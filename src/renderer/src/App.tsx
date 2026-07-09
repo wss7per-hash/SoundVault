@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo } from 'react'
+import { useEffect, useCallback, useMemo, useState, useRef } from 'react'
 import { useAppStore } from './stores/appStore'
 import { Sidebar } from './components/Sidebar'
 import { Toolbar } from './components/Toolbar'
@@ -10,11 +10,16 @@ import { RecycleBin } from './components/RecycleBin'
 import ScanDialog from './components/ScanDialog'
 import ModelConfig from './components/ModelConfig'
 import { Toaster } from 'react-hot-toast'
+import { Star } from 'lucide-react'
+import { SplashScreen } from './components/SplashScreen'
 
 export default function App(): JSX.Element {
+  const [showSplash, setShowSplash] = useState(true)
+  const [dataReady, setDataReady] = useState(false)
   const {
     sounds,
     sidebarTab,
+    activeCollectionId,
     selectedSoundId,
     showScanDialog,
     showModelConfig,
@@ -82,9 +87,27 @@ export default function App(): JSX.Element {
       refreshCollections(),
       refreshSmartFolders()
     ])
+    setDataReady(true)
   }, [refreshSounds, refreshTags, refreshTagStats, refreshStats, refreshCollections, refreshSmartFolders])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Reset selection & refresh data when switching sidebar tabs.
+  // This prevents stale state like "collection sounds still showing after switching to tags".
+  // Only clear selection when LEAVING the relevant tab (not when entering it).
+  const prevSidebarTabRef = useRef(sidebarTab)
+  useEffect(() => {
+    if (prevSidebarTabRef.current === sidebarTab) return
+    const prevTab = prevSidebarTabRef.current
+    prevSidebarTabRef.current = sidebarTab
+    // Clear any active filter selection from the PREVIOUS tab
+    const store = useAppStore.getState()
+    if (prevTab === 'collections' && store.activeCollectionId) store.setActiveCollection(null)
+    if (prevTab === 'smart' && store.activeSmartFolderId) store.setActiveSmartFolder(null)
+    if (store.selectedTagId && sidebarTab !== 'tags') store.setSelectedTag(null)
+    // Always refresh to show the correct dataset for the new tab
+    loadData()
+  }, [sidebarTab, loadData])
 
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontSize}px`
@@ -121,6 +144,9 @@ export default function App(): JSX.Element {
 
   return (
     <div className="flex h-full">
+      {/* Startup splash animation */}
+      {showSplash && <SplashScreen onDone={() => setShowSplash(false)} ready={dataReady} />}
+
       <Toaster position="bottom-right" toastOptions={{
         style: { background: '#2C2C2A', color: '#D3D1C7', border: '0.5px solid #3E3E3C', fontSize: '12px' }
       }} />
@@ -136,8 +162,14 @@ export default function App(): JSX.Element {
           ) : (
             <>
               <div className="flex-1 flex flex-col min-w-0">
+                {sidebarTab === 'collections' && activeCollectionId === '__starred__' && (
+                  <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-[#2a2a28] text-xs text-amber-400 shrink-0">
+                    <Star size={13} className="fill-amber-400" />
+                    <span>收藏 · 已星标的音效（不归属于任何收藏夹）</span>
+                  </div>
+                )}
                 {sounds.length === 0 ? (
-                  <EmptyState onImport={loadData} />
+                  <TabEmptyState tab={sidebarTab} onImport={loadData} />
                 ) : (
                   <SoundGrid sounds={filteredSounds} selectedId={selectedSoundId} onSelect={handleSelectSound} />
                 )}
@@ -159,6 +191,26 @@ export default function App(): JSX.Element {
       <ModelConfig isOpen={showModelConfig} onClose={() => toggleModelConfig()} />
     </div>
   )
+}
+
+function TabEmptyState({ tab, onImport }: { tab: string; onImport: () => void }): JSX.Element {
+  const activeCollectionId = useAppStore((s) => s.activeCollectionId)
+  const isStarred = tab === 'collections' && activeCollectionId === '__starred__'
+  const messages: Record<string, { title: string; sub: string }> = {
+    smart: { title: '这个智能文件夹没有匹配的音效', sub: '试着放宽筛选条件，或点击编辑修改规则' },
+    collections: { title: '这个收藏夹还是空的', sub: '在音效上右键「加入收藏夹」即可添加' },
+  }
+  const starredMsg = { title: '还没有收藏的音效', sub: '在任意音效详情里点「收藏」即可加入这里' }
+  const msg = isStarred ? starredMsg : messages[tab]
+  if (msg) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+        <p className="text-sm text-muted-light mb-1">{msg.title}</p>
+        <p className="text-xs text-muted">{msg.sub}</p>
+      </div>
+    )
+  }
+  return <EmptyState onImport={onImport} />
 }
 
 function StatusBar(): JSX.Element {

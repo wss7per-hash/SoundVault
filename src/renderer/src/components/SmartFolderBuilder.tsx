@@ -4,7 +4,7 @@ import { FolderCog, Plus, Trash2, Save, Play, Search, X, GripVertical } from 'lu
 import { useAppStore } from '../stores/appStore'
 import toast from 'react-hot-toast'
 
-type ConditionField = 'file_name' | 'description' | 'emotion' | 'use_cases' | 'file_ext' | 'duration_ms'
+type ConditionField = 'file_name' | 'description' | 'emotion' | 'use_cases' | 'file_ext' | 'duration_ms' | 'quality_score' | 'is_starred' | 'is_missing' | 'ai_analyzed_at' | 'imported_at' | 'tags'
 type ConditionOp = 'contains' | 'not_contains' | 'equals' | 'starts_with' | 'gt' | 'lt' | 'is'
 
 interface Condition {
@@ -29,9 +29,28 @@ const FIELD_OPTIONS: { value: ConditionField; label: string }[] = [
   { value: 'description', label: 'AI描述' },
   { value: 'emotion', label: '情绪' },
   { value: 'use_cases', label: '适用场景' },
+  { value: 'tags', label: '标签/分类' },
   { value: 'file_ext', label: '文件格式' },
-  { value: 'duration_ms', label: '时长(ms)' }
+  { value: 'duration_ms', label: '时长(ms)' },
+  { value: 'quality_score', label: '质量评分' },
+  { value: 'is_starred', label: '已收藏' },
+  { value: 'is_missing', label: '文件缺失' },
+  { value: 'ai_analyzed_at', label: '分析状态' },
+  { value: 'imported_at', label: '导入时间(天)' }
 ]
+
+// 这些字段用专用控件（是/否、已分析/未分析），op 固定为 is
+const BOOLEAN_FIELDS = new Set<ConditionField>(['is_starred', 'is_missing'])
+const STATUS_FIELDS = new Set<ConditionField>(['ai_analyzed_at'])
+const NUMERIC_FIELDS = new Set<ConditionField>(['duration_ms', 'quality_score', 'imported_at'])
+
+function valuePlaceholder(field: ConditionField): string {
+  if (field === 'imported_at') return '填天数，如 7'
+  if (field === 'duration_ms') return '毫秒，如 1000'
+  if (field === 'quality_score') return '1-5，如 7'
+  if (field === 'tags') return '标签或分类名，如 环境氛围'
+  return '输入值...'
+}
 
 const OP_OPTIONS: { value: ConditionOp; label: string; needsValue: boolean }[] = [
   { value: 'contains', label: '包含', needsValue: true },
@@ -90,7 +109,11 @@ export function SmartFolderList(): JSX.Element {
               className={`group flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
                 activeSmartFolderId === sf.id ? 'bg-accent/20 text-accent-light' : 'text-muted-light hover:bg-surface-card'
               }`}
-              onClick={() => setActiveSmartFolder(activeSmartFolderId === sf.id ? null : sf.id)}
+              onClick={() => {
+                const next = activeSmartFolderId === sf.id ? null : sf.id
+                setActiveSmartFolder(next)
+                if (next) useAppStore.getState().refreshSounds()
+              }}
             >
               <span className="flex-1 truncate">{sf.name}</span>
               <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
@@ -141,6 +164,7 @@ interface SmartFolderBuilderDialogProps {
 
 function SmartFolderBuilderDialog({ folder, onClose }: SmartFolderBuilderDialogProps): JSX.Element {
   const refreshSmartFolders = useAppStore((s) => s.refreshSmartFolders)
+  const [previewCount, setPreviewCount] = useState<number | null>(null)
 
   const [name, setName] = useState(folder?.name || '')
   const [groups, setGroups] = useState<ConditionGroup[]>(() => {
@@ -157,6 +181,15 @@ function SmartFolderBuilderDialog({ folder, onClose }: SmartFolderBuilderDialogP
   function createEmptyCondition(): Condition {
     return { id: generateId(), field: 'file_name', op: 'contains', value: '' }
   }
+
+  // 实时预览：根据当前规则计算匹配数量（必须在 groups useState 之后）
+  useEffect(() => {
+    let cancelled = false
+    window.api.previewSmartFolder(JSON.stringify(groups))
+      .then((rows) => { if (!cancelled) setPreviewCount(Array.isArray(rows) ? rows.length : 0) })
+      .catch(() => { if (!cancelled) setPreviewCount(0) })
+    return () => { cancelled = true }
+  }, [groups])
 
   const addCondition = (groupId: string) => {
     setGroups((prev) =>
@@ -270,15 +303,19 @@ function SmartFolderBuilderDialog({ folder, onClose }: SmartFolderBuilderDialogP
 
               <div className="space-y-1.5">
                 {group.conditions.map((cond) => {
-                  const fieldOpt = FIELD_OPTIONS.find((f) => f.value === cond.field)!
-                  const opOpt = OP_OPTIONS.find((o) => o.value === cond.op)!
+                  const fieldOpt = FIELD_OPTIONS.find((f) => f.value === cond.field) ?? FIELD_OPTIONS[0]
+                  const opOpt = OP_OPTIONS.find((o) => o.value === cond.op) ?? OP_OPTIONS[0]
                   return (
                     <div key={cond.id} className="flex items-center gap-1.5">
                       <GripVertical size={10} className="text-muted shrink-0" />
                       <select
                         className="bg-surface-panel border border-surface-border rounded px-1.5 py-1 text-2xs text-muted-light outline-none"
                         value={cond.field}
-                        onChange={(e) => updateCondition(group.id, cond.id, { field: e.target.value as ConditionField })}
+                        onChange={(e) => {
+                          const f = e.target.value as ConditionField
+                          const extra = (BOOLEAN_FIELDS.has(f) || STATUS_FIELDS.has(f)) ? { op: 'is' as ConditionOp } : {}
+                          updateCondition(group.id, cond.id, { field: f, ...extra })
+                        }}
                       >
                         {FIELD_OPTIONS.map((f) => (
                           <option key={f.value} value={f.value}>{f.label}</option>
@@ -295,13 +332,32 @@ function SmartFolderBuilderDialog({ folder, onClose }: SmartFolderBuilderDialogP
                         ))}
                       </select>
 
-                      <input
-                        className="flex-1 min-w-0 bg-surface-panel border border-surface-border rounded px-2 py-1 text-2xs text-muted-light outline-none focus:border-accent"
-                        placeholder={opOpt.needsValue ? '输入值...' : '无需输入'}
-                        value={cond.value}
-                        onChange={(e) => updateCondition(group.id, cond.id, { value: e.target.value })}
-                        disabled={!opOpt.needsValue}
-                      />
+                      {BOOLEAN_FIELDS.has(cond.field) || STATUS_FIELDS.has(cond.field) ? (
+                        <select
+                          className="flex-1 min-w-0 bg-surface-panel border border-surface-border rounded px-2 py-1 text-2xs text-muted-light outline-none focus:border-accent"
+                          value={cond.value || (STATUS_FIELDS.has(cond.field) ? 'analyzed' : 'true')}
+                          onChange={(e) => updateCondition(group.id, cond.id, { value: e.target.value })}
+                        >
+                          {STATUS_FIELDS.has(cond.field) ? (
+                            <>
+                              <option value="analyzed">已分析</option>
+                              <option value="unanalyzed">未分析</option>
+                            </>
+                          ) : (
+                            <>
+                              <option value="true">是</option>
+                              <option value="false">否</option>
+                            </>
+                          )}
+                        </select>
+                      ) : (
+                        <input
+                          className="flex-1 min-w-0 bg-surface-panel border border-surface-border rounded px-2 py-1 text-2xs text-muted-light outline-none focus:border-accent"
+                          placeholder={valuePlaceholder(cond.field)}
+                          value={cond.value}
+                          onChange={(e) => updateCondition(group.id, cond.id, { value: e.target.value })}
+                        />
+                      )}
 
                       <button
                         onClick={() => removeCondition(group.id, cond.id)}
@@ -331,7 +387,11 @@ function SmartFolderBuilderDialog({ folder, onClose }: SmartFolderBuilderDialogP
           </button>
         </div>
 
-        <div className="px-4 py-2 border-t border-[#2a2a28] flex gap-2">
+        <div className="px-4 py-2 border-t border-[#2a2a28] flex items-center gap-3">
+          <span className="text-2xs text-muted shrink-0">
+            {previewCount === null ? '匹配计算中…' : `当前匹配 ${previewCount} 个音效`}
+          </span>
+          <div className="flex-1" />
           <button
             onClick={handleSave}
             className="flex-1 py-1.5 bg-accent text-white text-xs rounded hover:bg-[#6B5ED4]"

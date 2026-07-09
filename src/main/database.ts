@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
+import { v4 as uuidv4 } from 'uuid'
 
 let db: Database.Database | null = null
 
@@ -16,6 +17,7 @@ export function initDatabase(): void {
   db.pragma('foreign_keys = ON')
 
   createTables()
+  seedDefaultCategories()
   cleanupLegacyQualityNotes()
 
   console.log('[Database] Initialized at', dbPath)
@@ -45,9 +47,22 @@ function cleanupLegacyQualityNotes(): void {
   }
 }
 
+// 预置 PRD §3.3.1 八大分类，让标签树一开始就展示标准分类体系
+const DEFAULT_CATEGORIES = ['人声', '动物', '环境氛围', '动作物品', 'UI交互', '乐器音乐', '机械科技', '特殊效果']
+
+function seedDefaultCategories(): void {
+  if (!db) return
+  const now = new Date().toISOString()
+  const stmt = db.prepare(
+    'INSERT OR IGNORE INTO tags (id, name, parent_id, sort_order, created_at) VALUES (?, ?, NULL, ?, ?)'
+  )
+  DEFAULT_CATEGORIES.forEach((name, i) => {
+    stmt.run(uuidv4(), name, i, now)
+  })
+}
+
 function createTables(): void {
   if (!db) return
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS sounds (
       id              TEXT PRIMARY KEY,

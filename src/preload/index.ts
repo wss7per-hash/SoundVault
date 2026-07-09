@@ -28,6 +28,7 @@ const api = {
   getSoundById: (id: string) => ipcRenderer.invoke('sound:getById', id),
   deleteSound: (id: string) => ipcRenderer.invoke('sound:delete', id),
   toggleStar: (id: string) => ipcRenderer.invoke('sound:toggleStar', id),
+  getStarred: () => ipcRenderer.invoke('sound:getStarred'),
   incrementPlayCount: (id: string) => ipcRenderer.invoke('sound:incrementPlayCount', id),
   searchSounds: (query: string) => ipcRenderer.invoke('sound:search', query),
   getStats: () => ipcRenderer.invoke('sound:getStats'),
@@ -80,6 +81,12 @@ const api = {
     ipcRenderer.invoke('smartFolder:save', data),
   getSmartFolders: () => ipcRenderer.invoke('smartFolder:getAll'),
   deleteSmartFolder: (id: string) => ipcRenderer.invoke('smartFolder:delete', id),
+  getSmartFolderSounds: (folderId: string) => ipcRenderer.invoke('smartFolder:getSounds', folderId),
+  previewSmartFolder: (conditionsJson: string) => ipcRenderer.invoke('smartFolder:preview', conditionsJson),
+
+  // Library Export / Import (portable bundle)
+  exportLibrary: (destDir: string, soundIds?: string[]) => ipcRenderer.invoke('library:export', destDir, soundIds),
+  importLibrary: (bundleDir: string) => ipcRenderer.invoke('library:import', bundleDir),
 
   // Batch Operations
   batchDelete: (ids: string[]) => ipcRenderer.invoke('sound:batchDelete', ids),
@@ -93,7 +100,12 @@ const api = {
 
   // Settings
   getSetting: (key: string) => ipcRenderer.invoke('settings:get', key),
-  setSetting: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value)
+  setSetting: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value),
+
+  // Window Controls (frameless mode)
+  minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
+  maximizeRestoreWindow: () => ipcRenderer.invoke('window:maximizeRestore'),
+  closeWindow: () => ipcRenderer.invoke('window:close')
 }
 
 if (process.contextIsolated) {

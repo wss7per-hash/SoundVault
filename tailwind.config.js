@@ -7,6 +7,7 @@ module.exports = {
         surface: {
           DEFAULT: '#1a1a18',
           card: '#2C2C2A',
+          panel: '#222220',
           hover: '#353533',
           border: '#3E3E3C'
         },

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import type { SoundData, CollectionData, TagData } from '../../preload/index.d'
 import {
-  Play, Pause, Star, Check, Music, FolderOpen, Copy, FileInput, Pencil, Tag, FolderPlus,
+  Play, Pause, Star, Check, Music, FolderOpen, Folder, Copy, FileInput, Pencil, Tag, FolderPlus,
   Sparkles, Trash2, X, Volume2, Heart, MoreHorizontal
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -674,9 +674,13 @@ interface ContextMenuProps {
 
 function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagInputVisible, collectionMenuVisible, setCollectionMenuVisible, onClose, refreshSounds, clearSelection, setRenameSound }: ContextMenuProps): JSX.Element {
   const [tagValue, setTagValue] = useState('')
+  const [newCollectionName, setNewCollectionName] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
   const left = Math.min(x, window.innerWidth - 220)
   const top = Math.min(y, window.innerHeight - (menuRef.current?.offsetHeight || 360))
+  // 右侧飞出面板位置：紧贴主菜单右边缘
+  const flyoutLeft = left + 208 // 主菜单宽 ~208px + 小间距
+  const flyoutTop = Math.min(top + 168, window.innerHeight - 280) // 对齐「加入收藏夹」行附近
 
   const handleShowInFolder = async () => {
     const res = await window.api.showItemInFolder(sound.id)
@@ -737,10 +741,27 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
 
   const handleAddToCollection = async (collectionId: string) => {
     const res = await window.api.addToCollection(collectionId, sound.id)
-    if (res.success) toast.success('已加入合集')
-    else toast.error('加入合集失败')
+    if (res.success) { toast.success('已加入收藏夹'); await refreshSounds() }
+    else toast.error('加入收藏夹失败')
     setCollectionMenuVisible(false)
     onClose()
+  }
+
+  const handleCreateAndAddCollection = async () => {
+    const name = newCollectionName.trim()
+    if (!name) return
+    try {
+      const col = await window.api.createCollection(name, '')
+      // Immediately add sound to the newly created collection
+      await window.api.addToCollection(col.id, sound.id)
+      toast.success(`已新建「${name}」并加入`)
+      setNewCollectionName('')
+      setCollectionMenuVisible(false)
+      await refreshSounds()
+      onClose()
+    } catch {
+      toast.error('创建收藏夹失败')
+    }
   }
 
   const menuItems = [
@@ -750,7 +771,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     { icon: Pencil, label: '重命名', action: () => { setRenameSound(sound); onClose() } },
     { divider: true },
     { icon: Tag, label: '添加标签', action: () => setTagInputVisible(true), hasSubmenu: true },
-    { icon: FolderPlus, label: '加入合集', action: () => setCollectionMenuVisible(true), hasSubmenu: true },
+    { icon: FolderPlus, label: '加入收藏夹', action: () => setCollectionMenuVisible(true), hasSubmenu: true },
     { icon: Heart, label: sound.is_starred ? '取消收藏' : '收藏', action: handleStar },
     { icon: Sparkles, label: 'AI 分析', action: handleAnalyze },
     { divider: true },
@@ -758,6 +779,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
   ]
 
   return (
+    <>
     <div
       ref={menuRef}
       className="fixed z-[100] w-52 py-1.5 rounded-xl border border-surface-border bg-[#252522] shadow-2xl"
@@ -808,22 +830,56 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
         </div>
       )}
 
+    </div>
+
       {collectionMenuVisible && (
-        <div className="px-1 py-2 border-t border-surface-border/60">
-          {collections.length > 0 ? collections.map((col) => (
+        <div
+          className="fixed z-[101] w-48 rounded-xl border border-surface-border bg-[#252522] shadow-2xl py-2"
+          style={{ left: flyoutLeft, top: flyoutTop }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="px-3 pb-1.5 text-[10px] text-muted/60 uppercase tracking-wider">新建收藏夹</p>
+          <div className="flex items-center gap-1.5 px-3 pb-2 mb-1.5 border-b border-surface-border/40">
+            <input
+              autoFocus
+              value={newCollectionName}
+              onChange={(e) => setNewCollectionName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateAndAddCollection()
+                if (e.key === 'Escape') setCollectionMenuVisible(false)
+              }}
+              placeholder="输入名称…"
+              className="flex-1 min-w-0 px-2 py-1 text-xs rounded bg-surface-card border border-surface-border text-muted-light placeholder:text-muted/40 focus:border-accent outline-none"
+            />
             <button
-              key={col.id}
-              onClick={() => handleAddToCollection(col.id)}
-              className="w-full px-3 py-1.5 text-xs text-muted-light hover:bg-surface-card rounded text-left"
+              onClick={handleCreateAndAddCollection}
+              disabled={!newCollectionName.trim()}
+              className="shrink-0 px-2 py-1 rounded bg-accent text-white text-[11px] hover:bg-accent/80 disabled:opacity-30 disabled:cursor-default transition-colors"
             >
-              {col.name}
+              <Check size={12} />
             </button>
-          )) : (
-            <p className="px-3 py-1 text-xs text-muted/50">暂无合集</p>
+          </div>
+
+          {collections.length > 0 ? (
+            <>
+              <p className="px-3 pt-1 pb-1 text-[10px] text-muted/60 uppercase tracking-wider">已有收藏夹</p>
+              {collections.map((col) => (
+                <button
+                  key={col.id}
+                  onClick={() => handleAddToCollection(col.id)}
+                  className="w-full px-3 py-1.5 text-xs text-muted-light hover:bg-surface-card rounded text-left flex items-center gap-2"
+                >
+                  <Folder size={12} className="text-muted" />
+                  {col.name}
+                </button>
+              ))}
+            </>
+          ) : (
+            <p className="px-3 py-2 text-xs text-muted/50">暂无收藏夹</p>
           )}
         </div>
       )}
-    </div>
+    </>
   )
 }
 

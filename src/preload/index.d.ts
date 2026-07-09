@@ -20,6 +20,7 @@ export interface SoundVaultAPI {
   getSoundById: (id: string) => Promise<SoundData | undefined>
   deleteSound: (id: string) => Promise<{ success: boolean }>
   toggleStar: (id: string) => Promise<{ success: boolean; is_starred: boolean }>
+  getStarred: () => Promise<SoundData[]>
   incrementPlayCount: (id: string) => Promise<void>
   searchSounds: (query: string) => Promise<SoundData[]>
   getStats: () => Promise<StatsData>
@@ -62,6 +63,24 @@ export interface SoundVaultAPI {
   saveSmartFolder: (data: SmartFolderInput) => Promise<{ id: string }>
   getSmartFolders: () => Promise<SmartFolderData[]>
   deleteSmartFolder: (id: string) => Promise<{ success: boolean }>
+  getSmartFolderSounds: (folderId: string) => Promise<SoundData[]>
+  previewSmartFolder: (conditionsJson: string) => Promise<SoundData[]>
+
+  // Library Export / Import (portable bundle)
+  exportLibrary: (destDir: string, soundIds?: string[]) => Promise<{
+    success: boolean
+    path?: string
+    counts?: Record<string, number>
+    copied?: number
+    missing?: number
+  }>
+  importLibrary: (bundleDir: string) => Promise<{
+    success: boolean
+    imported?: number
+    tags?: number
+    collections?: number
+    error?: string
+  }>
 
   // Batch Operations
   batchDelete: (ids: string[]) => Promise<{ success: boolean }>
@@ -75,6 +94,11 @@ export interface SoundVaultAPI {
   // Settings
   getSetting: (key: string) => Promise<string | null>
   setSetting: (key: string, value: string) => Promise<{ success: boolean }>
+
+  // Window Controls (frameless mode)
+  minimizeWindow: () => Promise<void>
+  maximizeRestoreWindow: () => Promise<void>
+  closeWindow: () => Promise<void>
 }
 
 // ---- Types ----

@@ -1,10 +1,14 @@
 import { useState, useCallback } from 'react'
 import type { CollectionData } from '../../preload/index.d'
-import { Folder, Plus, Trash2, Edit3, Check, X } from 'lucide-react'
+import { Folder, Plus, Trash2, Edit3, Check, X, Star } from 'lucide-react'
 import { useAppStore } from '../stores/appStore'
 import toast from 'react-hot-toast'
 
 const COLLECTION_COLORS = ['#534AB7', '#E85D75', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899']
+
+// 虚拟「收藏」项的哨兵 id：它不属于任何真实收藏夹，
+// 点击后从 collections 视图里列出所有已星标（is_starred=1）的音效。
+const STARRED_ID = '__starred__'
 
 export function CollectionsManager(): JSX.Element {
   const collections = useAppStore((s) => s.collections)
@@ -25,7 +29,7 @@ export function CollectionsManager(): JSX.Element {
       setNewName('')
       setShowAdd(false)
       await refreshCollections()
-      toast.success(`已创建合集: ${newName}`)
+      toast.success(`已创建收藏夹: ${newName}`)
     } catch {
       toast.error('创建失败')
     }
@@ -53,18 +57,19 @@ export function CollectionsManager(): JSX.Element {
   }, [editName, refreshCollections])
 
   const handleSelect = useCallback(async (col: CollectionData) => {
-    if (activeCollectionId === col.id) {
-      setActiveCollection(null)
-      await refreshSounds()
-      return
-    }
-    setActiveCollection(col.id)
-    try {
-      const sounds = await window.api.getCollectionSounds(col.id)
-      useAppStore.getState().setSounds(sounds)
-    } catch {
-      // fallback
-    }
+    const next = activeCollectionId === col.id ? null : col.id
+    setActiveCollection(next)
+    // 确保切到收藏夹标签，否则 refreshSounds 会走错分支
+    useAppStore.getState().setSidebarTab('collections')
+    await refreshSounds()
+  }, [activeCollectionId, setActiveCollection, refreshSounds])
+
+  // 虚拟「收藏」项：列出所有已星标音效，但不属于任何真实收藏夹
+  const handleSelectStarred = useCallback(async () => {
+    const next = activeCollectionId === STARRED_ID ? null : STARRED_ID
+    setActiveCollection(next)
+    useAppStore.getState().setSidebarTab('collections')
+    await refreshSounds()
   }, [activeCollectionId, setActiveCollection, refreshSounds])
 
   return (
@@ -72,12 +77,12 @@ export function CollectionsManager(): JSX.Element {
       <div className="flex items-center justify-between px-3 py-2 border-b border-[#2a2a28]">
         <div className="flex items-center gap-1.5">
           <Folder size={14} className="text-muted" />
-          <span className="text-xs font-medium text-muted-light">合集</span>
+          <span className="text-xs font-medium text-muted-light">收藏夹</span>
         </div>
         <button
           onClick={() => setShowAdd(!showAdd)}
           className="p-1 hover:bg-surface-card rounded text-muted hover:text-accent-light transition-colors"
-          title="新建合集"
+          title="新建收藏夹"
         >
           <Plus size={14} />
         </button>
@@ -87,7 +92,7 @@ export function CollectionsManager(): JSX.Element {
         <div className="px-3 py-2 border-b border-[#2a2a28] space-y-1.5">
           <input
             className="w-full bg-surface-card border border-surface-border rounded px-2 py-1 text-xs outline-none focus:border-accent"
-            placeholder="合集名称"
+            placeholder="收藏夹名称"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
@@ -111,8 +116,23 @@ export function CollectionsManager(): JSX.Element {
       )}
 
       <div className="flex-1 overflow-y-auto px-2 py-1.5">
+        {/* 虚拟「收藏」项：所有已星标音效，不归属于任何收藏夹 */}
+        <div
+          className={`flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
+            activeCollectionId === STARRED_ID
+              ? 'bg-accent/20 text-accent-light'
+              : 'text-amber-400/90 hover:bg-surface-card'
+          }`}
+          onClick={handleSelectStarred}
+        >
+          <Star size={14} className={activeCollectionId === STARRED_ID ? 'fill-amber-400' : ''} />
+          <span className="flex-1 truncate">收藏</span>
+        </div>
+
+        {collections.length > 0 && <div className="h-px bg-[#2a2a28] my-1.5" />}
+
         {collections.length === 0 ? (
-          <p className="text-2xs text-muted text-center py-4">暂无合集</p>
+          <p className="text-2xs text-muted text-center py-4">暂无收藏夹</p>
         ) : (
           collections.map((col) => (
             <div

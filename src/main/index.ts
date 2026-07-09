@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, Menu, protocol, net } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
+import { existsSync, readFileSync, statSync } from 'fs'
 import { initDatabase, closeDatabase, getDatabase } from './database'
 import { registerIpcHandlers } from './ipc-handlers'
 
@@ -17,6 +18,15 @@ app.on('render-process-gone', (_e, webContents, details) => {
 app.on('child-process-gone', (_e, details) => {
   console.error('[child-process-gone]', details)
 })
+
+// Audio: run the Audio Service in-process.
+// The out-of-process Audio Service (AudioServiceOutOfProcess) crashes
+// repeatedly on headless / RDP / server / no-audio-device setups
+// (child-process-gone: Audio Service, exitCode 1). That both blocks
+// playback AND destabilizes the renderer (black/frozen window). Running it
+// in-process is stable. Relax autoplay so <audio> can load/seek freely.
+app.commandLine.appendSwitch('disable-features', 'AudioServiceOutOfProcess')
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
 // Register a privileged custom scheme for streaming local audio files.
 // Loading file:// from an http(s) (dev) renderer is blocked by webSecurity,
@@ -39,6 +49,7 @@ function createWindow(): void {
       center: true,
       title: 'SoundVault',
       backgroundColor: '#1a1a18',
+      frame: false,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         sandbox: false,
@@ -89,8 +100,28 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   // Stream local audio through the privileged 'sv://<id>' scheme.
-  // net.fetch on the underlying file:// path transparently forwards Range
-  // headers, so the <audio> element can seek (drag the progress bar).
+  //
+  // Two serving strategies:
+  //  - Small files (< 8 MB): read into memory with fs.readFileSync → Response
+  //    (most reliable, guarantees correct MIME type, avoids Range issues)
+  //  - Large files: use net.fetch on file:// URL with explicit Content-Type
+  //    (preserves memory, supports Range for seeking)
+  const MIME_MAP: Record<string, string> = {
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.ogg': 'audio/ogg',
+    '.flac': 'audio/flac',
+    '.aac': 'audio/aac',
+    '.m4a': 'audio/mp4',
+    '.wma': 'audio/x-ms-wma',
+    '.mp4': 'video/mp4',
+    '.webm': 'audio/webm',
+    '.aiff': 'audio/aiff',
+    '.aif': 'audio/aiff',
+    '.opus': 'audio/ogg; codecs=opus',
+  }
+  const SMALL_FILE_THRESHOLD = 8 * 1024 * 1024 // 8 MB
+
   protocol.handle('sv', async (request) => {
     try {
       const id = decodeURIComponent(new URL(request.url).hostname)
@@ -101,9 +132,43 @@ app.whenReady().then(() => {
         console.error('[sv protocol] sound not found for id=', id)
         return new Response('Not Found', { status: 404 })
       }
-      console.log('[sv protocol] serving', row.file_path)
-      const fileUrl = pathToFileURL(row.file_path).toString()
-      return net.fetch(fileUrl, { headers: request.headers })
+      const filePath = row.file_path
+      if (!existsSync(filePath)) {
+        console.error('[sv protocol] file not found:', filePath)
+        return new Response('File not found', { status: 404 })
+      }
+      const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase()
+      const contentType = MIME_MAP[ext] || 'application/octet-stream'
+      const stat = statSync(filePath)
+
+      if (stat.size <= SMALL_FILE_THRESHOLD) {
+        // Small file: read fully into Response body (most reliable playback)
+        const buf = readFileSync(filePath)
+        console.log('[sv protocol] serving in-memory', filePath, `(${buf.length}B ${contentType})`)
+        return new Response(buf, {
+          headers: {
+            'Content-Type': contentType,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': String(buf.length),
+          },
+        })
+      }
+
+      // Large file: stream via net.fetch with correct Content-Type header
+      console.log('[sv protocol] streaming', filePath, `(${stat.size}B ${contentType})`)
+      const fileUrl = pathToFileURL(filePath).toString()
+      return net.fetch(fileUrl, { headers: request.headers }).then((res) => {
+        // Clone response to override headers (Response headers are immutable)
+        return new Response(res.body, {
+          status: res.status,
+          statusText: res.statusText,
+          headers: {
+            ...Object.fromEntries(res.headers.entries()),
+            'Content-Type': contentType,
+            'Accept-Ranges': 'bytes',
+          },
+        })
+      })
     } catch (err) {
       console.error('[sv protocol] error:', err)
       return new Response(String(err), { status: 500 })

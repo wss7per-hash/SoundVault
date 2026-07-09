@@ -1,5 +1,6 @@
-import { ipcMain, dialog, app, shell } from 'electron'
-import { readdir, stat, readFile, copyFile, rename, mkdir, access } from 'fs/promises'
+import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron'
+import { readdir, stat, readFile, writeFile, copyFile, rename, mkdir, access } from 'fs/promises'
+import { existsSync } from 'fs'
 import { createHash } from 'crypto'
 import { join, extname, basename, dirname, parse, format } from 'path'
 import { getDatabase } from './database'
@@ -201,6 +202,20 @@ export function registerIpcHandlers(): void {
     return { success: true, is_starred: !!newVal }
   })
 
+  // 收藏视图：列出所有已收藏（is_starred=1）的音效
+  ipcMain.handle('sound:getStarred', () => {
+    return db.prepare(`
+      SELECT s.*,
+        (SELECT GROUP_CONCAT(t.name, ',')
+         FROM tags t
+         JOIN sound_tags st ON t.id = st.tag_id
+         WHERE st.sound_id = s.id) AS tags
+      FROM sounds s
+      WHERE s.is_starred = 1
+      ORDER BY s.imported_at DESC
+    `).all()
+  })
+
   ipcMain.handle('sound:incrementPlayCount', (_event, id: string) => {
     db.prepare('UPDATE sounds SET play_count = play_count + 1 WHERE id = ?').run(id)
     db.prepare('INSERT INTO play_history (sound_id, played_at) VALUES (?, ?)').run(id, new Date().toISOString())
@@ -274,7 +289,10 @@ export function registerIpcHandlers(): void {
  * Avoids the previous bug where INSERT OR IGNORE skipped a duplicate name
  * but we still linked sound_tags to a non-existent uuid -> FK violation.
  */
-function getOrCreateTagId(name: string, now: string): string {
+// PRD §3.3.1 八大分类（人声/动物/环境氛围/动作物品/UI交互/乐器音乐/机械科技/特殊效果）
+const PRD_CATEGORIES = ['人声', '动物', '环境氛围', '动作物品', 'UI交互', '乐器音乐', '机械科技', '特殊效果']
+
+function getOrCreateTagId(name: string, now: string, parentId: string | null = null): string {
   const existing = db.prepare('SELECT id FROM tags WHERE name = ?').get(name) as
     | { id: string }
     | undefined
@@ -282,9 +300,15 @@ function getOrCreateTagId(name: string, now: string): string {
 
   const tagId = uuidv4()
   db.prepare(
-    'INSERT OR IGNORE INTO tags (id, name, parent_id, sort_order, created_at) VALUES (?, ?, NULL, 0, ?)'
-  ).run(tagId, name, now)
+    'INSERT OR IGNORE INTO tags (id, name, parent_id, sort_order, created_at) VALUES (?, ?, ?, 0, ?)'
+  ).run(tagId, name, parentId, now)
   return tagId
+}
+
+// 确保分类父节点存在，返回其父标签 id（用于把子标签挂到分类下，实现自动归类）
+function ensureParentCategory(category: string, now: string): string | null {
+  if (!PRD_CATEGORIES.includes(category)) return null
+  return getOrCreateTagId(category, now, null)
 }
 
   ipcMain.handle('ai:analyzeSingle', async (_event, soundId: string) => {
@@ -336,7 +360,8 @@ function getOrCreateTagId(name: string, now: string): string {
 
       const now = new Date().toISOString()
       for (const tag of result.tags) {
-        const tagId = getOrCreateTagId(tag.name, now)
+        const parentId = tag.name !== tag.category ? ensureParentCategory(tag.category, now) : null
+        const tagId = getOrCreateTagId(tag.name, now, parentId)
         soundTagInsert.run(soundId, tagId, tag.confidence)
       }
 
@@ -413,7 +438,8 @@ function getOrCreateTagId(name: string, now: string): string {
         `)
 
         for (const tag of result.tags) {
-          const tagId = getOrCreateTagId(tag.name, now)
+          const parentId = tag.name !== tag.category ? ensureParentCategory(tag.category, now) : null
+          const tagId = getOrCreateTagId(tag.name, now, parentId)
           soundTagInsert.run(id, tagId, tag.confidence)
         }
       }
@@ -456,10 +482,11 @@ function getOrCreateTagId(name: string, now: string): string {
   })
 
   ipcMain.handle('collection:addSound', (_event, collectionId: string, soundId: string) => {
-    db.prepare(`
-      INSERT OR IGNORE INTO collection_sounds (collection_id, sound_id) VALUES (?, ?)
-    `).run(collectionId, soundId)
-    return { success: true }
+    const result = db.prepare(`
+      INSERT OR IGNORE INTO collection_sounds (collection_id, sound_id, added_at)
+      VALUES (?, ?, ?)
+    `).run(collectionId, soundId, new Date().toISOString())
+    return { success: result.changes > 0 }
   })
 
   ipcMain.handle('collection:removeSound', (_event, collectionId: string, soundId: string) => {
@@ -504,6 +531,293 @@ function getOrCreateTagId(name: string, now: string): string {
     return { success: true }
   })
 
+  // ---- Library Export / Import (portable bundle, like Eagle) ----
+
+  /**
+   * Export a portable library bundle.
+   * @param destDir   Target parent folder (user-chosen).
+   * @param soundIds  Optional array of sound IDs to export.  Empty/undefined = export ALL sounds.
+   */
+  ipcMain.handle('library:export', async (_event, destDir: string, soundIds?: string[]) => {
+    const bundleName = `SoundVault-Library-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`
+    const root = join(destDir, bundleName)
+    const audiosDir = join(root, 'audios')
+    await mkdir(audiosDir, { recursive: true })
+
+    // Support selective export
+    let sounds
+    if (soundIds && soundIds.length > 0) {
+      const placeholders = soundIds.map(() => '?').join(',')
+      sounds = db.prepare(`SELECT * FROM sounds WHERE id IN (${placeholders})`).all(...soundIds)
+    } else {
+      sounds = db.prepare('SELECT * FROM sounds').all()
+    }
+
+    const ids = new Set((sounds as Array<{ id: string }>).map((s) => s.id))
+
+    const tags = ids.size > 0
+      ? db.prepare(`SELECT * FROM tags WHERE id IN (SELECT tag_id FROM sound_tags WHERE sound_id IN (${[...ids].map(() => '?').join(',')}))`).all(...ids)
+      : db.prepare('SELECT * FROM tags').all()
+    const soundTags = ids.size > 0
+      ? db.prepare(`SELECT * FROM sound_tags WHERE sound_id IN (${[...ids].map(() => '?').join(',')}))`).all(...ids)
+      : db.prepare('SELECT * FROM sound_tags').all()
+    const tagAliases = db.prepare('SELECT * FROM tag_aliases').all()
+    const collections = db.prepare('SELECT * FROM collections').all()
+    const collectionSounds = ids.size > 0
+      ? db.prepare(`SELECT * FROM collection_sounds WHERE sound_id IN (${[...ids].map(() => '?').join(',')}))`).all(...ids)
+      : db.prepare('SELECT * FROM collection_sounds').all()
+    const smartFolders = db.prepare('SELECT * FROM smart_folders').all()
+
+    // Copy audio files using ORIGINAL filenames (with dedup on name clash).
+    let copied = 0
+    let missing = 0
+    const nameCounter = new Map<string, number>() // baseName → next suffix
+    for (const s of sounds as Array<{ id: string; file_path: string; file_ext: string; file_name: string }>) {
+      const ext = (s.file_ext || extname(s.file_path) || '').toLowerCase()
+      const safeExt = ext.startsWith('.') ? ext : `.${ext}`
+      // Prefer stored file_name, fall back to basename of path.
+      let baseName = (s.file_name || basename(s.file_path) || s.id).trim()
+      // Strip extension if it's already included in file_name to avoid double-ext.
+      if (baseName.toLowerCase().endsWith(safeExt)) {
+        baseName = baseName.slice(0, baseName.length - safeExt.length)
+      }
+      // Sanitize: remove characters invalid on Windows/macOS/Linux.
+      baseName = baseName.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim() || 'audio'
+      // Dedup: if same filename already used, append _2 _3 ...
+      const candidate = `${baseName}${safeExt}`
+      const count = nameCounter.get(candidate) || 0
+      const finalName = count === 0 ? candidate : `${baseName}_${count}${safeExt}`
+      nameCounter.set(candidate, count + 1)
+
+      const src = s.file_path
+      const dest = join(audiosDir, finalName)
+      try {
+        await access(src)
+        await copyFile(src, dest)
+        copied++
+      } catch {
+        missing++
+      }
+    }
+
+    const manifest = {
+      format: 'soundvault-library',
+      version: 1,
+      appVersion: app.getVersion(),
+      exportedAt: new Date().toISOString(),
+      counts: {
+        sounds: (sounds as unknown[]).length,
+        tags: (tags as unknown[]).length,
+        sound_tags: (soundTags as unknown[]).length,
+        collections: (collections as unknown[]).length,
+        collection_sounds: (collectionSounds as unknown[]).length,
+        smart_folders: (smartFolders as unknown[]).length
+      },
+      audio: { copied, missing }
+    }
+
+    const payload = {
+      ...manifest,
+      sounds,
+      tags,
+      sound_tags: soundTags,
+      tag_aliases: tagAliases,
+      collections,
+      collection_sounds: collectionSounds,
+      smart_folders: smartFolders
+    }
+
+    await writeFile(join(root, 'library.json'), JSON.stringify(payload, null, 2))
+    await writeFile(
+      join(root, 'README.txt'),
+      [
+        'SoundVault 资源库导出包',
+        '============================',
+        `导出时间：${manifest.exportedAt}`,
+        `包含音效：${manifest.counts.sounds} 个（音频文件已复制 ${copied} 个，缺失 ${missing} 个）`,
+        `标签：${manifest.counts.tags} 个`,
+        `收藏夹：${manifest.counts.collections} 个`,
+        '',
+        '在另一台电脑的 SoundVault 中点「导入库」并选择本文件夹即可迁移全部数据。'
+      ].join('\n')
+    )
+
+    return {
+      success: true,
+      path: root,
+      counts: manifest.counts,
+      copied,
+      missing
+    }
+  })
+
+  ipcMain.handle('library:import', async (_event, bundleDir: string) => {
+    const manifestPath = join(bundleDir, 'library.json')
+    if (!existsSync(manifestPath)) {
+      return { success: false, error: '未找到 library.json，请选择 SoundVault 导出的资源库文件夹' }
+    }
+
+    let data: any
+    try {
+      data = JSON.parse(await readFile(manifestPath, 'utf-8'))
+    } catch {
+      return { success: false, error: 'library.json 解析失败，文件可能已损坏' }
+    }
+    if (data?.format !== 'soundvault-library') {
+      return { success: false, error: '文件格式不正确，不是有效的 SoundVault 资源库' }
+    }
+
+    const libraryRoot = join(app.getPath('userData'), 'library')
+    await mkdir(libraryRoot, { recursive: true })
+    const audioSrcDir = join(bundleDir, 'audios')
+    const now = () => new Date().toISOString()
+
+    // ---- Tags: match by name (UNIQUE) ----
+    const existingTags = db.prepare('SELECT id, name FROM tags').all() as Array<{ id: string; name: string }>
+    const tagNameToId = new Map(existingTags.map((t) => [t.name, t.id]))
+    const oldTagToNew = new Map<string, string>()
+    for (const t of (data.tags || []) as Array<any>) {
+      const finalId = tagNameToId.has(t.name)
+        ? (tagNameToId.get(t.name) as string)
+        : uuidv4()
+      if (!tagNameToId.has(t.name)) {
+        tagNameToId.set(t.name, finalId)
+        db.prepare(
+          'INSERT OR IGNORE INTO tags (id, name, parent_id, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(finalId, t.name, t.parent_id ?? null, t.color ?? null, t.icon ?? null, t.sort_order ?? 0, t.created_at ?? now())
+      }
+      oldTagToNew.set(t.id, finalId)
+    }
+
+    // ---- Sounds: dedupe by file_hash, copy audio locally ----
+    const existingHashes = new Set(
+      (db.prepare('SELECT file_hash FROM sounds').all() as Array<{ file_hash: string }>).map((r) => r.file_hash)
+    )
+    const soundCols = (db.prepare('PRAGMA table_info(sounds)').all() as Array<{ name: string }>).map((c) => c.name)
+    const soundInsert = db.prepare(
+      `INSERT OR IGNORE INTO sounds (${soundCols.join(',')}) VALUES (${soundCols.map(() => '?').join(',')})`
+    )
+    const oldSoundToNew = new Map<string, string>()
+    let imported = 0
+
+    for (const s of (data.sounds || []) as Array<any>) {
+      if (existingHashes.has(s.file_hash)) {
+        const ex = db.prepare('SELECT id FROM sounds WHERE file_hash = ?').get(s.file_hash) as { id: string } | undefined
+        if (ex) {
+          oldSoundToNew.set(s.id, ex.id)
+          continue
+        }
+      }
+      const newId = uuidv4()
+      oldSoundToNew.set(s.id, newId)
+
+      const ext = (s.file_ext || extname(s.file_path) || '').toLowerCase()
+      const safeExt = ext.startsWith('.') ? ext : `.${ext}`
+      const srcAudio = join(audioSrcDir, `${s.id}${safeExt}`)
+      const destAudio = join(libraryRoot, `${newId}${safeExt}`)
+      let audioOk = false
+      try {
+        await access(srcAudio)
+        await copyFile(srcAudio, destAudio)
+        audioOk = true
+      } catch {
+        audioOk = false
+      }
+
+      const row: any = { ...s }
+      row.id = newId
+      row.file_path = destAudio
+      row.is_missing = audioOk ? 0 : 1
+      row.imported_at = now()
+      row.updated_at = now()
+
+      const values = soundCols.map((c) => (row[c] === undefined ? null : row[c]))
+      try {
+        soundInsert.run(...values)
+        if (audioOk) imported++
+        else imported++ // 元数据仍导入，仅标记缺失
+      } catch (err) {
+        console.error('[library:import] sound insert failed:', (err as Error).message)
+      }
+    }
+
+    // ---- sound_tags (remap) ----
+    const stInsert = db.prepare(
+      'INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)'
+    )
+    for (const st of (data.sound_tags || []) as Array<any>) {
+      const sid = oldSoundToNew.get(st.sound_id)
+      const tid = oldTagToNew.get(st.tag_id)
+      if (!sid || !tid) continue
+      stInsert.run(sid, tid, st.confidence ?? null, st.is_manual ?? 0)
+    }
+
+    // ---- tag_aliases (remap) ----
+    const taInsert = db.prepare('INSERT OR IGNORE INTO tag_aliases (tag_id, alias) VALUES (?, ?)')
+    for (const ta of (data.tag_aliases || []) as Array<any>) {
+      const tid = oldTagToNew.get(ta.tag_id)
+      if (!tid) continue
+      taInsert.run(tid, ta.alias)
+    }
+
+    // ---- Collections: match by name ----
+    const existingCols = db.prepare('SELECT id, name FROM collections').all() as Array<{ id: string; name: string }>
+    const colNameToId = new Map(existingCols.map((c) => [c.name, c.id]))
+    const oldColToNew = new Map<string, string>()
+    for (const c of (data.collections || []) as Array<any>) {
+      const finalId = colNameToId.has(c.name) ? (colNameToId.get(c.name) as string) : uuidv4()
+      if (!colNameToId.has(c.name)) {
+        colNameToId.set(c.name, finalId)
+        db.prepare(
+          'INSERT OR IGNORE INTO collections (id, name, description, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(finalId, c.name, c.description ?? null, c.color ?? null, c.created_at ?? now(), c.updated_at ?? now())
+      }
+      oldColToNew.set(c.id, finalId)
+    }
+
+    // ---- collection_sounds (remap) ----
+    const csInsert = db.prepare(
+      'INSERT OR IGNORE INTO collection_sounds (collection_id, sound_id, sort_order, added_at) VALUES (?, ?, ?, ?)'
+    )
+    for (const cs of (data.collection_sounds || []) as Array<any>) {
+      const cid = oldColToNew.get(cs.collection_id)
+      const sid = oldSoundToNew.get(cs.sound_id)
+      if (!cid || !sid) continue
+      csInsert.run(cid, sid, cs.sort_order ?? 0, cs.added_at ?? now())
+    }
+
+    // ---- smart_folders: match by name ----
+    const existingSF = db.prepare('SELECT id, name FROM smart_folders').all() as Array<{ id: string; name: string }>
+    const sfNameToId = new Map(existingSF.map((c) => [c.name, c.id]))
+    for (const sf of (data.smart_folders || []) as Array<any>) {
+      if (sfNameToId.has(sf.name)) {
+        db.prepare('UPDATE smart_folders SET conditions = ?, updated_at = ? WHERE id = ?').run(
+          sf.conditions,
+          now(),
+          sfNameToId.get(sf.name) as string
+        )
+      } else {
+        db.prepare(
+          'INSERT OR IGNORE INTO smart_folders (id, name, conditions, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+        ).run(uuidv4(), sf.name, sf.conditions, now(), now())
+      }
+    }
+
+    // ---- keep FTS index in sync (if available) ----
+    try {
+      db.prepare(`INSERT INTO sounds_fts(sounds_fts) VALUES('rebuild')`).run()
+    } catch {
+      /* FTS5 not available */
+    }
+
+    return {
+      success: true,
+      imported,
+      tags: (data.tags || []).length,
+      collections: (data.collections || []).length
+    }
+  })
+
   // ---- Smart Folders ----
 
   ipcMain.handle('smartFolder:save', (_event, data: { id?: string; name: string; conditions: string }) => {
@@ -526,6 +840,136 @@ function getOrCreateTagId(name: string, now: string): string {
   ipcMain.handle('smartFolder:delete', (_event, id: string) => {
     db.prepare('DELETE FROM smart_folders WHERE id = ?').run(id)
     return { success: true }
+  })
+
+  // ---- Smart Folder 条件求值 ----
+  // 支持字段：文件名/AI描述/情绪/适用场景/格式/时长/质量评分/
+  //            收藏/缺失/未分析/导入时间/标签
+  type SFCondition = { field: string; op: string; value: string }
+  type SFGroup = { logic: 'AND' | 'OR'; conditions: SFCondition[] }
+
+  function buildConditionSql(c: SFCondition): { sql: string; params: any[] } {
+    const value = (c.value ?? '').toString().trim()
+
+    // 标签：关联 sound_tags / tags 表
+    if (c.field === 'tags') {
+      const like = `%${value}%`
+      if (c.op === 'not_contains') {
+        return { sql: `NOT EXISTS (SELECT 1 FROM sound_tags st JOIN tags tg ON tg.id = st.tag_id WHERE st.sound_id = s.id AND tg.name LIKE ?)`, params: [like] }
+      }
+      return { sql: `EXISTS (SELECT 1 FROM sound_tags st JOIN tags tg ON tg.id = st.tag_id WHERE st.sound_id = s.id AND tg.name LIKE ?)`, params: [like] }
+    }
+
+    // 布尔字段：收藏 / 缺失
+    if (c.field === 'is_starred' || c.field === 'is_missing') {
+      const col = c.field === 'is_starred' ? 's.is_starred' : 's.is_missing'
+      const want = (value === 'false' || value === '0' || value === '否') ? 0 : 1
+      return { sql: `${col} = ?`, params: [want] }
+    }
+
+    // 分析状态：未分析 = ai_analyzed_at IS NULL
+    if (c.field === 'ai_analyzed_at') {
+      const isNull = !(value === 'analyzed' || value === '是' || value === '1' || value === 'true')
+      return isNull
+        ? { sql: `s.ai_analyzed_at IS NULL`, params: [] }
+        : { sql: `s.ai_analyzed_at IS NOT NULL`, params: [] }
+    }
+
+    // 导入时间：值填天数 N（lt = 最近 N 天内；gt = N 天以前）
+    if (c.field === 'imported_at') {
+      const n = parseFloat(value)
+      if (!isNaN(n)) {
+        if (c.op === 'gt') return { sql: `julianday(s.imported_at) < julianday('now') - ?`, params: [n] }
+        return { sql: `julianday(s.imported_at) > julianday('now') - ?`, params: [n] }
+      }
+    }
+
+    const colMap: Record<string, string> = {
+      file_name: 's.file_name', description: 's.description', emotion: 's.emotion',
+      use_cases: 's.use_cases', file_ext: 's.file_ext',
+      duration_ms: 'CAST(s.duration_ms AS REAL)', quality_score: 'CAST(s.quality_score AS REAL)'
+    }
+    const col = colMap[c.field]
+    if (!col) return { sql: '', params: [] }
+
+    switch (c.op) {
+      case 'not_contains':
+        return { sql: `(${col} IS NULL OR ${col} NOT LIKE ?)`, params: [`%${value}%`] }
+      case 'equals':
+        return { sql: `${col} = ?`, params: [value] }
+      case 'starts_with':
+        return { sql: `${col} LIKE ?`, params: [`${value}%`] }
+      case 'gt': {
+        const num = parseFloat(value)
+        return isNaN(num) ? { sql: '', params: [] } : { sql: `${col} > ?`, params: [num] }
+      }
+      case 'lt': {
+        const num = parseFloat(value)
+        return isNaN(num) ? { sql: '', params: [] } : { sql: `${col} < ?`, params: [num] }
+      }
+      case 'is':
+        return { sql: `(${col} IS NOT NULL AND ${col} <> '')`, params: [] }
+      case 'contains':
+      default:
+        return { sql: `${col} LIKE ?`, params: [`%${value}%`] }
+    }
+  }
+
+  function buildSmartWhere(groups: SFGroup[]): { where: string; params: any[] } {
+    if (!groups || groups.length === 0) return { where: '', params: [] }
+    const groupFrags: string[] = []
+    const params: any[] = []
+    for (const g of groups) {
+      if (!g.conditions || g.conditions.length === 0) continue
+      const condFrags: string[] = []
+      for (const c of g.conditions) {
+        const built = buildConditionSql(c)
+        if (built.sql) { condFrags.push(built.sql); params.push(...built.params) }
+      }
+      if (condFrags.length === 0) continue
+      const joiner = g.logic === 'OR' ? ' OR ' : ' AND '
+      groupFrags.push(`(${condFrags.join(joiner)})`)
+    }
+    if (groupFrags.length === 0) return { where: '', params: [] }
+    return { where: `WHERE ${groupFrags.join(' AND ')}`, params }
+  }
+
+  function runSmartFolderQuery(conditionsJson: string): any[] {
+    let groups: SFGroup[] = []
+    try { groups = JSON.parse(conditionsJson) } catch { groups = [] }
+    const { where, params } = buildSmartWhere(groups)
+    const sql = `
+      SELECT s.*,
+        (SELECT GROUP_CONCAT(t.name, ',')
+         FROM tags t
+         JOIN sound_tags st ON t.id = st.tag_id
+         WHERE st.sound_id = s.id) AS tags
+      FROM sounds s
+      ${where}
+      ORDER BY s.imported_at DESC
+    `
+    return db.prepare(sql).all(...params)
+  }
+
+  // 按已保存的智能文件夹取数
+  ipcMain.handle('smartFolder:getSounds', (_event, folderId: string) => {
+    const folder = db.prepare('SELECT * FROM smart_folders WHERE id = ?').get(folderId) as
+      { id: string; conditions: string } | undefined
+    if (!folder) return []
+    try {
+      return runSmartFolderQuery(folder.conditions)
+    } catch {
+      return []
+    }
+  })
+
+  // 实时预览：直接传 conditions JSON 返回匹配音效
+  ipcMain.handle('smartFolder:preview', (_event, conditionsJson: string) => {
+    try {
+      return runSmartFolderQuery(conditionsJson)
+    } catch {
+      return []
+    }
   })
 
   // ---- Tag Management ----
@@ -729,6 +1173,24 @@ function getOrCreateTagId(name: string, now: string): string {
     } catch (err) {
       return { success: false, message: (err as Error).message }
     }
+  })
+
+  // Window Controls (frameless mode)
+  ipcMain.handle('window:minimize', () => {
+    BrowserWindow.getFocusedWindow()?.minimize()
+  })
+  ipcMain.handle('window:maximizeRestore', () => {
+    const win = BrowserWindow.getFocusedWindow()
+    if (win) {
+      if (win.isMaximized()) {
+        win.unmaximize()
+      } else {
+        win.maximize()
+      }
+    }
+  })
+  ipcMain.handle('window:close', () => {
+    BrowserWindow.getFocusedWindow()?.close()
   })
 
   console.log('[IPC] All handlers registered')

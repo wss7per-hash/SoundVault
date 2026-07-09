@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SoundVault · 软件介绍与使用手册</title>
+<style>
+  :root{
+    --bg:#0d0d10; --bg-2:#121116; --surface:#18171e; --surface-2:#211f29;
+    --border:rgba(255,255,255,.08); --border-2:rgba(255,255,255,.14);
+    --text:#ECEAF2; --muted:#9b97ad; --muted-2:#6f6b80;
+    --accent:#7C5CFC; --accent-2:#B06BF7; --accent-soft:rgba(124,92,252,.14);
+    --green:#3ddc97; --amber:#F5B53D; --red:#E85D75;
+    --font:"SF Pro Display","PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--font);
+    line-height:1.75; -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  ::selection{background:var(--accent-soft);color:#fff}
+
+  /* ── Ambient background ── */
+  .ambient{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+  .ambient::before,.ambient::after{
+    content:"";position:absolute;border-radius:50%;filter:blur(110px);opacity:.42;
+  }
+  .ambient::before{width:620px;height:620px;background:#4a2fb0;top:-200px;left:-160px}
+  .ambient::after{width:560px;height:560px;background:#7a27a;bottom:-220px;right:-140px}
+
+  /* ── Nav ── */
+  nav{
+    position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);
+    background:rgba(13,13,16,.72);border-bottom:1px solid var(--border);
+    display:flex;align-items:center;gap:22px;padding:13px 34px;
+  }
+  .nav-logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.3px}
+  .nav-logo .mark{
+    width:26px;height:26px;border-radius:8px;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    display:grid;place-items:center;font-size:13px;font-weight:800;color:#fff;
+    box-shadow:0 4px 14px rgba(124,92,252,.5);
+  }
+  .nav-links{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  .nav-links a{
+    font-size:13px;color:var(--muted);padding:7px 13px;border-radius:9px;
+    transition:.18s;
+  }
+  .nav-links a:hover{color:var(--text);background:var(--surface-2)}
+
+  /* ── Layout ── */
+  .wrap{max-width:980px;margin:0 auto;padding:0 26px}
+  section{padding:62px 0;border-bottom:1px solid var(--border)}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:7px;font-size:12px;letter-spacing:2px;
+    text-transform:uppercase;color:var(--accent-2);font-weight:600;margin-bottom:14px;
+  }
+  .eyebrow::before{content:"";width:22px;height:1px;background:var(--accent-2);opacity:.6}
+  h2{font-size:30px;font-weight:750;letter-spacing:-.4px;margin-bottom:10px}
+  .lead{color:var(--muted);font-size:15.5px;max-width:680px}
+
+  /* ── Hero ── */
+  .hero{padding:78px 0 56px;text-align:center;position:relative}
+  .hero .badge{
+    display:inline-flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted);
+    border:1px solid var(--border-2);padding:6px 14px;border-radius:999px;
+    background:var(--surface);margin-bottom:26px;
+  }
+  .hero .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green)}
+  .hero h1{
+    font-size:62px;line-height:1.02;font-weight:800;letter-spacing:-1.6px;margin-bottom:20px;
+  }
+  .hero h1 .grad{
+    background:linear-gradient(120deg,#fff 8%,var(--accent) 48%,var(--accent-2) 88%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .hero p.sub{font-size:18px;color:var(--muted);max-width:560px;margin:0 auto 34px}
+  .hero-cta{display:flex;gap:13px;justify-content:center;flex-wrap:wrap}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;
+    padding:12px 22px;border-radius:12px;transition:.2s;cursor:pointer;border:1px solid transparent;
+  }
+  .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;
+    box-shadow:0 10px 30px -8px rgba(124,92,252,.7)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 16px 36px -8px rgba(124,92,252,.85)}
+  .btn-ghost{border-color:var(--border-2);color:var(--text);background:var(--surface)}
+  .btn-ghost:hover{background:var(--surface-2)}
+
+  /* sound-wave */
+  .wave{display:flex;gap:4px;justify-content:center;align-items:flex-end;height:54px;margin:40px auto 0;max-width:340px}
+  .wave span{flex:1;background:linear-gradient(180deg,var(--accent),var(--accent-2));
+    border-radius:3px;animation:wf 1.6s ease-in-out infinite;opacity:.85}
+  @keyframes wf{0%,100%{height:14%}50%{height:100%}}
+
+  .stat-row{display:flex;justify-content:center;gap:46px;flex-wrap:wrap;margin-top:46px}
+  .stat{text-align:center}
+  .stat b{display:block;font-size:30px;font-weight:800;
+    background:linear-gradient(120deg,var(--accent),var(--accent-2));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .stat span{font-size:12.5px;color:var(--muted)}
+
+  /* ── Feature grid ── */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:34px}
+  .card{
+    background:linear-gradient(160deg,var(--surface),var(--bg-2));
+    border:1px solid var(--border);border-radius:18px;padding:24px;
+    transition:.22s;position:relative;overflow:hidden;
+  }
+  .card:hover{transform:translateY(-4px);border-color:var(--border-2);
+    box-shadow:0 22px 48px -22px rgba(124,92,252,.5)}
+  .card .ico{
+    width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+    background:var(--accent-soft);color:var(--accent-2);margin-bottom:15px;border:1px solid var(--border);
+  }
+  .card h3{font-size:17px;font-weight:700;margin-bottom:7px}
+  .card p{font-size:13.6px;color:var(--muted);line-height:1.7}
+
+  /* ── Manual steps ── */
+  .step{
+    display:grid;grid-template-columns:54px 1fr;gap:22px;padding:26px 0;
+    border-bottom:1px dashed var(--border);
+  }
+  .step:last-child{border-bottom:none}
+  .step .num{
+    width:54px;height:54px;border-radius:15px;display:grid;place-items:center;
+    font-size:21px;font-weight:800;color:#fff;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    box-shadow:0 8px 22px -8px rgba(124,92,252,.7);
+  }
+  .step h3{font-size:19px;font-weight:700;margin-bottom:9px}
+  .step p{color:var(--muted);font-size:14.5px;margin-bottom:10px}
+  .step ul{list-style:none;display:flex;flex-direction:column;gap:8px;margin-top:4px}
+  .step li{position:relative;padding-left:24px;font-size:14px;color:#cfccda}
+  .step li::before{content:"";position:absolute;left:4px;top:9px;width:7px;height:7px;
+    border-radius:2px;background:linear-gradient(135deg,var(--accent),var(--accent-2))}
+  .chip{display:inline-block;font-family:var(--mono);font-size:12px;background:var(--surface-2);
+    border:1px solid var(--border);border-radius:7px;padding:2px 8px;color:#cfc6ff;margin:2px 4px 2px 0}
+
+  .callout{
+    border:1px solid var(--border-2);border-left:3px solid var(--accent);
+    background:var(--surface);border-radius:12px;padding:15px 18px;margin-top:14px;font-size:13.6px;color:var(--muted);
+  }
+  .callout b{color:var(--text)}
+  .callout.tip{border-left-color:var(--green)}
+  .callout.warn{border-left-color:var(--amber)}
+
+  /* ── FAQ ── */
+  .faq{display:flex;flex-direction:column;gap:12px;margin-top:30px}
+  .qa{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 22px}
+  .qa q{quotes:none}
+  .qa .q{font-weight:700;font-size:15px;margin-bottom:6px;display:flex;gap:10px;align-items:flex-start}
+  .qa .q::before{content:"Q";font-family:var(--mono);font-size:12px;color:#fff;background:var(--accent);
+    width:22px;height:22px;border-radius:6px;display:grid;place-items:center;flex-shrink:0;margin-top:2px}
+  .qa .a{color:var(--muted);font-size:14px;padding-left:32px}
+
+  /* ── Footer ── */
+  footer{padding:46px 0 60px;text-align:center;color:var(--muted-2);font-size:13px}
+  footer .mark{font-weight:800;color:var(--muted);letter-spacing:.5px}
+  footer .links{display:flex;gap:18px;justify-content:center;margin:14px 0;flex-wrap:wrap}
+  footer .links a{color:var(--muted);font-size:13px}
+  footer .links a:hover{color:var(--accent-2)}
+
+  .tagline{font-size:12.5px;color:var(--muted-2);margin-top:8px}
+  @media(max-width:680px){
+    .grid{grid-template-columns:1fr}
+    .hero h1{font-size:42px}
+    nav{padding:13px 18px;gap:10px}.nav-links{display:none}
+    .step{grid-template-columns:1fr;gap:14px}.step .num{width:44px;height:44px;font-size:17px}
+  }
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+
+<!-- ══════════════ NAV ══════════════ -->
+<nav>
+  <a class="nav-logo" href="#top"><span class="mark">SV</span> SoundVault</a>
+  <div class="nav-links">
+    <a href="#intro">软件介绍</a>
+    <a href="#features">核心特性</a>
+    <a href="#manual">使用手册</a>
+    <a href="#faq">常见问题</a>
+    <a href="#roadmap">未来计划</a>
+  </div>
+</nav>
+
+<!-- ══════════════ HERO ══════════════ -->
+<header class="hero wrap" id="top">
+  <div class="badge"><span class="dot"></span> 本地优先 · 隐私安全 · 离线可用</div>
+  <h1>你的<span class="grad">音效库</span><br/>值得被智能整理</h1>
+  <p class="sub">SoundVault 是一款本地运行的音效素材管理软件——AI 自动理解每段音频的<strong>使用场景、情绪与拟声词</strong>，并按八大分类体系自动打标签，让「找一段合适的音」从翻文件夹变成秒级检索。</p>
+  <div class="hero-cta">
+    <a class="btn btn-primary" href="#manual">📖 阅读使用手册</a>
+    <a class="btn btn-ghost" href="#features">✨ 看看能做什么</a>
+  </div>
+  <div class="wave" aria-hidden="true">
+    <span style="animation-delay:0s"></span><span style="animation-delay:.12s"></span>
+    <span style="animation-delay:.24s"></span><span style="animation-delay:.36s"></span>
+    <span style="animation-delay:.48s"></span><span style="animation-delay:.6s"></span>
+    <span style="animation-delay:.72s"></span><span style="animation-delay:.84s"></span>
+    <span style="animation-delay:.96s"></span><span style="animation-delay:1.08s"></span>
+    <span style="animation-delay:1.2s"></span><span style="animation-delay:1.32s"></span>
+    <span style="animation-delay:1.44s"></span><span style="animation-delay:1.56s"></span>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><b>8</b><span>大智能分类</span></div>
+    <div class="stat"><b>11</b><span>种智能过滤字段</span></div>
+    <div class="stat"><b>100%</b><span>本地离线运行</span></div>
+    <div class="stat"><b>0</b><span>音频文件上传云端</span></div>
+  </div>
+</header>
+
+<!-- ══════════════ INTRO ══════════════ -->
+<section class="wrap" id="intro">
+  <div class="eyebrow">软件介绍</div>
+  <h2>SoundVault 是什么？</h2>
+  <p class="lead">它是为音效设计师、游戏/影视开发者、播客与视频创作者打造的「本地音效素材库」。你导入成千上万的音频片段，它帮你做三件事：<b style="color:var(--text)">听懂</b>（AI 语义分析）、<b style="color:var(--text)">归类</b>（标签与智能文件夹）、<b style="color:var(--text)">复用</b>（搜索、收藏、跨设备迁移）。所有数据都在你自己的电脑上，API Key 只存在本地。</p>
+
+  <div class="callout tip" style="margin-top:24px">
+    <b>为什么不用网盘 + 文件夹？</b> 当素材超过几百条，「按文件名猜内容」就会崩溃。SoundVault 让每段音频自带结构化描述与标签——你可以用「战斗、紧张、金属」这样的语义组合来检索，而不是记住每段文件的名字。
+  </div>
+</section>
+
+<!-- ══════════════ FEATURES ══════════════ -->
+<section class="wrap" id="features">
+  <div class="eyebrow">核心特性</div>
+  <h2>它能为你做什么</h2>
+  <p class="lead">从导入到复用，覆盖音效管理的完整链路。</p>
+  <div class="grid">
+
+    <div class="card">
+      <div class="ico">🧠</div>
+      <h3>AI 语义分析</h3>
+      <p>一键让 AI 化身「音效库标注员」，为每段音频生成<strong style="color:var(--text)">形象描述、使用场景、关联关键词、拟声词</strong>以及语义标签——全程不用任何音频工程术语，人人能懂。</p>
+    </div>
+
+    <div class="card">
+      <div class="ico">🗂️</div>
+      <h3>八大分类标签体系</h3>
+      <p>人声 / 动物 / 环境氛围 / 动作物品 / UI交互 / 乐器音乐 / 机械科技 / 特殊效果。AI 分析结果自动归入对应父分类，标签树点击即筛选。</p>
+    </div>
+
+    <div class="card">
+      <div class="ico">🎚️</div>
+      <h3>波形播放器</h3>
+      <p>内置音频波形与进度条，支持音量调节与拖动定位。私有 <code class="chip">sv://</code> 协议流式加载，大文件也能秒开、可精准 seek。</p>
+    </div>
+
+    <div class="card">
+      <div class="ico">⭐</div>
+      <h3>收藏与收藏夹</h3>
+      <p>单条音效一键「收藏」（星标）；也可建<strong style="color:var(--text)">命名收藏夹</strong>做手动分组，右键任意音效即可加入，或当场新建文件夹。</p>
+    </div>
+
+    <div class="card">
+      <div class="ico">🪄</div>
+      <h3>智能文件夹</h3>
+      <p>不是文件夹，是<strong style="color:var(--text)">自动归类规则</strong>。按质量评分、标签、是否收藏、导入时间等 11 个字段设条件，实时预览匹配数量，新增音效自动归位。</p>
+    </div>
+
+    <div class="card">
+      <div class="ico">📦</div>
+      <h3>资源库导出 / 导入</h3>
+      <p>像 Eagle 一样生成<strong style="color:var(--text)">便携式资源包</strong>：真实音频 + AI 分析 + 标签 + 收藏夹全部带走，可在另一台电脑一键合并迁入。</p>
+    </div>
+
+    <div class="card">
+      <div class="ico">🔍</div>
+      <h3>语义检索与筛选</h3>
+      <p>按文件名、场景、情绪关键词搜索；支持按导入时间 / 文件名 / 时长 / 大小排序，按格式过滤，网格与列表双视图切换。</p>
+    </div>
+
+    <div class="card">
+      <div class="ico">♻️</div>
+      <h3>回收站与隐私优先</h3>
+      <p>删除的音效先进回收站，可恢复。整个软件<strong style="color:var(--text)">离线运行</strong>，AI 服务商可自定义（OpenAI / DeepSeek / Claude / Gemini / Ollama 等），Key 仅存本地。</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════ MANUAL ══════════════ -->
+<section class="wrap" id="manual">
+  <div class="eyebrow">使用手册</div>
+  <h2>八步上手 SoundVault</h2>
+  <p class="lead">从空白到井井有条，跟着走一遍即可。所有操作都在主界面的工具栏与左侧栏完成。</p>
+
+  <!-- Step 1 -->
+  <div class="step">
+    <div class="num">1</div>
+    <div>
+      <h3>导入音频</h3>
+      <p>点击窗口右上角或工具栏的「扫描 / 导入」入口，选择<strong style="color:var(--text)">单个文件或整个文件夹</strong>。SoundVault 会递归读取常见格式（mp3 / wav / flac / ogg / m4a / aiff 等）。</p>
+      <ul>
+        <li>导入时自动计算文件哈希，<b>重复文件不会重复入库</b>。</li>
+        <li>音频本体复制进本地库目录，<code class="chip">file_path</code> 指向本机位置——这也是它能离线工作的原因。</li>
+      </ul>
+      <div class="callout">导入完成后，音效会显示在右侧主区域。若文件本体丢失，会标记为「缺失」但仍保留元数据。</div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step">
+    <div class="num">2</div>
+    <div>
+      <h3>播放与管理</h3>
+      <p>点击任意音效卡片，详情面板展示波形、播放 / 暂停、音量滑块与可拖动的进度条。</p>
+      <ul>
+        <li>工具栏可切换 <code class="chip">网格视图</code> 与 <code class="chip">列表视图</code>。</li>
+        <li>右键音效可：打开文件位置、复制、重命名、收藏、AI 分析、删除等。</li>
+        <li>按 <code class="chip">文件名 / 时长 / 大小 / 导入时间</code> 排序，支持升 / 降序与格式过滤。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step">
+    <div class="num">3</div>
+    <div>
+      <h3>AI 语义分析</h3>
+      <p>在详情面板或右键菜单点「AI 分析」。AI 会输出：形象描述、使用场景、关联关键词、拟声词，以及一组语义标签。</p>
+      <ul>
+        <li>首次使用前，在「设置 / 模型配置」里选择服务商并填入 API Key（仅存本机）。</li>
+        <li>支持<strong style="color:var(--text)">并发批量分析</strong>，并可在进行中随时取消。</li>
+        <li>分析结果会自动归入<strong style="color:var(--text)">八大分类</strong>父节点，形成「分类 → 子标签」层级。</li>
+      </ul>
+      <div class="callout tip">小技巧：标签是检索的核心。分析得越充分，后面用智能文件夹与搜索时能筛得越准。</div>
+    </div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step">
+    <div class="num">4</div>
+    <div>
+      <h3>标签体系与筛选</h3>
+      <p>左侧「标签」栏呈现八大分类树。点击任意标签，右侧立即过滤出带该标签的音效。</p>
+      <ul>
+        <li>右键音效可<strong style="color:var(--text)">手动添加标签</strong>，手动标签与 AI 标签统一管理。</li>
+        <li>顶部搜索框支持按文件名、场景、情绪关键词实时检索。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="step">
+    <div class="num">5</div>
+    <div>
+      <h3>收藏与收藏夹</h3>
+      <p>两种「收藏」方式并存，各司其职：</p>
+      <ul>
+        <li><b>⭐ 收藏（星标）</b>：详情面板一键点亮，是全局「我喜欢」的扁平清单；状态栏实时显示「X 个收藏」。</li>
+        <li><b>📁 收藏夹</b>：左侧栏的<strong style="color:var(--text)">命名分组</strong>。右键音效 → 「加入收藏夹」→ 选择已有文件夹，或当场输入名称<strong style="color:var(--text)">新建并加入</strong>。</li>
+        <li>收藏夹顶部还内置「⭐ 收藏」虚拟项，星标过的音效也会在这里出现（但不归属于任何具体文件夹）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Step 6 -->
+  <div class="step">
+    <div class="num">6</div>
+    <div>
+      <h3>智能文件夹</h3>
+      <p>左侧点「智能」→ 点 <code class="chip">+</code> 新建规则。它不是物理文件夹，而是一组<strong style="color:var(--text)">自动归类条件</strong>。</p>
+      <ul>
+        <li>支持 11 个字段：文件名、描述、情绪、适用场景、标签、格式、时长、质量评分、是否收藏、是否缺失、分析时间、导入时间。</li>
+        <li>多条件可分组，组内「与 / 或」自由组合。</li>
+        <li>编辑时底部<strong style="color:var(--text)">实时显示「当前匹配 N 个音效」</strong>，调条件即刻看到结果。</li>
+        <li>保存后，符合条件的音效会自动出现在该智能文件夹里，新增素材也会自动归位。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Step 7 -->
+  <div class="step">
+    <div class="num">7</div>
+    <div>
+      <h3>资源库导出 / 导入（跨电脑迁移）</h3>
+      <p>工具栏的 <code class="chip">导出库 / 导入库</code> 按钮，生成类似 Eagle 的便携式资源包。</p>
+      <ul>
+        <li><b>导出</b>：点击后先选范围——<strong style="color:var(--text)">全部 / 选中项 / 指定收藏夹</strong>，再选保存位置。包内含 <code class="chip">library.json</code>（元数据）+ <code class="chip">audios/</code>（真实音频，保留原始文件名）+ 说明文档。</li>
+        <li><b>导入</b>：选择导出包目录，自动<strong style="color:var(--text)">合并</strong>进当前库——按哈希去重、标签按名复用、收藏夹按名合并，已有数据不丢失。</li>
+        <li>导出的音频会复制到本机库目录并更新路径，因此换一台电脑也能正常播放。</li>
+      </ul>
+      <div class="callout warn">注意：导入采用「合并」而非「覆盖」，最安全。若你想完全替换当前库，请先备份数据库文件。</div>
+    </div>
+  </div>
+
+  <!-- Step 8 -->
+  <div class="step">
+    <div class="num">8</div>
+    <div>
+      <h3>界面与效率</h3>
+      <ul>
+        <li>工具栏右侧可<strong style="color:var(--text)">调节界面字号</strong>（12–20px），适配不同屏幕与视力。</li>
+        <li>无边框窗口，右上角提供最小化 / 最大化 / 关闭。</li>
+        <li>删除的音效先进入<strong style="color:var(--text)">回收站</strong>，误删可恢复。</li>
+      </ul>
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════ FAQ ══════════════ -->
+<section class="wrap" id="faq">
+  <div class="eyebrow">常见问题</div>
+  <h2>你可能想问</h2>
+  <div class="faq">
+    <div class="qa">
+      <div class="q">我的音频会被上传到云端吗？</div>
+      <div class="a">不会。SoundVault 完全本地运行，音频文件只存在你电脑上。只有当你配置并启用了 AI 分析时，才会把<em>文本描述</em>发送给你所选的模型服务商（Key 仅存本机）；音频本体不上传。</div>
+    </div>
+    <div class="qa">
+      <div class="q">为什么某个音效在收藏夹里看不到？</div>
+      <div class="a">请确认已成功「加入收藏夹」并刷新。加入操作需要文件确实写入数据库；若当时提示成功却看不到，重新操作一次即可。星标（⭐）与收藏夹是两套独立机制——星标的音效会出现在收藏夹栏顶部的「⭐ 收藏」虚拟项里。</div>
+    </div>
+    <div class="qa">
+      <div class="q">导出后文件名怎么全变成随机字符串了？</div>
+      <div class="a">早期版本确实存在该问题，现已修复——导出会<strong style="color:var(--text)">保留原始文件名</strong>，仅在同名冲突时自动追加 <code class="chip">_2</code> <code class="chip">_3</code> 序号。</div>
+    </div>
+    <div class="qa">
+      <div class="q">换了电脑，导入后还能播放吗？</div>
+      <div class="a">可以。导入时会把音频文件复制到新电脑的库目录并更新路径，所以迁移后照常播放，不依赖旧机器的文件路径。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ ROADMAP ══════════════ -->
+<section class="wrap" id="roadmap">
+  <div class="eyebrow">未来计划</div>
+  <h2>路线图（规划中）</h2>
+  <p class="lead">以下方向已在规划中，按优先级推进：</p>
+  <ul style="list-style:none;display:flex;flex-direction:column;gap:10px;margin-top:22px">
+    <li style="padding-left:24px;position:relative;color:#cfccda">🔊 <b style="color:var(--text)">提示词生成音效（text-to-SFX）</b>——接入 ElevenLabs SFX / Stable Audio，按文字描述直接生成音效，优先级最高。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">🔁 <b style="color:var(--text)">首尾无缝循环</b>——纯 ffmpeg 交叉淡化，无需 AI，性价比最高。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">🧬 <b style="color:var(--text)">生成类似音频</b>——用本库 AI 分析结果（场景 / 拟声词）作 prompt 近似实现。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">⏱️ <b style="color:var(--text)">延长当前音频</b>——DSP 时间拉伸或 Stable Audio inpainting。</li>
+  </ul>
+  <div class="callout" style="margin-top:22px">生成类功能需接入外部音频生成 API 或本地部署模型（Stable Audio / AudioCraft），可能按次计费或需 GPU。Suno / Udio 偏音乐、API 受限，暂不纳入。</div>
+</section>
+
+<!-- ══════════════ FOOTER ══════════════ -->
+<footer class="wrap">
+  <div class="mark">SOUNDVAULT</div>
+  <div class="tagline">本地音效库管理 · AI 语义标注 · 智能分类 · 隐私优先</div>
+  <div class="links">
+    <a href="#intro">软件介绍</a>
+    <a href="#features">核心特性</a>
+    <a href="#manual">使用手册</a>
+    <a href="#faq">常见问题</a>
+  </div>
+  <div class="tagline">© 2026 SoundVault · 本文档随软件版本更新 · Electron + React + TypeScript</div>
+</footer>
+
+</body>
+</html>

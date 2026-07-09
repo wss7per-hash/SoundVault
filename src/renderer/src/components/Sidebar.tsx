@@ -17,7 +17,7 @@ export function Sidebar(): JSX.Element {
     icon: JSX.Element
   }> = [
     { key: 'tags', label: '标签', icon: <Tags size={16} /> },
-    { key: 'collections', label: '合集', icon: <Folder size={16} /> },
+    { key: 'collections', label: '收藏夹', icon: <Folder size={16} /> },
     { key: 'smart', label: '智能', icon: <FolderCog size={16} /> },
     { key: 'trash', label: '回收站', icon: <Trash2 size={16} /> },
   ]

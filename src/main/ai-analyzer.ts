@@ -248,11 +248,11 @@ function buildAnalyzePrompt(metadata: AudioMetadata, fileName: string): string {
 }
 
 ## 标签规则
-- category 只能是以下之一：动作音效 / 环境氛围 / UI转场 / 乐器音乐 / 人声 / 机械科技 / 自然音效 / 拟声词
+- category 必须是以下八大类之一（与产品的标准分类体系一致）：人声 / 动物 / 环境氛围 / 动作物品 / UI交互 / 乐器音乐 / 机械科技 / 特殊效果
 - 必须提供 4-7 个标签
 - 至少覆盖 2 个不同 category
 - **标签必须有实际意义**，要包含：①内容词（如 金币/水流/枪声/脚步）②用法词（如 获得物品/背景音/UI反馈）③拟声/形容词（如 叮当/哗啦啦/清脆/密集）
-- 好标签示例（流水音效）：["水流","河流","自然音效","水花","哗啦啦","环境氛围"]
+- 好标签示例（流水音效）：["水流","河流","环境氛围","水花","哗啦啦","自然音效"]
 - 坏标签示例：["短音效","音频","低码率","音效","MP3","未分类"]
 
 ## 拟声词示例参考
@@ -700,15 +700,16 @@ function generateTagsFromDescription(description: string, fileName: string): Arr
   const tags: Array<{ name: string; category: string; confidence: number }> = []
   const lowerDesc = description.toLowerCase() + ' ' + fileName.toLowerCase()
 
-  // Category mapping with keywords
+  // Category mapping with keywords (对齐 PRD 八大分类)
   const categoryKeywords: Array<{ category: string; keywords: string[] }> = [
-    { category: '动作音效', keywords: ['撞击', '击打', '碰撞', '冲击', '碎', '破', '爆', 'hit', 'impact', 'crash', 'bang', 'smash', 'strike'] },
-    { category: '机械科技', keywords: ['金属', '机器', '电子', '电机', '引擎', 'metal', 'machine', 'engine', 'tech', 'robot', '机械', '科技'] },
-    { category: '环境氛围', keywords: ['风', '雨', '水', '火', '环境', '气氛', 'ambience', 'atmosphere', 'weather', 'nature'] },
-    { category: 'UI转场', keywords: ['点击', '弹出', '过渡', '通知', 'ui', 'click', 'pop', 'transition', 'notify', 'alert', ' swoosh'] },
     { category: '人声', keywords: ['人', '喊', '叫', '笑', '哭', 'voice', 'human', 'vocal', 'speak', 'shout'] },
     { category: '动物', keywords: ['动物', '狗', '猫', '鸟', 'animal', 'dog', 'cat', 'bird'] },
+    { category: '环境氛围', keywords: ['风', '雨', '水', '火', '环境', '气氛', 'ambience', 'atmosphere', 'weather', 'nature'] },
+    { category: '动作物品', keywords: ['撞击', '击打', '碰撞', '冲击', '碎', '破', '爆', 'hit', 'impact', 'crash', 'bang', 'smash', 'strike', '脚步', '物品'] },
+    { category: 'UI交互', keywords: ['点击', '弹出', '过渡', '通知', 'ui', 'click', 'pop', 'transition', 'notify', 'alert', 'swoosh'] },
     { category: '乐器音乐', keywords: ['钢琴', '吉他', '鼓', '弦', '管', 'piano', 'guitar', 'drum', 'music', 'instrument'] },
+    { category: '机械科技', keywords: ['金属', '机器', '电子', '电机', '引擎', 'metal', 'machine', 'engine', 'tech', 'robot', '机械', '科技'] },
+    { category: '特殊效果', keywords: ['魔法', '信号', '恐怖', '影视', '科幻', 'magic', 'scifi', 'horror'] },
   ]
 
   for (const { category, keywords } of categoryKeywords) {
@@ -837,43 +838,43 @@ function generateSmartTags(m: AudioMetadata, name: string): Array<{ name: string
   }
 
   // === 获得奖励类 ===
-  if (/金币|coin|gold|硬币/.test(lower)) { addTag('金币', 'UI转场', 0.95); addTag('获得物品', '动作音效', 0.90); addTag('奖励音效', 'UI转场', 0.88); }
-  if (/银币|silver/.test(lower)) addTag('银币', 'UI转场', 0.95)
-  if (/拾取|collect|pickup|收集|获得|获取/.test(lower)) { addTag('拾取', '动作音效', 0.92); addTag('获得物品', 'UI转场', 0.88); }
-  if (/升级|level.?up|upgrade/.test(lower)) { addTag('升级', 'UI转场', 0.95); addTag('提示音效', 'UI转场', 0.85); }
-  if (/解锁|unlock|成就|achievement/.test(lower)) addTag('解锁', 'UI转场', 0.92)
-  if (/掉落|drop|loot/.test(lower)) addTag('掉落', '动作音效', 0.90)
-  if (/奖励|reward|bonus/.test(lower)) addTag('奖励', 'UI转场', 0.93)
+  if (/金币|coin|gold|硬币/.test(lower)) { addTag('金币', 'UI交互', 0.95); addTag('获得物品', '动作物品', 0.90); addTag('奖励音效', 'UI交互', 0.88); }
+  if (/银币|silver/.test(lower)) addTag('银币', 'UI交互', 0.95)
+  if (/拾取|collect|pickup|收集|获得|获取/.test(lower)) { addTag('拾取', '动作物品', 0.92); addTag('获得物品', 'UI交互', 0.88); }
+  if (/升级|level.?up|upgrade/.test(lower)) { addTag('升级', 'UI交互', 0.95); addTag('提示音效', 'UI交互', 0.85); }
+  if (/解锁|unlock|成就|achievement/.test(lower)) addTag('解锁', 'UI交互', 0.92)
+  if (/掉落|drop|loot/.test(lower)) addTag('掉落', '动作物品', 0.90)
+  if (/奖励|reward|bonus/.test(lower)) addTag('奖励', 'UI交互', 0.93)
 
   // === 战斗动作类 ===
-  if (/击中|hit|impact|命中/.test(lower)) addTag('击中', '动作音效', 0.94)
+  if (/击中|hit|impact|命中/.test(lower)) addTag('击中', '动作物品', 0.94)
   if (/金属|metal|铁|钢|铜/.test(lower)) addTag('金属', '机械科技', 0.88)
-  if (/攻击|attack|strike|砍|劈/.test(lower)) addTag('攻击', '动作音效', 0.92)
-  if (/受击|hurt|受伤|damage/.test(lower)) addTag('受击', '动作音效', 0.93)
-  if (/爆炸|explosion|boom/.test(lower)) addTag('爆炸', '动作音效', 0.94)
-  if (/射击|shoot|gun|fire/.test(lower)) addTag('射击', '动作音效', 0.91)
-  if (/武器|weapon|剑|刀|枪/.test(lower)) addTag('战斗', '动作音效', 0.87)
+  if (/攻击|attack|strike|砍|劈/.test(lower)) addTag('攻击', '动作物品', 0.92)
+  if (/受击|hurt|受伤|damage/.test(lower)) addTag('受击', '动作物品', 0.93)
+  if (/爆炸|explosion|boom/.test(lower)) addTag('爆炸', '动作物品', 0.94)
+  if (/射击|shoot|gun|fire/.test(lower)) addTag('射击', '动作物品', 0.91)
+  if (/武器|weapon|剑|刀|枪/.test(lower)) addTag('战斗', '动作物品', 0.87)
 
   // === 移动交互类 ===
   if (/脚步|foot|step|walk|run/.test(lower)) addTag('脚步声', '环境氛围', 0.93)
-  if (/跳跃|jump|hop/.test(lower)) addTag('跳跃', '动作音效', 0.91)
+  if (/跳跃|jump|hop/.test(lower)) addTag('跳跃', '动作物品', 0.91)
   if (/开门|关门|door/.test(lower)) addTag('开关门', '环境氛围', 0.89)
 
   // === UI界面类 ===
-  if (/ui|click|pop|notify|按钮|点击|确认|cancel|error/.test(lower)) addTag('UI反馈', 'UI转场', 0.89)
-  if (/确认|success|ok|正确/.test(lower)) addTag('确认音效', 'UI转场', 0.90)
-  if (/错误|error|fail|警告|warn/.test(lower)) addTag('警告音效', 'UI转场', 0.88)
+  if (/ui|click|pop|notify|按钮|点击|确认|cancel|error/.test(lower)) addTag('UI反馈', 'UI交互', 0.89)
+  if (/确认|success|ok|正确/.test(lower)) addTag('确认音效', 'UI交互', 0.90)
+  if (/错误|error|fail|警告|warn/.test(lower)) addTag('警告音效', 'UI交互', 0.88)
 
   // === 环境氛围类 ===
   if (/风|wind|whoosh/.test(lower)) addTag('风声', '环境氛围', 0.90)
-  if (/雨|rain|水|water/.test(lower)) addTag(/rain/.test(lower) ? '雨声' : '水声', '自然音效', 0.89)
+  if (/雨|rain|水|water/.test(lower)) addTag(/rain/.test(lower) ? '雨声' : '水声', '环境氛围', 0.89)
   if (/火|fire|燃烧/.test(lower)) addTag('火焰', '环境氛围', 0.88)
   if (/城市|city|街道/.test(lower)) addTag('城市', '环境氛围', 0.86)
-  if (/森林|forest|自然|nature/.test(lower)) addTag('自然环境', '自然音效', 0.87)
+  if (/森林|forest|自然|nature/.test(lower)) addTag('自然环境', '环境氛围', 0.87)
 
   // === 生物声音类 ===
   if (/怪物|monster|beast|咆哮|roar/.test(lower)) addTag('怪物叫声', '人声', 0.90)
-  if (/动物|animal|dog|cat|bird/.test(lower)) addTag('动物', '自然音效', 0.88)
+  if (/动物|animal|dog|cat|bird/.test(lower)) addTag('动物', '环境氛围', 0.88)
   if (/人群|crowd/.test(lower)) addTag('人群', '环境氛围', 0.85)
 
   // === 音乐乐器类 ===
@@ -927,7 +928,7 @@ function generateSmartTags(m: AudioMetadata, name: string): Array<{ name: string
 
   // Ensure minimum tags
   if (tags.length < 2) {
-    if (m.duration < 2 && m.duration > 0) addTag(m.duration < 0.5 ? '瞬态音效' : '短音效', '动作音效', 0.60)
+    if (m.duration < 2 && m.duration > 0) addTag(m.duration < 0.5 ? '瞬态音效' : '短音效', '动作物品', 0.60)
     else if (m.duration >= 2) addTag('环境音效', '环境氛围', 0.60)
   }
 

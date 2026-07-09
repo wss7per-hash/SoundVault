@@ -133,10 +133,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleModelConfig: () => set((s) => ({ showModelConfig: !s.showModelConfig })),
 
   refreshSounds: async () => {
-    const query = get().searchQuery
-    const sounds = query
-      ? await window.api.searchSounds(query)
-      : await window.api.getSounds()
+    const { searchQuery, sidebarTab, activeCollectionId, activeSmartFolderId } = get()
+    let sounds: SoundData[]
+    if (sidebarTab === 'smart' && activeSmartFolderId) {
+      // 智能文件夹：按规则过滤
+      sounds = await window.api.getSmartFolderSounds(activeSmartFolderId)
+    } else if (sidebarTab === 'collections' && activeCollectionId) {
+      // 收藏夹：显示该收藏夹内的音效；虚拟「收藏」项用哨兵 id 取已星标音效
+      if (activeCollectionId === '__starred__') {
+        sounds = await window.api.getStarred()
+      } else {
+        sounds = await window.api.getCollectionSounds(activeCollectionId)
+      }
+    } else {
+      sounds = searchQuery
+        ? await window.api.searchSounds(searchQuery)
+        : await window.api.getSounds()
+    }
     set({ sounds })
   },
 
