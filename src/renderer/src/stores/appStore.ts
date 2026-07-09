@@ -2,6 +2,11 @@ import { create } from 'zustand'
 import toast from 'react-hot-toast'
 import type { SoundData, TagData, TagStatData, CollectionData, SmartFolderData } from '../../preload/index.d'
 
+/** 判断是否为「未配置 API 密钥」类错误 */
+function isApiKeyError(msg: string, code?: string): boolean {
+  return !!msg && (msg.includes('API 密钥') || msg.includes('API_KEY') || code === 'AI_API_KEY_NOT_SET')
+}
+
 interface AppState {
   // Data
   sounds: SoundData[]
@@ -55,6 +60,7 @@ interface AppState {
   getFilteredSounds: () => SoundData[]
   toggleScanDialog: () => void
   toggleModelConfig: () => void
+  handleAnalyzeError: (msg: string, code: string | undefined, fallback: string) => void
 
   // Refresh
   refreshSounds: () => Promise<void>
@@ -131,6 +137,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFormatFilter: (format) => set({ formatFilter: format }),
   toggleScanDialog: () => set((s) => ({ showScanDialog: !s.showScanDialog })),
   toggleModelConfig: () => set((s) => ({ showModelConfig: !s.showModelConfig })),
+
+  handleAnalyzeError: (msg, code, fallback) => {
+    if (isApiKeyError(msg, code)) {
+      // 引导新手去配置 API：友好提示 + 自动打开设置面板
+      toast('请先在设置中配置 AI 服务商和 API 密钥，才能使用智能分析', {
+        icon: '⚙️',
+        duration: 5000,
+        style: { background: '#2a2a28', color: '#e5e5e5', border: '1px solid #555' }
+      })
+      // 面板未打开时才自动弹出（避免把已打开的面板 toggle 关掉）
+      if (!get().showModelConfig) {
+        setTimeout(() => {
+          if (!get().showModelConfig) set({ showModelConfig: true })
+        }, 400)
+      }
+    } else {
+      toast.error(msg || fallback)
+    }
+  },
 
   refreshSounds: async () => {
     const { searchQuery, sidebarTab, activeCollectionId, activeSmartFolderId } = get()
@@ -232,23 +257,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         toast.success('AI 分析完成')
         return true
       } else {
-        toast.error(result.error || '分析失败')
+        // handler 内部已 try/catch，未配置 API 时会走这里（result.success=false）
+        get().handleAnalyzeError(result.error || '', undefined, '分析失败')
         return false
       }
     } catch (err) {
-      const msg = (err as Error).message || ''
-      if (msg.includes('API 密钥') || (err as any)?.code === 'AI_API_KEY_NOT_SET') {
-        // 引导新手去配置 API：友好提示 + 自动打开设置面板
-        toast('请先在设置中配置 AI 服务商和 API 密钥', {
-          icon: '⚙️',
-          duration: 5000,
-          style: { background: '#2a2a28', color: '#e5e5e5', border: '1px solid #555' }
-        })
-        // 延迟一点自动打开设置面板，让用户先看到提示
-        setTimeout(() => get().toggleModelConfig(), 400)
-      } else {
-        toast.error(msg || '分析失败')
-      }
+      // 极端情况：IPC 本身抛错
+      get().handleAnalyzeError((err as Error).message || '', (err as any)?.code, '分析失败')
       return false
     } finally {
       set((s) => ({ analyzingIds: s.analyzingIds.filter((id) => id !== soundId) }))
@@ -270,21 +285,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else if (result.success) {
         toast.success(`已完成 ${result.analyzed} 个音效的 AI 分析`)
       } else {
-        toast.error(result.error || '批量分析失败')
+        get().handleAnalyzeError(result.error || '', undefined, '批量分析失败')
       }
       await get().refreshSounds()
     } catch (err) {
-      const msg = (err as Error).message || ''
-      if (msg.includes('API 密钥') || (err as any)?.code === 'AI_API_KEY_NOT_SET') {
-        toast('请先在设置中配置 AI 服务商和 API 密钥', {
-          icon: '⚙️',
-          duration: 5000,
-          style: { background: '#2a2a28', color: '#e5e5e5', border: '1px solid #555' }
-        })
-        setTimeout(() => get().toggleModelConfig(), 400)
-      } else {
-        toast.error(msg || '批量分析失败')
-      }
+      get().handleAnalyzeError((err as Error).message || '', (err as any)?.code, '批量分析失败')
     } finally {
       set((s) => ({
         batchAnalyzing: false,
