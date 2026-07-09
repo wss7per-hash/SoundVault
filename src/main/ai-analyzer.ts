@@ -615,7 +615,9 @@ export async function analyzeAudio(
   const config = { ...getModelConfig(), ...configOverride }
 
   if (!config.apiKey) {
-    throw new Error('AI_API_KEY_NOT_SET')
+    const err = new Error('请先配置 AI API 密钥')
+    ;(err as any).code = 'AI_API_KEY_NOT_SET'
+    throw err
   }
 
   const prompt = buildAnalyzePrompt(metadata, fileName)

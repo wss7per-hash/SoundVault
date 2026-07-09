@@ -236,7 +236,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         return false
       }
     } catch (err) {
-      toast.error((err as Error).message || '分析失败')
+      const msg = (err as Error).message || ''
+      if (msg.includes('API 密钥') || (err as any)?.code === 'AI_API_KEY_NOT_SET') {
+        // 引导新手去配置 API：友好提示 + 自动打开设置面板
+        toast('请先在设置中配置 AI 服务商和 API 密钥', {
+          icon: '⚙️',
+          duration: 5000,
+          style: { background: '#2a2a28', color: '#e5e5e5', border: '1px solid #555' }
+        })
+        // 延迟一点自动打开设置面板，让用户先看到提示
+        setTimeout(() => get().toggleModelConfig(), 400)
+      } else {
+        toast.error(msg || '分析失败')
+      }
       return false
     } finally {
       set((s) => ({ analyzingIds: s.analyzingIds.filter((id) => id !== soundId) }))
@@ -262,7 +274,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       await get().refreshSounds()
     } catch (err) {
-      toast.error((err as Error).message || '批量分析失败')
+      const msg = (err as Error).message || ''
+      if (msg.includes('API 密钥') || (err as any)?.code === 'AI_API_KEY_NOT_SET') {
+        toast('请先在设置中配置 AI 服务商和 API 密钥', {
+          icon: '⚙️',
+          duration: 5000,
+          style: { background: '#2a2a28', color: '#e5e5e5', border: '1px solid #555' }
+        })
+        setTimeout(() => get().toggleModelConfig(), 400)
+      } else {
+        toast.error(msg || '批量分析失败')
+      }
     } finally {
       set((s) => ({
         batchAnalyzing: false,
