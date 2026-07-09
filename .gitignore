@@ -1,0 +1,14 @@
+node_modules/
+out/
+dist/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.DS_Store
+Thumbs.db
+
+# scratch / temporary test scripts
+test-main*.js
+*.log
+npm-debug.log*

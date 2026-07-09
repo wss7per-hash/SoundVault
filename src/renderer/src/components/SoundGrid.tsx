@@ -1,0 +1,865 @@
+import { useState, useCallback, useRef, useEffect } from 'react'
+import type { SoundData, CollectionData, TagData } from '../../preload/index.d'
+import {
+  Play, Pause, Star, Check, Music, FolderOpen, Copy, FileInput, Pencil, Tag, FolderPlus,
+  Sparkles, Trash2, X, Volume2, Heart, MoreHorizontal
+} from 'lucide-react'
+import toast from 'react-hot-toast'
+import { useAppStore } from '../stores/appStore'
+
+interface SoundGridProps {
+  sounds: SoundData[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+}
+
+export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX.Element {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [playingId, setPlayingId] = useState<string | null>(null)
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sound: SoundData } | null>(null)
+  const [tagInputVisible, setTagInputVisible] = useState(false)
+  const [collectionMenuVisible, setCollectionMenuVisible] = useState(false)
+  const [renameSound, setRenameSound] = useState<SoundData | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+
+  // ---- Rubber band selection state ----
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null)
+  const [dragCurrent, setDragCurrent] = useState<{ x: number; y: number } | null>(null)
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null)
+
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const selectedIds = useAppStore((s) => s.selectedSoundIds)
+  const toggleSoundSelection = useAppStore((s) => s.toggleSoundSelection)
+  const clearSelection = useAppStore((s) => s.clearSelection)
+  const setSelection = useAppStore((s) => s.setSelection)
+  const selectRange = useAppStore((s) => s.selectRange)
+  const viewMode = useAppStore((s) => s.viewMode)
+  const collections = useAppStore((s) => s.collections)
+  const tags = useAppStore((s) => s.tags)
+  const refreshSounds = useAppStore((s) => s.refreshSounds)
+  const isMultiSelecting = selectedIds.length > 0
+
+  // Audio preview logic
+  const startPreview = useCallback((sound: SoundData) => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    const audio = new Audio(`sv://${sound.id}`)
+    audioRef.current = audio
+    audio.onended = () => setPlayingId(null)
+    audio.onerror = () => { setPlayingId(null); toast.error('无法播放此格式') }
+    audio.volume = 0.6
+    audio.play().then(() => {
+      setPlayingId(sound.id)
+      window.api.incrementPlayCount(sound.id).catch(() => {})
+    }).catch(() => {})
+  }, [])
+
+  const stopPreview = useCallback(() => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    setPlayingId(null)
+  }, [])
+
+  const handleMouseEnter = useCallback((sound: SoundData, e: React.MouseEvent) => {
+    if (isDragging) return
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredId(sound.id)
+      setTooltipPos({ x: e.clientX, y: e.clientY })
+      startPreview(sound)
+    }, 250)
+  }, [isDragging, startPreview])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (hoveredId) setTooltipPos({ x: e.clientX, y: e.clientY })
+  }, [hoveredId])
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimeoutRef.current) { clearTimeout(hoverTimeoutRef.current); hoverTimeoutRef.current = null }
+    setHoveredId(null)
+    setTooltipPos(null)
+    stopTimeoutRef.current = setTimeout(() => stopPreview(), 120)
+  }, [stopPreview])
+
+  // ---- Rubber band selection ----
+  const THRESHOLD = 5 // px minimum drag to start
+
+  const getContainerPos = useCallback((e: React.MouseEvent) => {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return { x: 0, y: 0 }
+    const scrollX = containerRef.current?.scrollLeft ?? 0
+    const scrollY = containerRef.current?.scrollTop ?? 0
+    return { x: e.clientX - rect.left + scrollX, y: e.clientY - rect.top + scrollY }
+  }, [])
+
+  const handleContainerMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only start box select on left click in empty area
+    if (e.button !== 0) return
+    const target = e.target as HTMLElement
+    const card = target.closest('[data-sound-id]')
+    if (card) return // clicked on a card, let card handle it
+
+    const pos = getContainerPos(e)
+    setDragStart(pos)
+    setDragCurrent(pos)
+    setIsDragging(false) // wait for threshold
+  }, [getContainerPos])
+
+  const handleContainerMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragStart) return
+    const pos = getContainerPos(e)
+    setDragCurrent(pos)
+
+    const dx = pos.x - dragStart.x
+    const dy = pos.y - dragStart.y
+    if (Math.abs(dx) > THRESHOLD || Math.abs(dy) > THRESHOLD) {
+      setIsDragging(true)
+      // clear hover when dragging
+      setHoveredId(null)
+      setTooltipPos(null)
+      stopPreview()
+    }
+  }, [dragStart, getContainerPos, stopPreview])
+
+  const handleContainerMouseUp = useCallback(() => {
+    if (isDragging && dragStart && dragCurrent && containerRef.current) {
+      collectSelectedCards()
+    }
+    setDragStart(null)
+    setDragCurrent(null)
+    setIsDragging(false)
+  }, [isDragging, dragStart, dragCurrent])
+
+  const collectSelectedCards = useCallback(() => {
+    if (!dragStart || !dragCurrent) return
+    const selRect = {
+      left: Math.min(dragStart.x, dragCurrent.x),
+      top: Math.min(dragStart.y, dragCurrent.y),
+      right: Math.max(dragStart.x, dragCurrent.x),
+      bottom: Math.max(dragStart.y, dragCurrent.y),
+    }
+
+    const cards = containerRef.current?.querySelectorAll('[data-sound-id]')
+    if (!cards) return
+
+    const ids: string[] = []
+    const containerRect = containerRef.current!.getBoundingClientRect()
+    const scrollX = containerRef.current!.scrollLeft
+    const scrollY = containerRef.current!.scrollTop
+
+    cards.forEach((el) => {
+      const rect = el.getBoundingClientRect()
+      const cardRect = {
+        left: rect.left - containerRect.left + scrollX,
+        top: rect.top - containerRect.top + scrollY,
+        right: rect.right - containerRect.left + scrollX,
+        bottom: rect.bottom - containerRect.top + scrollY,
+      }
+      // check intersection > 30%
+      const ix = Math.max(selRect.left, cardRect.left)
+      const iy = Math.max(selRect.top, cardRect.top)
+      const ix2 = Math.min(selRect.right, cardRect.right)
+      const iy2 = Math.min(selRect.bottom, cardRect.bottom)
+      const iw = Math.max(0, ix2 - ix)
+      const ih = Math.max(0, iy2 - iy)
+      const intersectArea = iw * ih
+      const cardArea = (cardRect.right - cardRect.left) * (cardRect.bottom - cardRect.top)
+      // threshold: only pick cards with >20% overlap (for grid this is fine)
+      const threshold = cardArea > 0 ? (cardArea * 0.2) : 1
+      if (intersectArea > threshold) {
+        ids.push(el.getAttribute('data-sound-id')!)
+      }
+    })
+
+    setSelection(ids)
+  }, [dragStart, dragCurrent, setSelection])
+
+  // ---- Card click handler (Ctrl/Shift) ----
+  const handleCardClick = useCallback((sound: SoundData, index: number, e: React.MouseEvent) => {
+    if (isDragging) return
+
+    if (e.ctrlKey || e.metaKey) {
+      e.stopPropagation()
+      toggleSoundSelection(sound.id)
+      setLastClickedIndex(index)
+      return
+    }
+
+    if (e.shiftKey) {
+      e.stopPropagation()
+      if (lastClickedIndex !== null) {
+        selectRange(lastClickedIndex, index, sounds.map((s) => s.id))
+      } else {
+        toggleSoundSelection(sound.id)
+      }
+      return
+    }
+
+    // Normal click: if multi-select mode, toggle; else select single
+    if (selectedIds.length > 0) {
+      e.stopPropagation()
+      toggleSoundSelection(sound.id)
+      setLastClickedIndex(index)
+    } else {
+      onSelect(sound.id)
+      setLastClickedIndex(index)
+    }
+  }, [isDragging, lastClickedIndex, sounds, selectedIds, toggleSoundSelection, selectRange, onSelect])
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+      if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current)
+      stopPreview()
+    }
+  }, [stopPreview])
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null)
+    setTagInputVisible(false)
+    setCollectionMenuVisible(false)
+  }, [])
+
+  // Box-select rect style
+  const boxStyle = dragStart && dragCurrent ? (() => {
+    const l = Math.min(dragStart.x, dragCurrent.x)
+    const t = Math.min(dragStart.y, dragCurrent.y)
+    const w = Math.abs(dragCurrent.x - dragStart.x)
+    const h = Math.abs(dragCurrent.y - dragStart.y)
+    return { left: l, top: t, width: w, height: h, display: 'block' as const }
+  })() : { display: 'none' as const }
+
+  const ctx = contextMenu
+  const hoveredSound = hoveredId ? sounds.find((s) => s.id === hoveredId) || null : null
+
+  return (
+    <div
+      ref={containerRef}
+      className="flex-1 overflow-y-auto p-4 relative select-none"
+      onMouseDown={handleContainerMouseDown}
+      onMouseMove={(e) => {
+        handleContainerMouseMove(e)
+        handleMouseMove(e)
+      }}
+      onMouseUp={handleContainerMouseUp}
+      onClick={closeContextMenu}
+    >
+      {/* Rubber band selection box */}
+      <div
+        className="absolute border border-[#7C72E6]/70 bg-[#7C72E6]/15 rounded pointer-events-none z-40"
+        style={boxStyle}
+      />
+
+      {viewMode === 'grid' ? (
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          {sounds.map((sound, idx) => (
+            <SoundCard
+              key={sound.id}
+              sound={sound}
+              index={idx}
+              isSelected={sound.id === selectedId}
+              isHovered={sound.id === hoveredId}
+              isPlaying={sound.id === playingId}
+              isChecked={selectedIds.includes(sound.id)}
+              isMultiSelecting={selectedIds.length > 0}
+              onClick={(e) => handleCardClick(sound, idx, e)}
+              onCheck={(e) => { e.stopPropagation(); toggleSoundSelection(sound.id); setLastClickedIndex(idx) }}
+              onMouseEnter={(e) => handleMouseEnter(sound, e)}
+              onMouseLeave={handleMouseLeave}
+              onContextMenu={(e) => handleContextMenu(e, sound)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="border border-surface-border rounded-xl overflow-hidden bg-surface-card/50">
+          <div className="grid grid-cols-12 gap-3 px-4 py-2.5 text-xs text-muted border-b border-surface-border bg-surface-card">
+            <div className="col-span-5">文件名 / 描述</div>
+            <div className="col-span-2">标签</div>
+            <div className="col-span-1">格式</div>
+            <div className="col-span-1">时长</div>
+            <div className="col-span-1">大小</div>
+            <div className="col-span-2">操作</div>
+          </div>
+          {sounds.map((sound, idx) => (
+            <SoundListRow
+              key={sound.id}
+              sound={sound}
+              index={idx}
+              isSelected={sound.id === selectedId}
+              isPlaying={sound.id === playingId}
+              isChecked={selectedIds.includes(sound.id)}
+              isMultiSelecting={selectedIds.length > 0}
+              onClick={(e) => handleCardClick(sound, idx, e)}
+              onPlay={() => startPreview(sound)}
+              onCheck={(e) => { e.stopPropagation(); toggleSoundSelection(sound.id); setLastClickedIndex(idx) }}
+              onContextMenu={(e) => handleContextMenu(e, sound)}
+            />
+          ))}
+        </div>
+      )}
+
+      {hoveredSound && tooltipPos && !isDragging && (
+        <SoundPreviewTooltip sound={hoveredSound} x={tooltipPos.x} y={tooltipPos.y} isPlaying={hoveredSound.id === playingId} />
+      )}
+
+      {ctx && (
+        <ContextMenu
+          x={ctx.x}
+          y={ctx.y}
+          sound={ctx.sound}
+          collections={collections}
+          tags={tags}
+          tagInputVisible={tagInputVisible}
+          setTagInputVisible={setTagInputVisible}
+          collectionMenuVisible={collectionMenuVisible}
+          setCollectionMenuVisible={setCollectionMenuVisible}
+          onClose={closeContextMenu}
+          refreshSounds={refreshSounds}
+          clearSelection={clearSelection}
+          setRenameSound={setRenameSound}
+        />
+      )}
+
+      {renameSound && (
+        <RenameModal
+          sound={renameSound}
+          value={renameValue}
+          onChange={setRenameValue}
+          onClose={() => setRenameSound(null)}
+          onConfirm={async (newName) => {
+            const res = await window.api.renameSound(renameSound.id, newName)
+            if (res.success) {
+              toast.success('重命名成功')
+              refreshSounds()
+            } else {
+              toast.error(res.message || '重命名失败')
+            }
+            setRenameSound(null)
+          }}
+        />
+      )}
+    </div>
+  )
+
+  // ---- Nested functions ----
+
+  function handleContextMenu(e: React.MouseEvent, sound: SoundData) {
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({ x: e.clientX, y: e.clientY, sound })
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Tooltip                                                            */
+/* ------------------------------------------------------------------ */
+
+function SoundPreviewTooltip({ sound, x, y, isPlaying }: { sound: SoundData; x: number; y: number; isPlaying: boolean }): JSX.Element {
+  const formatDuration = (ms: number | null): string => {
+    if (!ms) return '--:--'
+    const s = Math.floor(ms / 1000)
+    const m = Math.floor(s / 60)
+    return `${m}:${(s % 60).toString().padStart(2, '0')}`
+  }
+  const formatSize = (bytes: number): string => {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    return `${(bytes / 1024).toFixed(0)} KB`
+  }
+  const tags = (sound.tags || '').split(',').filter(Boolean).slice(0, 5)
+  const info = [
+    { label: '时长', value: formatDuration(sound.duration_ms) },
+    { label: '大小', value: formatSize(sound.file_size) },
+    { label: '采样率', value: sound.sample_rate ? `${sound.sample_rate} Hz` : '-' },
+    { label: '声道', value: sound.channels ? `${sound.channels} ch` : '-' },
+    { label: '比特率', value: sound.bitrate_kbps ? `${sound.bitrate_kbps} kbps` : '-' },
+  ]
+
+  const left = Math.min(x + 16, window.innerWidth - 320)
+  const top = Math.min(y + 16, window.innerHeight - 280)
+
+  return (
+    <div
+      className="fixed z-50 w-72 p-3 rounded-xl border border-surface-border bg-[#252522] shadow-2xl"
+      style={{ left, top }}
+    >
+      <div className="flex items-center gap-2 mb-2.5">
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center ${isPlaying ? 'bg-accent' : 'bg-surface-card'}`}>
+          {isPlaying ? <Volume2 size={14} className="text-white" /> : <Music size={14} className="text-muted" />}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-muted-light truncate" title={sound.file_name}>{sound.file_name}</p>
+          <p className="text-xs text-muted truncate">{isPlaying ? '正在试听...' : (sound.description || '等待 AI 分析...')}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {info.map((item) => (
+          <div key={item.label} className="px-2 py-1.5 rounded-lg bg-surface-card/60 border border-surface-border/50">
+            <p className="text-[10px] text-muted uppercase tracking-wider">{item.label}</p>
+            <p className="text-xs font-medium text-muted-light">{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((tag, i) => (
+            <span key={i} className="px-1.5 py-0.5 rounded bg-[#2a2a28] text-[10px] text-muted">{tag}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Grid Card                                                          */
+/* ------------------------------------------------------------------ */
+
+interface SoundCardProps {
+  sound: SoundData
+  index: number
+  isSelected: boolean
+  isHovered: boolean
+  isPlaying: boolean
+  isChecked: boolean
+  isMultiSelecting: boolean
+  onClick: (e: React.MouseEvent) => void
+  onCheck: (e: React.MouseEvent) => void
+  onMouseEnter: (e: React.MouseEvent) => void
+  onMouseLeave: () => void
+  onContextMenu: (e: React.MouseEvent) => void
+}
+
+function SoundCard({ sound, isSelected, isHovered, isPlaying, isChecked, isMultiSelecting, onClick, onCheck, onMouseEnter, onMouseLeave, onContextMenu }: SoundCardProps): JSX.Element {
+  const formatDuration = (ms: number | null): string => {
+    if (!ms) return '--:--'
+    const s = Math.floor(ms / 1000)
+    const m = Math.floor(s / 60)
+    return `${m}:${(s % 60).toString().padStart(2, '0')}`
+  }
+
+  const formatSize = (bytes: number): string => {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    return `${(bytes / 1024).toFixed(0)} KB`
+  }
+
+  const handleStar = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try { await window.api.toggleStar(sound.id); useAppStore.getState().refreshSounds() } catch { toast.error('操作失败') }
+  }, [sound.id])
+
+  return (
+    <div
+      data-sound-id={sound.id}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      className={`relative rounded-xl border cursor-pointer transition-all duration-150 overflow-hidden ${
+        isSelected || isChecked
+          ? 'border-accent bg-accent/10'
+          : isHovered
+            ? 'border-surface-border bg-surface-card'
+            : 'border-transparent bg-surface-card/50'
+      }`}
+    >
+      {/* Waveform + Play area */}
+      <div className="h-24 bg-surface-card flex items-center justify-center relative">
+        <div className="w-full h-full px-4 flex items-center justify-center">
+          <svg viewBox="0 0 200 48" className="w-full h-10" preserveAspectRatio="none" style={{ opacity: isPlaying ? 0.7 : 0.35 }}>
+            <path
+              d={`M0,24 ${Array.from({ length: 40 }, (_, i) => {
+                const h = Math.sin(i * 0.45) * 9 + Math.sin(i * 1.3) * 5 + Math.sin(i * 0.18) * 3
+                return `L${i * 5},${24 + h}`
+              }).join(' ')}`}
+              fill="none"
+              stroke={isPlaying ? '#7C72E6' : '#534AB7'}
+              strokeWidth="0.8"
+            />
+          </svg>
+        </div>
+
+        {isPlaying && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-accent/90 flex items-center justify-center">
+              <Volume2 size={18} className="text-white" />
+            </div>
+          </div>
+        )}
+
+        {(isMultiSelecting || isChecked) && (
+          <div className={`absolute top-2 left-2 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+            isChecked ? 'bg-accent border-accent' : 'border-muted bg-black/30'
+          }`}>
+            {isChecked && <Check size={12} className="text-white" />}
+          </div>
+        )}
+
+        {sound.is_starred && !isMultiSelecting && (
+          <button onClick={handleStar} className="absolute top-2 right-2 p-0.5 rounded hover:bg-black/20 transition-colors">
+            <Star size={14} className="text-amber-400 fill-amber-400" />
+          </button>
+        )}
+
+        {sound.ai_analyzed_at && !isMultiSelecting && !sound.is_starred && (
+          <div className="absolute top-2 right-2">
+            <span className="w-2 h-2 rounded-full bg-green-500 block" title="AI 已分析" />
+          </div>
+        )}
+      </div>
+
+      {/* Card info */}
+      <div className="p-3">
+        <p className="text-sm font-medium text-muted-light truncate mb-1.5" title={sound.file_name}>
+          {sound.file_name}
+        </p>
+
+        {sound.description ? (
+          <p className="text-xs text-muted line-clamp-2 leading-relaxed mb-2">{sound.description}</p>
+        ) : (
+          <p className="text-xs text-muted/50 mb-2">等待 AI 分析...</p>
+        )}
+
+        <div className="flex items-center justify-between text-xs text-muted">
+          <div className="flex items-center gap-2">
+            <span>{formatDuration(sound.duration_ms)}</span>
+            <span className="px-1.5 py-0.5 rounded bg-[#2a2a28] text-xs">{sound.file_ext.toUpperCase()}</span>
+          </div>
+          <span>{formatSize(sound.file_size)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* List Row                                                           */
+/* ------------------------------------------------------------------ */
+
+interface SoundListRowProps {
+  sound: SoundData
+  index: number
+  isSelected: boolean
+  isPlaying: boolean
+  isChecked: boolean
+  isMultiSelecting: boolean
+  onClick: (e: React.MouseEvent) => void
+  onPlay: () => void
+  onCheck: (e: React.MouseEvent) => void
+  onContextMenu: (e: React.MouseEvent) => void
+}
+
+function SoundListRow({ sound, isSelected, isPlaying, isChecked, isMultiSelecting, onClick, onPlay, onCheck, onContextMenu }: SoundListRowProps): JSX.Element {
+  const formatDuration = (ms: number | null): string => {
+    if (!ms) return '--:--'
+    const s = Math.floor(ms / 1000)
+    const m = Math.floor(s / 60)
+    return `${m}:${(s % 60).toString().padStart(2, '0')}`
+  }
+
+  const formatSize = (bytes: number): string => {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    return `${(bytes / 1024).toFixed(0)} KB`
+  }
+
+  const handleStar = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try { await window.api.toggleStar(sound.id); useAppStore.getState().refreshSounds() } catch { toast.error('操作失败') }
+  }, [sound.id])
+
+  const tags = (sound.tags || '').split(',').filter(Boolean).slice(0, 3)
+  const hasMoreTags = (sound.tags || '').split(',').filter(Boolean).length > 3
+
+  return (
+    <div
+      data-sound-id={sound.id}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      className={`grid grid-cols-12 gap-3 px-4 py-3 items-center border-b border-surface-border/50 cursor-pointer transition-all ${
+        isSelected || isChecked
+          ? 'bg-accent/10'
+          : 'hover:bg-surface-card'
+      }`}
+    >
+      <div className="col-span-5 flex items-center gap-3 min-w-0">
+        <div
+          onClick={onCheck}
+          className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${
+            isChecked ? 'bg-accent border-accent' : 'border-muted bg-black/30'
+          }`}
+        >
+          {isChecked && <Check size={12} className="text-white" />}
+        </div>
+        <div className="w-9 h-9 rounded-lg bg-[#2a2a28] flex items-center justify-center shrink-0">
+          {isPlaying ? <Volume2 size={16} className="text-accent" /> : <Music size={16} className="text-muted" />}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-muted-light truncate" title={sound.file_name}>
+            {sound.file_name}
+          </p>
+          <p className="text-xs text-muted truncate">
+            {sound.description || '等待 AI 分析...'}
+          </p>
+        </div>
+      </div>
+
+      <div className="col-span-2 flex flex-wrap gap-1 min-w-0">
+        {tags.length > 0 ? tags.map((tag, i) => (
+          <span key={i} className="px-1.5 py-0.5 rounded bg-[#2a2a28] text-xs text-muted truncate max-w-[80px]">
+            {tag}
+          </span>
+        )) : (
+          <span className="text-xs text-muted/50">-</span>
+        )}
+        {hasMoreTags && <span className="text-xs text-muted/50">+</span>}
+      </div>
+
+      <div className="col-span-1">
+        <span className="px-1.5 py-0.5 rounded bg-[#2a2a28] text-xs text-muted">{sound.file_ext.toUpperCase()}</span>
+      </div>
+
+      <div className="col-span-1 text-xs text-muted">{formatDuration(sound.duration_ms)}</div>
+      <div className="col-span-1 text-xs text-muted">{formatSize(sound.file_size)}</div>
+
+      <div className="col-span-2 flex items-center gap-2">
+        <button
+          onClick={(e) => { e.stopPropagation(); onPlay() }}
+          className={`p-1.5 rounded-md transition-colors ${
+            isPlaying ? 'bg-accent text-white' : 'text-muted hover:bg-surface-hover hover:text-muted-light'
+          }`}
+        >
+          {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+        </button>
+        <button
+          onClick={handleStar}
+          className={`p-1.5 rounded-md transition-colors ${
+            sound.is_starred ? 'text-amber-400' : 'text-muted hover:bg-surface-hover hover:text-muted-light'
+          }`}
+        >
+          <Star size={14} className={sound.is_starred ? 'fill-amber-400' : ''} />
+        </button>
+        {sound.ai_analyzed_at && (
+          <span className="w-2 h-2 rounded-full bg-green-500 block" title="AI 已分析" />
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Context Menu                                                       */
+/* ------------------------------------------------------------------ */
+
+interface ContextMenuProps {
+  x: number
+  y: number
+  sound: SoundData
+  collections: CollectionData[]
+  tags: TagData[]
+  tagInputVisible: boolean
+  setTagInputVisible: (v: boolean) => void
+  collectionMenuVisible: boolean
+  setCollectionMenuVisible: (v: boolean) => void
+  onClose: () => void
+  refreshSounds: () => Promise<void>
+  clearSelection: () => void
+  setRenameSound: (s: SoundData | null) => void
+}
+
+function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagInputVisible, collectionMenuVisible, setCollectionMenuVisible, onClose, refreshSounds, clearSelection, setRenameSound }: ContextMenuProps): JSX.Element {
+  const [tagValue, setTagValue] = useState('')
+  const menuRef = useRef<HTMLDivElement>(null)
+  const left = Math.min(x, window.innerWidth - 220)
+  const top = Math.min(y, window.innerHeight - (menuRef.current?.offsetHeight || 360))
+
+  const handleShowInFolder = async () => {
+    const res = await window.api.showItemInFolder(sound.id)
+    if (!res.success) toast.error(res.message || '打开失败')
+    onClose()
+  }
+
+  const handleCopyTo = async () => {
+    const result = await window.api.selectFolder()
+    if (!result || result.length === 0) return
+    const toastId = toast.loading('正在复制...')
+    const res = await window.api.copyFileTo(sound.id, result[0])
+    toast.dismiss(toastId)
+    if (res.success) toast.success('已复制到目标文件夹')
+    else toast.error(res.message || '复制失败')
+    onClose()
+  }
+
+  const handleMoveTo = async () => {
+    const result = await window.api.selectFolder()
+    if (!result || result.length === 0) return
+    const toastId = toast.loading('正在移动...')
+    const res = await window.api.moveFileTo(sound.id, result[0])
+    toast.dismiss(toastId)
+    if (res.success) { toast.success('已移动'); refreshSounds() }
+    else toast.error(res.message || '移动失败')
+    onClose()
+  }
+
+  const handleTrash = async () => {
+    const res = await window.api.trashFile(sound.id)
+    if (res.success) { toast.success('已移到回收站'); refreshSounds() }
+    else toast.error(res.message || '删除失败')
+    onClose()
+  }
+
+  const handleStar = async () => {
+    try { await window.api.toggleStar(sound.id); refreshSounds() } catch { toast.error('操作失败') }
+    onClose()
+  }
+
+  const handleAnalyze = async () => {
+    onClose()
+    await useAppStore.getState().analyzeSound(sound.id)
+    refreshSounds()
+  }
+
+  const handleAddTag = async (tagName: string) => {
+    const name = tagName.trim()
+    if (!name) return
+    const res = await window.api.addTagToSound(sound.id, name, 1)
+    if (res.success) { toast.success(`已添加标签: ${name}`); refreshSounds() }
+    else toast.error('添加标签失败')
+    setTagValue('')
+    setTagInputVisible(false)
+    onClose()
+  }
+
+  const handleAddToCollection = async (collectionId: string) => {
+    const res = await window.api.addToCollection(collectionId, sound.id)
+    if (res.success) toast.success('已加入合集')
+    else toast.error('加入合集失败')
+    setCollectionMenuVisible(false)
+    onClose()
+  }
+
+  const menuItems = [
+    { icon: FolderOpen, label: '打开文件位置', action: handleShowInFolder },
+    { icon: Copy, label: '复制到...', action: handleCopyTo },
+    { icon: FileInput, label: '移动到...', action: handleMoveTo },
+    { icon: Pencil, label: '重命名', action: () => { setRenameSound(sound); onClose() } },
+    { divider: true },
+    { icon: Tag, label: '添加标签', action: () => setTagInputVisible(true), hasSubmenu: true },
+    { icon: FolderPlus, label: '加入合集', action: () => setCollectionMenuVisible(true), hasSubmenu: true },
+    { icon: Heart, label: sound.is_starred ? '取消收藏' : '收藏', action: handleStar },
+    { icon: Sparkles, label: 'AI 分析', action: handleAnalyze },
+    { divider: true },
+    { icon: Trash2, label: '删除', action: handleTrash, danger: true },
+  ]
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-[100] w-52 py-1.5 rounded-xl border border-surface-border bg-[#252522] shadow-2xl"
+      style={{ left, top }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {menuItems.map((item, idx) => (
+        item.divider ? (
+          <div key={idx} className="h-px bg-surface-border/60 my-1.5 mx-2" />
+        ) : (
+          <button
+            key={idx}
+            onClick={item.action}
+            className={`w-full px-3 py-2 flex items-center gap-2.5 text-sm transition-colors ${
+              item.danger ? 'text-red-400 hover:bg-red-500/10' : 'text-muted-light hover:bg-surface-card'
+            }`}
+          >
+            <item.icon size={14} className={item.danger ? 'text-red-400' : 'text-muted'} />
+            <span className="flex-1 text-left">{item.label}</span>
+            {item.hasSubmenu && <MoreHorizontal size={14} className="text-muted" />}
+          </button>
+        )
+      ))}
+
+      {tagInputVisible && (
+        <div className="px-3 py-2 border-t border-surface-border/60">
+          <input
+            autoFocus
+            value={tagValue}
+            onChange={(e) => setTagValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAddTag(tagValue); if (e.key === 'Escape') setTagInputVisible(false) }}
+            placeholder="输入标签回车"
+            className="w-full px-2 py-1 text-xs rounded bg-surface-card border border-surface-border text-muted-light placeholder:text-muted/50 focus:border-accent outline-none"
+          />
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2 max-h-20 overflow-y-auto">
+              {tags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => handleAddTag(tag.name)}
+                  className="px-1.5 py-0.5 rounded bg-[#2a2a28] text-[10px] text-muted hover:text-muted-light hover:bg-surface-hover"
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {collectionMenuVisible && (
+        <div className="px-1 py-2 border-t border-surface-border/60">
+          {collections.length > 0 ? collections.map((col) => (
+            <button
+              key={col.id}
+              onClick={() => handleAddToCollection(col.id)}
+              className="w-full px-3 py-1.5 text-xs text-muted-light hover:bg-surface-card rounded text-left"
+            >
+              {col.name}
+            </button>
+          )) : (
+            <p className="px-3 py-1 text-xs text-muted/50">暂无合集</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Rename Modal                                                       */
+/* ------------------------------------------------------------------ */
+
+function RenameModal({ sound, value, onChange, onClose, onConfirm }: {
+  sound: SoundData
+  value: string
+  onChange: (v: string) => void
+  onClose: () => void
+  onConfirm: (newName: string) => void
+}): JSX.Element {
+  useEffect(() => {
+    const ext = sound.file_ext
+    const base = sound.file_name.endsWith(ext) ? sound.file_name.slice(0, -ext.length) : sound.file_name
+    onChange(base)
+  }, [sound, onChange])
+
+  return (
+    <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center" onClick={onClose}>
+      <div className="w-80 p-4 rounded-xl border border-surface-border bg-surface-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-sm font-medium text-muted-light mb-3">重命名</h3>
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') onConfirm(value); if (e.key === 'Escape') onClose() }}
+          className="w-full px-3 py-2 text-sm rounded-lg bg-[#2a2a28] border border-surface-border text-muted-light focus:border-accent outline-none mb-4"
+        />
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-1.5 text-xs text-muted hover:text-muted-light">取消</button>
+          <button onClick={() => onConfirm(value)} className="px-3 py-1.5 text-xs bg-accent text-white rounded-md hover:bg-accent/90">确定</button>
+        </div>
+      </div>
+    </div>
+  )
+}
