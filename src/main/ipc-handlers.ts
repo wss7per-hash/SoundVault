@@ -1,5 +1,5 @@
 import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron'
-import { readdir, stat, readFile, writeFile, copyFile, rename, mkdir, access } from 'fs/promises'
+import { readdir, stat, readFile, writeFile, copyFile, rename, mkdir, access, rm } from 'fs/promises'
 import { existsSync } from 'fs'
 import { createHash } from 'crypto'
 import { join, extname, basename, dirname, parse, format } from 'path'
@@ -533,121 +533,183 @@ function ensureParentCategory(category: string, now: string): string | null {
 
   // ---- Library Export / Import (portable bundle, like Eagle) ----
 
+  // Cancellation registry for in-flight exports, keyed by a token passed from the renderer.
+  const exportCancels = new Map<string, { cancelled: boolean }>()
+
+  // Cancel an in-flight export identified by its token.
+  ipcMain.handle('library:cancelExport', (_event, token: string) => {
+    const ref = exportCancels.get(token)
+    if (ref) {
+      ref.cancelled = true
+      return { success: true }
+    }
+    return { success: false }
+  })
+
+  // Open a folder in the OS file explorer (used by the export-completion toast).
+  ipcMain.handle('shell:openPath', async (_event, p: string) => {
+    try {
+      await shell.openPath(p)
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
+  })
+
   /**
    * Export a portable library bundle.
    * @param destDir   Target parent folder (user-chosen).
    * @param soundIds  Optional array of sound IDs to export.  Empty/undefined = export ALL sounds.
+   * @param token     Optional cancellation token. Renderer can call library:cancelExport(token).
    */
-  ipcMain.handle('library:export', async (_event, destDir: string, soundIds?: string[]) => {
+  ipcMain.handle('library:export', async (event, destDir: string, soundIds?: string[], token?: string) => {
+    const cancelRef = { cancelled: false }
+    if (token) exportCancels.set(token, cancelRef)
+    const startTime = Date.now()
     const bundleName = `SoundVault-Library-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`
     const root = join(destDir, bundleName)
     const audiosDir = join(root, 'audios')
-    await mkdir(audiosDir, { recursive: true })
 
-    // Support selective export
-    let sounds
-    if (soundIds && soundIds.length > 0) {
-      const placeholders = soundIds.map(() => '?').join(',')
-      sounds = db.prepare(`SELECT * FROM sounds WHERE id IN (${placeholders})`).all(...soundIds)
-    } else {
-      sounds = db.prepare('SELECT * FROM sounds').all()
-    }
+    try {
+      await mkdir(audiosDir, { recursive: true })
 
-    const ids = new Set((sounds as Array<{ id: string }>).map((s) => s.id))
-
-    const tags = ids.size > 0
-      ? db.prepare(`SELECT * FROM tags WHERE id IN (SELECT tag_id FROM sound_tags WHERE sound_id IN (${[...ids].map(() => '?').join(',')}))`).all(...ids)
-      : db.prepare('SELECT * FROM tags').all()
-    const soundTags = ids.size > 0
-      ? db.prepare(`SELECT * FROM sound_tags WHERE sound_id IN (${[...ids].map(() => '?').join(',')}))`).all(...ids)
-      : db.prepare('SELECT * FROM sound_tags').all()
-    const tagAliases = db.prepare('SELECT * FROM tag_aliases').all()
-    const collections = db.prepare('SELECT * FROM collections').all()
-    const collectionSounds = ids.size > 0
-      ? db.prepare(`SELECT * FROM collection_sounds WHERE sound_id IN (${[...ids].map(() => '?').join(',')}))`).all(...ids)
-      : db.prepare('SELECT * FROM collection_sounds').all()
-    const smartFolders = db.prepare('SELECT * FROM smart_folders').all()
-
-    // Copy audio files using ORIGINAL filenames (with dedup on name clash).
-    let copied = 0
-    let missing = 0
-    const nameCounter = new Map<string, number>() // baseName → next suffix
-    for (const s of sounds as Array<{ id: string; file_path: string; file_ext: string; file_name: string }>) {
-      const ext = (s.file_ext || extname(s.file_path) || '').toLowerCase()
-      const safeExt = ext.startsWith('.') ? ext : `.${ext}`
-      // Prefer stored file_name, fall back to basename of path.
-      let baseName = (s.file_name || basename(s.file_path) || s.id).trim()
-      // Strip extension if it's already included in file_name to avoid double-ext.
-      if (baseName.toLowerCase().endsWith(safeExt)) {
-        baseName = baseName.slice(0, baseName.length - safeExt.length)
+      // Support selective export
+      let sounds
+      if (soundIds && soundIds.length > 0) {
+        const placeholders = soundIds.map(() => '?').join(',')
+        sounds = db.prepare(`SELECT * FROM sounds WHERE id IN (${placeholders})`).all(...soundIds)
+      } else {
+        sounds = db.prepare('SELECT * FROM sounds').all()
       }
-      // Sanitize: remove characters invalid on Windows/macOS/Linux.
-      baseName = baseName.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim() || 'audio'
-      // Dedup: if same filename already used, append _2 _3 ...
-      const candidate = `${baseName}${safeExt}`
-      const count = nameCounter.get(candidate) || 0
-      const finalName = count === 0 ? candidate : `${baseName}_${count}${safeExt}`
-      nameCounter.set(candidate, count + 1)
 
-      const src = s.file_path
-      const dest = join(audiosDir, finalName)
-      try {
-        await access(src)
-        await copyFile(src, dest)
-        copied++
-      } catch {
-        missing++
+      const ids = new Set((sounds as Array<{ id: string }>).map((s) => s.id))
+      const tagPlaceholders = ids.size > 0 ? [...ids].map(() => '?').join(',') : ''
+
+      const tags = ids.size > 0
+        ? db.prepare(`SELECT * FROM tags WHERE id IN (SELECT tag_id FROM sound_tags WHERE sound_id IN (${tagPlaceholders}))`).all(...ids)
+        : db.prepare('SELECT * FROM tags').all()
+      const soundTags = ids.size > 0
+        ? db.prepare(`SELECT * FROM sound_tags WHERE sound_id IN (${tagPlaceholders})`).all(...ids)
+        : db.prepare('SELECT * FROM sound_tags').all()
+      const tagAliases = db.prepare('SELECT * FROM tag_aliases').all()
+      const collections = db.prepare('SELECT * FROM collections').all()
+      const collectionSounds = ids.size > 0
+        ? db.prepare(`SELECT * FROM collection_sounds WHERE sound_id IN (${tagPlaceholders})`).all(...ids)
+        : db.prepare('SELECT * FROM collection_sounds').all()
+      const smartFolders = db.prepare('SELECT * FROM smart_folders').all()
+
+      // Copy audio files using ORIGINAL filenames (with dedup on name clash).
+      const total = (sounds as unknown[]).length
+      let copied = 0
+      let missing = 0
+      let done = 0
+      const nameCounter = new Map<string, number>() // baseName → next suffix
+      for (const s of sounds as Array<{ id: string; file_path: string; file_ext: string; file_name: string }>) {
+        // Honor cancellation between file copies (delete the half-written bundle).
+        if (cancelRef.cancelled) {
+          try { await rm(root, { recursive: true, force: true }) } catch { /* ignore */ }
+          return { success: false, cancelled: true, path: null, copied, missing, total }
+        }
+
+        const ext = (s.file_ext || extname(s.file_path) || '').toLowerCase()
+        const safeExt = ext.startsWith('.') ? ext : `.${ext}`
+        // Prefer stored file_name, fall back to basename of path.
+        let baseName = (s.file_name || basename(s.file_path) || s.id).trim()
+        // Strip extension if it's already included in file_name to avoid double-ext.
+        if (baseName.toLowerCase().endsWith(safeExt)) {
+          baseName = baseName.slice(0, baseName.length - safeExt.length)
+        }
+        // Sanitize: remove characters invalid on Windows/macOS/Linux.
+        baseName = baseName.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim() || 'audio'
+        // Dedup: if same filename already used, append _2 _3 ...
+        const candidate = `${baseName}${safeExt}`
+        const count = nameCounter.get(candidate) || 0
+        const finalName = count === 0 ? candidate : `${baseName}_${count}${safeExt}`
+        nameCounter.set(candidate, count + 1)
+
+        const src = s.file_path
+        const dest = join(audiosDir, finalName)
+        let isCopy = false
+        try {
+          await access(src)
+          await copyFile(src, dest)
+          isCopy = true
+        } catch {
+          isCopy = false
+        }
+
+        done++
+        if (isCopy) copied++
+        else missing++
+
+        // Stream progress to the renderer (live bar / elapsed time).
+        event.sender.send('library:export-progress', {
+          done,
+          total,
+          copied,
+          missing,
+          fileName: finalName,
+          elapsedMs: Date.now() - startTime
+        })
       }
-    }
 
-    const manifest = {
-      format: 'soundvault-library',
-      version: 1,
-      appVersion: app.getVersion(),
-      exportedAt: new Date().toISOString(),
-      counts: {
-        sounds: (sounds as unknown[]).length,
-        tags: (tags as unknown[]).length,
-        sound_tags: (soundTags as unknown[]).length,
-        collections: (collections as unknown[]).length,
-        collection_sounds: (collectionSounds as unknown[]).length,
-        smart_folders: (smartFolders as unknown[]).length
-      },
-      audio: { copied, missing }
-    }
+      const manifest = {
+        format: 'soundvault-library',
+        version: 1,
+        appVersion: app.getVersion(),
+        exportedAt: new Date().toISOString(),
+        counts: {
+          sounds: (sounds as unknown[]).length,
+          tags: (tags as unknown[]).length,
+          sound_tags: (soundTags as unknown[]).length,
+          collections: (collections as unknown[]).length,
+          collection_sounds: (collectionSounds as unknown[]).length,
+          smart_folders: (smartFolders as unknown[]).length
+        },
+        audio: { copied, missing }
+      }
 
-    const payload = {
-      ...manifest,
-      sounds,
-      tags,
-      sound_tags: soundTags,
-      tag_aliases: tagAliases,
-      collections,
-      collection_sounds: collectionSounds,
-      smart_folders: smartFolders
-    }
+      const payload = {
+        ...manifest,
+        sounds,
+        tags,
+        sound_tags: soundTags,
+        tag_aliases: tagAliases,
+        collections,
+        collection_sounds: collectionSounds,
+        smart_folders: smartFolders
+      }
 
-    await writeFile(join(root, 'library.json'), JSON.stringify(payload, null, 2))
-    await writeFile(
-      join(root, 'README.txt'),
-      [
-        'SoundVault 资源库导出包',
-        '============================',
-        `导出时间：${manifest.exportedAt}`,
-        `包含音效：${manifest.counts.sounds} 个（音频文件已复制 ${copied} 个，缺失 ${missing} 个）`,
-        `标签：${manifest.counts.tags} 个`,
-        `收藏夹：${manifest.counts.collections} 个`,
-        '',
-        '在另一台电脑的 SoundVault 中点「导入库」并选择本文件夹即可迁移全部数据。'
-      ].join('\n')
-    )
+      await writeFile(join(root, 'library.json'), JSON.stringify(payload, null, 2))
+      await writeFile(
+        join(root, 'README.txt'),
+        [
+          'SoundVault 资源库导出包',
+          '============================',
+          `导出时间：${manifest.exportedAt}`,
+          `包含音效：${manifest.counts.sounds} 个（音频文件已复制 ${copied} 个，缺失 ${missing} 个）`,
+          `标签：${manifest.counts.tags} 个`,
+          `收藏夹：${manifest.counts.collections} 个`,
+          '',
+          '在另一台电脑的 SoundVault 中点「导入库」并选择本文件夹即可迁移全部数据。'
+        ].join('\n')
+      )
 
-    return {
-      success: true,
-      path: root,
-      counts: manifest.counts,
-      copied,
-      missing
+      return {
+        success: true,
+        path: root,
+        counts: manifest.counts,
+        copied,
+        missing,
+        total,
+        elapsedMs: Date.now() - startTime
+      }
+    } catch (err) {
+      // On failure, clean up the half-written bundle so the target folder isn't polluted.
+      try { await rm(root, { recursive: true, force: true }) } catch { /* ignore */ }
+      return { success: false, error: (err as Error).message, cancelled: false }
+    } finally {
+      if (token) exportCancels.delete(token)
     }
   })
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
-import { Search, LayoutGrid, List, SlidersHorizontal, Minus, Plus, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Type, Upload, Download, Loader2, Check, Package } from 'lucide-react'
+import { Search, LayoutGrid, List, SlidersHorizontal, Minus, Plus, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Type, Upload, Download, Loader2, Check, Package, FolderOpen, Ban, CheckCircle2 } from 'lucide-react'
 
 const SORT_OPTIONS = [
   { value: 'date', label: '导入时间', icon: Calendar },
@@ -19,12 +20,39 @@ const FORMAT_OPTIONS = [
   { value: 'aiff', label: 'AIFF' }
 ]
 
+// Human-friendly elapsed time for the export progress panel.
+function formatElapsed(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  const s = ms / 1000
+  if (s < 60) return `${s.toFixed(1)}s`
+  const m = Math.floor(s / 60)
+  const rem = Math.round(s % 60)
+  return `${m}m ${rem}s`
+}
+
+// Lightweight cancellation token (no crypto dependency needed).
+function makeToken(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+}
+
 export function Toolbar(): JSX.Element {
   const { searchQuery, setSearchQuery, fontSize, setFontSize } = useAppStore()
   const [showFilter, setShowFilter] = useState(false)
   const [isMaximized, setIsMaximized] = useState(false)
-  const [busy, setBusy] = useState<null | 'export' | 'import'>(null)
+  const [busy, setBusy] = useState<null | 'import'>(null)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  // Export progress state
+  const [exportState, setExportState] = useState<null | {
+    token: string
+    done: number
+    total: number
+    copied: number
+    missing: number
+    currentFile: string
+    startTime: number
+  }>(null)
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const exportStartRef = useRef(0)
   const exportRef = useRef<HTMLDivElement>(null)
   const filterRef = useRef<HTMLDivElement>(null)
 
@@ -113,20 +141,60 @@ export function Toolbar(): JSX.Element {
     setShowExportMenu(false)
     const dirs = await window.api.selectFolder()
     if (!dirs || dirs.length === 0) return
-    setBusy('export')
+    const token = makeToken()
+    const startTime = Date.now()
+    exportStartRef.current = startTime
+    setElapsedMs(0)
+    setExportState({ token, done: 0, total: 0, copied: 0, missing: 0, currentFile: '', startTime })
+    // Subscribe to main-process progress events before starting the export.
+    const unsub = window.api.onExportProgress((p) => {
+      setExportState((prev) =>
+        prev
+          ? { ...prev, done: p.done, total: p.total, copied: p.copied, missing: p.missing, currentFile: p.fileName }
+          : prev
+      )
+    })
     try {
-      const res = await window.api.exportLibrary(dirs[0], exportSoundIds)
-      if (res.success) {
-        toast.success(`已导出资源库（${res.copied} 个音频，${res.missing ?? 0} 个缺失）`)
+      const res = await window.api.exportLibrary(dirs[0], exportSoundIds, token)
+      if (res.cancelled) {
+        toast('已取消导出，未生成导出包')
+      } else if (res.success) {
+        const secs = ((res.elapsedMs ?? 0) / 1000).toFixed(1)
+        toast((t) => (
+          <div className="flex items-center gap-2.5 max-w-xs">
+            <CheckCircle2 size={16} className="text-green-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-muted-light leading-snug">导出完成</div>
+              <div className="text-[10px] text-muted mt-0.5">
+                {res.total} 个音效 · 复制 {res.copied} 个音频 · 缺失 {res.missing ?? 0} · 用时 {secs}s
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (res.path) window.api.openPath(res.path)
+                toast.dismiss(t.id)
+              }}
+              className="shrink-0 flex items-center gap-1 px-1.5 py-1 rounded-md bg-accent/20 text-accent-light text-[10px] hover:bg-accent/30 transition-colors"
+            >
+              <FolderOpen size={11} />打开
+            </button>
+          </div>
+        ), { duration: 8000 })
       } else {
-        toast.error('导出失败')
+        toast.error('导出失败：' + (res.error || '未知错误'))
       }
     } catch (err) {
       toast.error('导出出错：' + (err as Error).message)
     } finally {
-      setBusy(null)
+      unsub()
+      setExportState(null)
     }
   }, [])
+
+  /** Cancel the in-flight export. */
+  const cancelExport = useCallback(() => {
+    if (exportState) window.api.cancelExport(exportState.token)
+  }, [exportState])
 
   const handleImport = useCallback(async () => {
     const dirs = await window.api.selectFolder()
@@ -168,6 +236,17 @@ export function Toolbar(): JSX.Element {
     if (showFilter || showExportMenu) document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showFilter, showExportMenu])
+
+  // Live elapsed-time ticker while an export is running.
+  const exporting = exportState !== null
+  useEffect(() => {
+    if (!exporting) {
+      setElapsedMs(0)
+      return
+    }
+    const t = setInterval(() => setElapsedMs(Date.now() - exportStartRef.current), 250)
+    return () => clearInterval(t)
+  }, [exporting])
 
   const activeSort = SORT_OPTIONS.find((s) => s.value === sortBy)
 
@@ -216,7 +295,7 @@ export function Toolbar(): JSX.Element {
         <div className="w-px h-5 bg-surface-border mx-1" />
         <button
           onClick={handleExportClick}
-          disabled={busy !== null}
+          disabled={busy !== null || exportState !== null}
           className={`p-1.5 rounded-md transition-colors ${
             showExportMenu
               ? 'bg-accent/20 text-accent-light'
@@ -284,7 +363,7 @@ export function Toolbar(): JSX.Element {
 
         <button
           onClick={handleImport}
-          disabled={busy !== null}
+          disabled={busy !== null || exportState !== null}
           className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light disabled:opacity-30 disabled:cursor-default"
           title="导入资源库（从另一台电脑迁移）"
         >
@@ -460,13 +539,50 @@ export function Toolbar(): JSX.Element {
         </button>
       </div>
 
-      {/* Library export / import progress overlay */}
-      {busy && (
+      {/* Library export progress panel (live progress + cancel) */}
+      {exportState && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-sm">
+          <div className="relative w-[360px] bg-[#232321] border border-surface-border rounded-2xl shadow-2xl p-5">
+            <div className="flex items-center gap-2.5 mb-3">
+              <Loader2 size={18} className="text-accent-light animate-spin shrink-0" />
+              <div className="text-sm text-muted-light font-medium">正在导出资源库…</div>
+            </div>
+
+            {/* progress bar */}
+            <div className="h-2 rounded-full bg-surface-border overflow-hidden mb-2">
+              <div
+                className="h-full bg-accent rounded-full transition-all duration-200"
+                style={{ width: `${exportState.total > 0 ? (exportState.done / exportState.total) * 100 : 0}%` }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-muted mb-3 tabular-nums">
+              <span>已处理 {exportState.done} / {exportState.total} 个</span>
+              <span>{formatElapsed(elapsedMs)}</span>
+            </div>
+
+            <div className="text-[11px] text-muted-light/80 mb-1 truncate" title={exportState.currentFile}>
+              当前：{exportState.currentFile || '准备中…'}
+            </div>
+            <div className="text-[10px] text-muted mb-4">
+              已复制 {exportState.copied} 个音频 · 缺失 {exportState.missing} 个
+            </div>
+
+            <button
+              onClick={cancelExport}
+              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-red-500/15 text-red-300 hover:bg-red-500/25 text-xs transition-colors"
+            >
+              <Ban size={13} />取消导出
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Library import progress overlay */}
+      {busy === 'import' && (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-3 bg-black/55 backdrop-blur-sm">
           <Loader2 size={32} className="text-accent-light animate-spin" />
-          <p className="text-sm text-muted-light">
-            {busy === 'export' ? '正在导出资源库…' : '正在导入资源库…'}
-          </p>
+          <p className="text-sm text-muted-light">正在导入资源库…</p>
           <p className="text-xs text-muted">请稍候，正在复制音频文件</p>
         </div>
       )}

@@ -67,13 +67,7 @@ export interface SoundVaultAPI {
   previewSmartFolder: (conditionsJson: string) => Promise<SoundData[]>
 
   // Library Export / Import (portable bundle)
-  exportLibrary: (destDir: string, soundIds?: string[]) => Promise<{
-    success: boolean
-    path?: string
-    counts?: Record<string, number>
-    copied?: number
-    missing?: number
-  }>
+  exportLibrary: (destDir: string, soundIds?: string[], token?: string) => Promise<ExportResult>
   importLibrary: (bundleDir: string) => Promise<{
     success: boolean
     imported?: number
@@ -81,6 +75,12 @@ export interface SoundVaultAPI {
     collections?: number
     error?: string
   }>
+  // Cancel an in-flight export (by token)
+  cancelExport: (token: string) => Promise<{ success: boolean }>
+  // Subscribe to live export progress; returns an unsubscribe function
+  onExportProgress: (cb: (p: ExportProgress) => void) => () => void
+  // Open a folder in the OS file explorer
+  openPath: (p: string) => Promise<{ success: boolean; error?: string }>
 
   // Batch Operations
   batchDelete: (ids: string[]) => Promise<{ success: boolean }>
@@ -102,6 +102,27 @@ export interface SoundVaultAPI {
 }
 
 // ---- Types ----
+
+export interface ExportProgress {
+  done: number
+  total: number
+  copied: number
+  missing: number
+  fileName: string
+  elapsedMs: number
+}
+
+export interface ExportResult {
+  success: boolean
+  cancelled?: boolean
+  error?: string
+  path?: string | null
+  counts?: Record<string, number>
+  copied?: number
+  missing?: number
+  total?: number
+  elapsedMs?: number
+}
 
 export interface ScanOptions {
   targetPath: string

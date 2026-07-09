@@ -85,8 +85,19 @@ const api = {
   previewSmartFolder: (conditionsJson: string) => ipcRenderer.invoke('smartFolder:preview', conditionsJson),
 
   // Library Export / Import (portable bundle)
-  exportLibrary: (destDir: string, soundIds?: string[]) => ipcRenderer.invoke('library:export', destDir, soundIds),
+  exportLibrary: (destDir: string, soundIds?: string[], token?: string) =>
+    ipcRenderer.invoke('library:export', destDir, soundIds, token),
   importLibrary: (bundleDir: string) => ipcRenderer.invoke('library:import', bundleDir),
+  // Cancel an in-flight export (by token)
+  cancelExport: (token: string) => ipcRenderer.invoke('library:cancelExport', token),
+  // Subscribe to live export progress events; returns an unsubscribe fn.
+  onExportProgress: (cb: (p: any) => void) => {
+    const listener = (_e: unknown, p: any) => cb(p)
+    ipcRenderer.on('library:export-progress', listener)
+    return () => ipcRenderer.removeListener('library:export-progress', listener)
+  },
+  // Open a folder in the OS file explorer
+  openPath: (p: string) => ipcRenderer.invoke('shell:openPath', p),
 
   // Batch Operations
   batchDelete: (ids: string[]) => ipcRenderer.invoke('sound:batchDelete', ids),
