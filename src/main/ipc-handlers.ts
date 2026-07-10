@@ -1338,10 +1338,21 @@ function ensureParentCategory(category: string, now: string): string | null {
     return { success: true }
   })
 
-  ipcMain.handle('sound:permanentDelete', (_event, ids: string[]) => {
+  ipcMain.handle('sound:permanentDelete', async (_event, ids: string[], deleteLocalFile?: boolean) => {
     const placeholders = ids.map(() => '?').join(',')
+    // 如果勾选了删除本地文件，先从磁盘移除
+    if (deleteLocalFile) {
+      const rows = db.prepare(`SELECT file_path FROM sounds WHERE id IN (${placeholders})`).all(...ids) as Array<{ file_path: string }>
+      for (const r of rows) {
+        try { await rm(r.file_path, { force: true }) } catch { /* 文件可能已不存在 */ }
+      }
+    }
+    // 删除关联数据（标签关联 + 收藏夹关联）
+    db.prepare(`DELETE FROM sound_tags WHERE sound_id IN (${placeholders})`).run(...ids)
+    db.prepare(`DELETE FROM collection_sounds WHERE sound_id IN (${placeholders})`).run(...ids)
+    // 最后删主记录
     db.prepare(`DELETE FROM sounds WHERE id IN (${placeholders})`).run(...ids)
-    return { success: true }
+    return { success: true, deletedLocal: !!deleteLocalFile }
   })
 
   ipcMain.handle('sound:batchTag', (_event, soundIds: string[], tagNames: string[], action: 'add' | 'remove') => {

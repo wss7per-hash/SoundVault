@@ -1,12 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { SoundData } from '../../preload/index.d'
-import { Trash2, RotateCcw, AlertTriangle } from 'lucide-react'
+import { Trash2, RotateCcw, AlertTriangle, X, HardDrive } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+interface ConfirmState {
+  open: boolean
+  count: number
+}
 
 export function RecycleBin(): JSX.Element {
   const [trashSounds, setTrashSounds] = useState<SoundData[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
+  const [confirm, setConfirm] = useState<ConfirmState>({ open: false, count: 0 })
+  const [deleteLocalFile, setDeleteLocalFile] = useState(false)
 
   const loadTrash = useCallback(async () => {
     try {
@@ -56,16 +63,31 @@ export function RecycleBin(): JSX.Element {
 
   const handlePermanentDelete = async () => {
     if (selected.size === 0) return
+    // 先弹出确认对话框，不直接执行
+    setConfirm({ open: true, count: selected.size })
+  }
+
+  const confirmPermanentDelete = async () => {
+    setConfirm({ open: false, count: 0 })
     setLoading(true)
     try {
-      await window.api.permanentDelete(Array.from(selected))
-      toast.success(`已永久删除 ${selected.size} 个音效`)
+      await window.api.permanentDelete(Array.from(selected), deleteLocalFile)
+      toast.success(
+        `已从库中移除 ${selected.size} 个音效` +
+        (deleteLocalFile ? '（本地文件也已删除）' : '（本地文件未受影响）')
+      )
+      setSelected(new Set())
       await loadTrash()
     } catch {
       toast.error('删除失败')
     } finally {
       setLoading(false)
     }
+  }
+
+  const cancelConfirm = () => {
+    setConfirm({ open: false, count: 0 })
+    setDeleteLocalFile(false)
   }
 
   const formatSize = (bytes: number): string => {
@@ -75,18 +97,134 @@ export function RecycleBin(): JSX.Element {
 
   if (trashSounds.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center relative">
+        {/* 确认弹窗（空状态时也需渲染，以防状态残留） */}
+        {confirm.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={cancelConfirm}>
+            <div
+              className="bg-surface-panel border border-[#3a3a38] rounded-xl shadow-2xl w-[380px] p-5 mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-9 h-9 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <AlertTriangle size={18} className="text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[#f0ede6] mb-1">确认永久删除</h3>
+                  <p className="text-xs text-muted leading-relaxed">
+                    将从 SoundVault 库中<strong className="text-[#f0ede6]">永久移除</strong> {confirm.count} 个音效记录。
+                    <br />此操作<span className="font-medium text-[#f0ede6]">不可撤销</span>。
+                  </p>
+
+                  <label className="flex items-start gap-2 mt-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={deleteLocalFile}
+                      onChange={(e) => setDeleteLocalFile(e.target.checked)}
+                      className="mt-0.5 accent-red-500"
+                    />
+                    <span className="text-xs text-muted group-hover:text-[#f0ede6] transition-colors leading-relaxed">
+                      <HardDrive size={11} className="inline mr-1 -mt-0.5" />
+                      同时删除本地音频文件（不可恢复）
+                    </span>
+                  </label>
+
+                  {deleteLocalFile && (
+                    <p className="text-[10px] text-red-400/80 mt-1.5 ml-5 leading-relaxed">
+                      ⚠ 勾选后，原始音频文件将从磁盘彻底删除，无法通过系统回收站恢复！
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#2a2a28]">
+                <button
+                  onClick={cancelConfirm}
+                  className="px-3 py-1.5 text-xs text-muted-light bg-surface-card hover:bg-surface-border border border-surface-border rounded-md transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={confirmPermanentDelete}
+                  disabled={loading}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  {loading ? '删除中…' : '确认永久删除'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="text-center">
           <Trash2 size={32} className="text-muted mx-auto mb-3 opacity-30" />
           <p className="text-sm text-muted">回收站是空的</p>
-          <p className="text-2xs text-muted/60 mt-1">删除的音效会在回收站保留 30 天</p>
+          <p className="text-2xs text-muted/60 mt-1">删除的音效会保留在此处，可随时恢复或永久移除</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 relative">
+      {/* 永久删除确认弹窗 */}
+      {confirm.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={cancelConfirm}>
+          <div
+            className="bg-surface-panel border border-[#3a3a38] rounded-xl shadow-2xl w-[380px] p-5 mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-9 h-9 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <AlertTriangle size={18} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-[#f0ede6] mb-1">确认永久删除</h3>
+                <p className="text-xs text-muted leading-relaxed">
+                  将从 SoundVault 库中<strong className="text-[#f0ede6]">永久移除</strong> {confirm.count} 个音效记录。
+                  <br />此操作<span className="font-medium text-[#f0ede6]">不可撤销</span>。
+                </p>
+
+                <label className="flex items-start gap-2 mt-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={deleteLocalFile}
+                    onChange={(e) => setDeleteLocalFile(e.target.checked)}
+                    className="mt-0.5 accent-red-500"
+                  />
+                  <span className="text-xs text-muted group-hover:text-[#f0ede6] transition-colors leading-relaxed">
+                    <HardDrive size={11} className="inline mr-1 -mt-0.5" />
+                    同时删除本地音频文件（不可恢复）
+                  </span>
+                </label>
+
+                {deleteLocalFile && (
+                  <p className="text-[10px] text-red-400/80 mt-1.5 ml-5 leading-relaxed">
+                    ⚠ 勾选后，原始音频文件将从磁盘彻底删除，无法通过系统回收站恢复！
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-[#2a2a28]">
+              <button
+                onClick={cancelConfirm}
+                className="px-3 py-1.5 text-xs text-muted-light bg-surface-card hover:bg-surface-border border border-surface-border rounded-md transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmPermanentDelete}
+                disabled={loading}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors disabled:opacity-50 flex items-center gap-1"
+              >
+                {loading ? '删除中…' : '确认永久删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-3 px-4 py-2 border-b border-[#2a2a28]">
         <div className="flex items-center gap-1.5 text-xs text-muted-light">
           <Trash2 size={14} className="text-red-400" />

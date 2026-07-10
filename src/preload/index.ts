@@ -109,7 +109,7 @@ const api = {
   // Trash / Recycle Bin
   getTrash: () => ipcRenderer.invoke('sound:getTrash'),
   restoreSounds: (ids: string[]) => ipcRenderer.invoke('sound:restore', ids),
-  permanentDelete: (ids: string[]) => ipcRenderer.invoke('sound:permanentDelete', ids),
+  permanentDelete: (ids: string[], deleteLocalFile?: boolean) => ipcRenderer.invoke('sound:permanentDelete', ids, deleteLocalFile),
 
   // Settings
   getSetting: (key: string) => ipcRenderer.invoke('settings:get', key),

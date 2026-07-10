@@ -91,7 +91,7 @@ export interface SoundVaultAPI {
   // Trash / Recycle Bin
   getTrash: () => Promise<SoundData[]>
   restoreSounds: (ids: string[]) => Promise<{ success: boolean }>
-  permanentDelete: (ids: string[]) => Promise<{ success: boolean }>
+  permanentDelete: (ids: string[], deleteLocalFile?: boolean) => Promise<{ success: boolean; deletedLocal?: boolean }>
 
   // Settings
   getSetting: (key: string) => Promise<string | null>
