@@ -41,8 +41,8 @@ const api = {
   trashFile: (soundId: string) => ipcRenderer.invoke('file:trash', soundId),
 
   // Seamless Loop (ffmpeg crossfade)
-  seamlessLoop: (soundId: string, crossfadeMs?: number) =>
-    ipcRenderer.invoke('audio:seamlessLoop', soundId, crossfadeMs),
+  seamlessLoop: (soundId: string, crossfadeMs?: number, loopCount?: number) =>
+    ipcRenderer.invoke('audio:seamlessLoop', soundId, crossfadeMs, loopCount),
 
   // AI Analysis
   getAIConfig: () => ipcRenderer.invoke('ai:getConfig'),

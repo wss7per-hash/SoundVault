@@ -147,18 +147,19 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [sound.file_path])
 
-  // 首尾无缝循环：调用后端 ffmpeg 交叉淡变，生成 * _loop.wav
+  // 首尾无缝循环：调用后端 ffmpeg 交叉淡变，生成 *_loopN.wav
   const [loopMs, setLoopMs] = useState(30)
+  const [loopCount, setLoopCount] = useState(1)
   const [looping, setLooping] = useState(false)
   const handleSeamlessLoop = useCallback(async () => {
     if (looping) return
     setLooping(true)
     try {
-      const res = await window.api.seamlessLoop(sound.id, loopMs)
+      const res = await window.api.seamlessLoop(sound.id, loopMs, loopCount)
       if (res.success && res.outPath) {
         toast.success(
           <span>
-            已生成无缝循环文件（交叉 {res.crossfadeMs}ms）
+            已生成无缝循环文件（{res.loopCount}×循环，交叉 {res.crossfadeMs}ms）
             <button
               onClick={() => window.api.openPath(res.outPath!)}
               style={{ marginLeft: 8, textDecoration: 'underline' }}
@@ -175,7 +176,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     } finally {
       setLooping(false)
     }
-  }, [sound.id, loopMs, looping])
+  }, [sound.id, loopMs, loopCount, looping])
 
   const handleStar = useCallback(async () => {
     try {
@@ -389,6 +390,47 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
               </div>
             </>
           )}
+        </div>
+
+        {/* ===== 首尾无缝循环（紧邻播放器） ===== */}
+        <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+              <Repeat size={13} className="text-accent" />
+              首尾无缝循环
+            </span>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
+                交叉
+                <input
+                  type="number" min={10} max={500} value={loopMs}
+                  onChange={(e) => setLoopMs(Math.max(10, Math.min(500, Number(e.target.value) || 30)))}
+                  className="w-12 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center"
+                />
+                ms
+              </label>
+              <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
+                循环
+                <input
+                  type="number" min={1} max={50} value={loopCount}
+                  onChange={(e) => setLoopCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                  className="w-10 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center"
+                />
+                次
+              </label>
+            </div>
+          </div>
+          <button
+            onClick={handleSeamlessLoop}
+            disabled={looping}
+            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
+          >
+            <Repeat size={13} />
+            {looping ? '生成中…' : '生成无缝循环文件'}
+          </button>
+          <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
+            用 ffmpeg 将尾音交叉淡入开头，在原文件同目录生成 <code className="text-[#8a8a82]">原名_loop次数.wav</code>（不覆盖原文件）。
+          </p>
         </div>
 
         {/* ===== AI DESCRIPTION (editable) ===== */}
@@ -631,35 +673,6 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
             <FolderOpen size={15} />
             打开文件位置
           </button>
-
-          <div className="mt-1 rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-[#8a8a82] flex items-center gap-1.5">
-                <Repeat size={13} className="text-accent" />
-                首尾无缝循环
-              </span>
-              <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
-                交叉
-                <input
-                  type="number" min={10} max={500} value={loopMs}
-                  onChange={(e) => setLoopMs(Math.max(10, Math.min(500, Number(e.target.value) || 30)))}
-                  className="w-12 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center"
-                />
-                ms
-              </label>
-            </div>
-            <button
-              onClick={handleSeamlessLoop}
-              disabled={looping}
-              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
-            >
-              <Repeat size={13} />
-              {looping ? '生成中…' : '生成无缝循环文件'}
-            </button>
-            <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
-              用 ffmpeg 把尾音交叉淡入开头，在原文件同目录生成 <code className="text-[#8a8a82]">*_loop.wav</code>（不覆盖原文件）。
-            </p>
-          </div>
         </div>
       </div>
     </div>

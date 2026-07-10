@@ -1456,12 +1456,14 @@ function ensureParentCategory(category: string, now: string): string | null {
   })
 
   // ---- 首尾无缝循环：ffmpeg 把「尾音」交叉淡入到「开头」，生成新的天生无缝循环文件 ----
-  ipcMain.handle('audio:seamlessLoop', async (_event, soundId: string, crossfadeMs = 30) => {
+  ipcMain.handle('audio:seamlessLoop', async (_event, soundId: string, crossfadeMs = 30, loopCount = 1) => {
+    const tmpDir = app.getPath('temp')
     try {
       const row = db.prepare('SELECT file_path, duration_ms FROM sounds WHERE id = ?')
         .get(soundId) as { file_path: string; duration_ms: number } | undefined
       if (!row) return { success: false, message: '找不到文件记录' }
 
+      const N = Math.max(1, Math.min(50, loopCount || 1))
       const durSec = (row.duration_ms || 0) / 1000
       // 交叉长度限制 10–500ms，避免过短无声 / 过长改变听感
       const L = Math.max(10, Math.min(500, crossfadeMs)) / 1000
@@ -1474,27 +1476,57 @@ function ensureParentCategory(category: string, now: string): string | null {
       const DURM = (durSec - L).toFixed(4)
       const dir = dirname(row.file_path)
       const { name } = parse(row.file_path)
-      const outPath = join(dir, `${name}_loop.wav`)
+      // 友好命名：原名_loop次数.wav  例如 footstep_loop3.wav
+      const outPath = join(dir, `${name}_loop${N}.wav`)
 
-      const filter = [
+      // ── 阶段一：生成一个周期的无缝版本（temp）──
+      const tmpPath = join(tmpDir, `sv_seamless_${Date.now()}.wav`)
+      const singleFilter = [
         '[0:a]asplit=3[s1][s2][s3]',
         `[s1]atrim=0:${DURM}[a]`,
         `[s2]atrim=${DURM}[tail]`,
         `[s3]atrim=0:${L}[head]`,
-        `[tail][head]acrossfade=d=${L}:curve1=esin:curve2=esin[cf]`,
-        `[a][cf]concat=n=2:v=0:a=1[out]`
+        '[tail][head]acrossfade=d=' + L + ':curve1=esin:curve2=esin[cf]',
+        '[a][cf]concat=n=2:v=0:a=1[out]'
       ].join(';')
 
       await new Promise<void>((resolve, reject) => {
         execFile(
           ffmpegPath,
-          ['-i', row.file_path, '-filter_complex', filter, '-map', '[out]', '-c:a', 'pcm_s16le', '-y', outPath],
+          ['-i', row.file_path, '-filter_complex', singleFilter, '-map', '[out]', '-c:a', 'pcm_s16le', '-y', tmpPath],
           { windowsHide: true, timeout: 120000 },
           (err, _stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve())
         )
       })
 
-      return { success: true, outPath, crossfadeMs: Math.round(L * 1000) }
+      // ── 阶段二：N==1 直接用临时文件；N>1 则重复拼接 ──
+      if (N === 1) {
+        // 单次：直接把临时文件挪到目标位置（rename 更快）
+        await rename(tmpPath, outPath)
+      } else {
+        // 多次：用 concat 协议把单周期无缝文件重复 N 份
+        // （每份内部已无缝；游戏引擎/DAW 设 loop point 即可实现首尾循环）
+        const listPath = join(tmpDir, `sv_concat_${Date.now()}.txt`)
+        const listContent = Array.from({ length: N }, () =>
+          `file '${tmpPath.replace(/\\/g, '/').replace(/'/g, "\\'")}'`
+        ).join('\n')
+        await writeFile(listPath, listContent, 'utf-8')
+
+        await new Promise<void>((resolve, reject) => {
+          execFile(
+            ffmpegPath,
+            ['-f', 'concat', '-safe', '0', '-i', listPath, '-c:a', 'pcm_s16le', '-y', outPath],
+            { windowsHide: true, timeout: 300000 },
+            (err, _stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve())
+          )
+        })
+
+        // 清理临时文件
+        try { await rm(tmpPath) } catch { /* ignore */ }
+        try { await rm(listPath) } catch { /* ignore */ }
+      }
+
+      return { success: true, outPath, crossfadeMs: Math.round(L * 1000), loopCount: N }
     } catch (err) {
       return { success: false, message: (err as Error).message }
     }
