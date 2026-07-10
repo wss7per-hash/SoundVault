@@ -147,7 +147,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [sound.file_path])
 
-  // 首尾无缝循环：调用后端 ffmpeg 交叉淡变，生成 *_loopN.wav
+  // 首尾无缝循环：调用后端 ffmpeg 交叉淡变，生成 *_loopN.wav 并自动导入库
   const [loopMs, setLoopMs] = useState(30)
   const [loopCount, setLoopCount] = useState(1)
   const [looping, setLooping] = useState(false)
@@ -157,16 +157,19 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     try {
       const res = await window.api.seamlessLoop(sound.id, loopMs, loopCount)
       if (res.success && res.outPath) {
+        // 刷新主列表（让新导入的文件显示出来）
+        onUpdate()
         toast.success(
           <span>
-            已生成无缝循环文件（{res.loopCount}×循环，交叉 {res.crossfadeMs}ms）
+            已生成无缝循环文件（{res.loopCount}×循环，交叉 {res.crossfadeMs}ms）并自动导入音效库
             <button
               onClick={() => window.api.openPath(res.outPath!)}
               style={{ marginLeft: 8, textDecoration: 'underline' }}
             >
               打开位置
             </button>
-          </span>
+          </span>,
+          { duration: 5000 }
         )
       } else {
         toast.error(res.message || '生成失败')
@@ -176,7 +179,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     } finally {
       setLooping(false)
     }
-  }, [sound.id, loopMs, loopCount, looping])
+  }, [sound.id, loopMs, loopCount, looping, onUpdate])
 
   const handleStar = useCallback(async () => {
     try {

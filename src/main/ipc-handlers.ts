@@ -1,5 +1,5 @@
 import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron'
-import { readdir, stat, readFile, writeFile, copyFile, rename, mkdir, access, rm } from 'fs/promises'
+import { readdir, stat, readFile, writeFile, copyFile, rename, mkdir, access, rm, unlink } from 'fs/promises'
 import { execFile } from 'child_process'
 // @ts-ignore - ffmpeg-static 无类型声明，但运行期返回二进制路径字符串
 import ffmpegPath from 'ffmpeg-static'
@@ -1455,16 +1455,59 @@ function ensureParentCategory(category: string, now: string): string | null {
     }
   })
 
+  // ---- 跨盘安全移动：先尝试 rename（同盘快），失败则 copyFile + unlink（跨盘兜底） ----
+  async function safeMove(src: string, dest: string): Promise<void> {
+    try {
+      await rename(src, dest)
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
+        // 跨设备/跨盘：Windows rename 不支持，回退到复制+删除
+        await copyFile(src, dest)
+        await unlink(src)
+      } else {
+        throw err
+      }
+    }
+  }
+
+  // ---- 用 ffprobe 从实际文件获取时长秒数（不依赖 DB 的 duration_ms） ----
+  function getDurationFromFile(filePath: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+      execFile(
+        ffmpegPath,
+        ['-i', filePath, '-hide_banner', '-show_entries', 'format=duration', '-of', 'csv=p=0'],
+        { windowsHide: true, timeout: 10000 },
+        (_err, _stdout, stderr) => {
+          // ffprobe 把信息写到 stderr，从里面提取 Duration
+          const match = /Duration:\s*(\d+):(\d+):(\d+\.\d+)/.exec(stderr)
+          if (match) {
+            const h = parseInt(match[1], 10)
+            const m = parseInt(match[2], 10)
+            const s = parseFloat(match[3])
+            resolve(h * 3600 + m * 60 + s)
+          } else {
+            reject(new Error('无法读取音频时长'))
+          }
+        }
+      )
+    })
+  }
+
   // ---- 首尾无缝循环：ffmpeg 把「尾音」交叉淡入到「开头」，生成新的天生无缝循环文件 ----
+  // 修复：① 跨盘移动用 safeMove ② 时长用 ffprobe 实际读取 ③ 生成后自动导入音效库
   ipcMain.handle('audio:seamlessLoop', async (_event, soundId: string, crossfadeMs = 30, loopCount = 1) => {
     const tmpDir = app.getPath('temp')
     try {
       const row = db.prepare('SELECT file_path, duration_ms FROM sounds WHERE id = ?')
-        .get(soundId) as { file_path: string; duration_ms: number } | undefined
+        .get(soundId) as { file_path: string; duration_ms: number | null } | undefined
       if (!row) return { success: false, message: '找不到文件记录' }
 
       const N = Math.max(1, Math.min(50, loopCount || 1))
-      const durSec = (row.duration_ms || 0) / 1000
+      // 优先用 DB 缓存的时长；若为空或 0 则用 ffprobe 从实际文件读取
+      let durSec = (row.duration_ms && row.duration_ms > 0) ? row.duration_ms / 1000 : 0
+      if (durSec <= 0) {
+        durSec = await getDurationFromFile(row.file_path)
+      }
       // 交叉长度限制 10–500ms，避免过短无声 / 过长改变听感
       const L = Math.max(10, Math.min(500, crossfadeMs)) / 1000
       if (durSec <= L * 2 + 0.1) {
@@ -1501,11 +1544,10 @@ function ensureParentCategory(category: string, now: string): string | null {
 
       // ── 阶段二：N==1 直接用临时文件；N>1 则重复拼接 ──
       if (N === 1) {
-        // 单次：直接把临时文件挪到目标位置（rename 更快）
-        await rename(tmpPath, outPath)
+        // 单次：用 safeMove 支持跨盘（C:Temp → E: 等）
+        await safeMove(tmpPath, outPath)
       } else {
         // 多次：用 concat 协议把单周期无缝文件重复 N 份
-        // （每份内部已无缝；游戏引擎/DAW 设 loop point 即可实现首尾循环）
         const listPath = join(tmpDir, `sv_concat_${Date.now()}.txt`)
         const listContent = Array.from({ length: N }, () =>
           `file '${tmpPath.replace(/\\/g, '/').replace(/'/g, "\\'")}'`
@@ -1526,7 +1568,24 @@ function ensureParentCategory(category: string, now: string): string | null {
         try { await rm(listPath) } catch { /* ignore */ }
       }
 
-      return { success: true, outPath, crossfadeMs: Math.round(L * 1000), loopCount: N }
+      // ---- 自动导入生成的无缝循环文件到音效库 ----
+      const outStat = await stat(outPath)
+      const outExt = extname(outPath).toLowerCase()
+      const outFileName = basename(outPath)
+      const buffer = await readFile(outPath, { length: 64 * 1024 })
+      const hash = createHash('sha256').update(buffer).digest('hex')
+      const now = new Date().toISOString()
+      const newId = uuidv4()
+      // 检查是否已存在（同 hash 去重）
+      const existing = db.prepare('SELECT id FROM sounds WHERE file_hash = ?').get(hash) as { id: string } | undefined
+      if (!existing) {
+        db.prepare(`
+          INSERT OR IGNORE INTO sounds (id, file_path, file_hash, file_name, file_ext, file_size, imported_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(newId, outPath, hash, outFileName, outExt, outStat.size, now, now)
+      }
+
+      return { success: true, outPath, crossfadeMs: Math.round(L * 1000), loopCount: N, importedId: existing?.id || newId }
     } catch (err) {
       return { success: false, message: (err as Error).message }
     }
