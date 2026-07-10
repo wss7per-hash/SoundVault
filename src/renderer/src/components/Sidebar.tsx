@@ -1,7 +1,7 @@
 import { useAppStore } from '../stores/appStore'
 import { TagTree } from './TagTree'
 import { CollectionsManager } from './CollectionsManager'
-import { SmartFolderList } from './SmartFolderBuilder'
+import { SmartFolderList, SmartClassifyPanel } from './SmartFolderBuilder'
 import { Tags, Folder, FolderCog, Trash2, Settings, Upload } from 'lucide-react'
 import logoMark from '../assets/images/logo-mark.png'
 
@@ -67,7 +67,12 @@ export function Sidebar(): JSX.Element {
       <div className="flex-1 min-h-0 overflow-hidden">
         {sidebarTab === 'tags' && <TagTree />}
         {sidebarTab === 'collections' && <CollectionsManager />}
-        {sidebarTab === 'smart' && <SmartFolderList />}
+        {sidebarTab === 'smart' && (
+          <>
+            <SmartClassifyPanel />
+            <SmartFolderList />
+          </>
+        )}
         {sidebarTab === 'trash' && (
           <div className="flex flex-col h-full">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a28]">

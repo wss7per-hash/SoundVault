@@ -83,6 +83,7 @@ const api = {
   deleteSmartFolder: (id: string) => ipcRenderer.invoke('smartFolder:delete', id),
   getSmartFolderSounds: (folderId: string) => ipcRenderer.invoke('smartFolder:getSounds', folderId),
   previewSmartFolder: (conditionsJson: string) => ipcRenderer.invoke('smartFolder:preview', conditionsJson),
+  autoClassify: (dimension: string) => ipcRenderer.invoke('smartFolder:autoClassify', dimension),
 
   // Library Export / Import (portable bundle)
   exportLibrary: (destDir: string, soundIds?: string[], token?: string) =>

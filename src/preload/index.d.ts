@@ -65,6 +65,8 @@ export interface SoundVaultAPI {
   deleteSmartFolder: (id: string) => Promise<{ success: boolean }>
   getSmartFolderSounds: (folderId: string) => Promise<SoundData[]>
   previewSmartFolder: (conditionsJson: string) => Promise<SoundData[]>
+  // 一键智能分类：按维度自动生成智能文件夹，返回创建/跳过摘要
+  autoClassify: (dimension: string) => Promise<{ created: number; skipped: number; names: string[] }>
 
   // Library Export / Import (portable bundle)
   exportLibrary: (destDir: string, soundIds?: string[], token?: string) => Promise<ExportResult>

@@ -1034,6 +1034,170 @@ function ensureParentCategory(category: string, now: string): string | null {
     }
   })
 
+  // ---- 智能分类：一键自动生成智能文件夹 ----
+  // 维度：scenario(适用场景) / emotion(情绪) / ai_tags(已分析文件按AI标签)
+  //       / filename(文件名关键词) / file_ext(格式) / imported(导入时间段)
+  //       / duration(时长) / quality(质量评分)
+  type AutoClassifyResult = { created: number; skipped: number; names: string[] }
+
+  ipcMain.handle('smartFolder:autoClassify', (_event, dimension: string): AutoClassifyResult => {
+    const now = new Date().toISOString()
+    const createdNames: string[] = []
+    const skippedNames: string[] = []
+
+    // 按名称幂等创建：已存在则跳过（避免重复点击刷出一堆）
+    const ensureFolder = (name: string, conditionsJson: string): boolean => {
+      const ex = db.prepare('SELECT id FROM smart_folders WHERE name = ?').get(name) as
+        { id: string } | undefined
+      if (ex) { skippedNames.push(name); return false }
+      db.prepare(
+        'INSERT INTO smart_folders (id, name, conditions, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+      ).run(uuidv4(), name, conditionsJson, now, now)
+      createdNames.push(name)
+      return true
+    }
+
+    // 统计某组条件能命中多少音效（用于跳过空分类）
+    const countOf = (conditionsJson: string): number => {
+      try { return runSmartFolderQuery(conditionsJson).length } catch { return 0 }
+    }
+
+    const mk = (field: string, op: string, value: string) => ({ field, op, value })
+    const grp = (logic: 'AND' | 'OR', conditions: any[]) => ({ logic, conditions })
+    const toJson = (g: any) => JSON.stringify([g])
+
+    switch (dimension) {
+      case 'scenario': {
+        // 按 AI 适用场景分类：拆分 use_cases 逗号/顿号，统计频次取前 40
+        const rows = db.prepare(
+          "SELECT use_cases FROM sounds WHERE use_cases IS NOT NULL AND use_cases <> ''"
+        ).all() as Array<{ use_cases: string }>
+        const tally = new Map<string, number>()
+        for (const r of rows) {
+          for (const p of r.use_cases.split(/[、,，]/).map((s) => s.trim()).filter((s) => !!s)) {
+            tally.set(p, (tally.get(p) || 0) + 1)
+          }
+        }
+        ;[...tally.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 40)
+          .forEach(([val]) => {
+            const cj = toJson(grp('AND', [mk('use_cases', 'contains', val)]))
+            if (countOf(cj) > 0) ensureFolder(`场景 · ${val}`, cj)
+          })
+        break
+      }
+      case 'emotion': {
+        // 按 AI 情绪分类
+        const rows = db.prepare(
+          "SELECT emotion FROM sounds WHERE emotion IS NOT NULL AND emotion <> ''"
+        ).all() as Array<{ emotion: string }>
+        const tally = new Map<string, number>()
+        for (const r of rows) {
+          for (const p of r.emotion.split(/[/、,，]/).map((s) => s.trim()).filter((s) => !!s)) {
+            tally.set(p, (tally.get(p) || 0) + 1)
+          }
+        }
+        ;[...tally.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 40)
+          .forEach(([val]) => {
+            const cj = toJson(grp('AND', [mk('emotion', 'contains', val)]))
+            if (countOf(cj) > 0) ensureFolder(`情绪 · ${val}`, cj)
+          })
+        break
+      }
+      case 'ai_tags': {
+        // 自动分类「已 AI 分析」的文件：按其实际带有的 AI 标签建文件夹
+        const rows = db.prepare(`
+          SELECT DISTINCT tg.name FROM tags tg
+          JOIN sound_tags st ON tg.id = st.tag_id
+          JOIN sounds s ON s.id = st.sound_id
+          WHERE s.ai_analyzed_at IS NOT NULL
+        `).all() as Array<{ name: string }>
+        rows.slice(0, 60).forEach((r) => {
+          const cj = toJson(grp('AND', [mk('tags', 'contains', r.name)]))
+          if (countOf(cj) > 0) ensureFolder(`标签 · ${r.name}`, cj)
+        })
+        break
+      }
+      case 'filename': {
+        // 按文件名关键词自动归类（内置中英文关键词词典）
+        const DICT: Array<{ label: string; kws: string[] }> = [
+          { label: '人声', kws: ['voice', 'vocal', 'human', 'speak', 'shout', '人声', '喊叫', '笑声', '哭声', '男声', '女声'] },
+          { label: '动物', kws: ['animal', 'dog', 'cat', 'bird', '鸡', '鸭', '牛', '羊', '狼', '虫鸣', '动物'] },
+          { label: '环境氛围', kws: ['rain', 'wind', 'water', 'fire', 'thunder', 'ocean', 'forest', 'city', 'nature', 'weather', 'ambience', '雨', '海浪', '森林', '城市', '环境'] },
+          { label: '动作物品', kws: ['hit', 'impact', 'crash', 'bang', 'smash', 'strike', 'footstep', 'glass', 'metal', 'wood', 'gun', 'sword', 'door', '撞击', '碎裂', '脚步', '玻璃', '金属', '木头', '枪', '刀', '门'] },
+          { label: 'UI交互', kws: ['click', 'pop', 'transition', 'notify', 'alert', 'swoosh', 'button', 'hover', 'menu', '点击', '弹出', '通知', '过渡'] },
+          { label: '乐器音乐', kws: ['piano', 'guitar', 'drum', 'music', 'instrument', 'synth', 'bass', '钢琴', '吉他', '鼓', '弦乐', '管乐'] },
+          { label: '机械科技', kws: ['machine', 'engine', 'tech', 'robot', 'sci', 'laser', 'energy', 'circuit', '机器', '引擎', '机械', '科技', '激光', '电路', '能量'] },
+          { label: '特殊效果', kws: ['magic', 'scifi', 'horror', 'explosion', 'boom', 'glitch', 'whoosh', '魔法', '科幻', '恐怖', '爆炸', '故障'] }
+        ]
+        for (const { label, kws } of DICT) {
+          const cj = toJson(grp('OR', kws.map((k) => mk('file_name', 'contains', k))))
+          if (countOf(cj) > 0) ensureFolder(`文件 · ${label}`, cj)
+        }
+        break
+      }
+      case 'file_ext': {
+        // 按文件格式分类
+        const rows = db.prepare(
+          "SELECT DISTINCT file_ext FROM sounds WHERE file_ext IS NOT NULL AND file_ext <> ''"
+        ).all() as Array<{ file_ext: string }>
+        for (const r of rows) {
+          const cj = toJson(grp('AND', [mk('file_ext', 'equals', r.file_ext)]))
+          if (countOf(cj) > 0) ensureFolder(`格式 · ${r.file_ext}`, cj)
+        }
+        break
+      }
+      case 'imported': {
+        // 按导入时间段分类
+        const buckets: Array<{ name: string; g: any }> = [
+          { name: '导入 · 今天', g: grp('AND', [mk('imported_at', 'lt', '1')]) },
+          { name: '导入 · 近7天', g: grp('AND', [mk('imported_at', 'lt', '7')]) },
+          { name: '导入 · 近30天', g: grp('AND', [mk('imported_at', 'lt', '30')]) },
+          { name: '导入 · 近90天', g: grp('AND', [mk('imported_at', 'lt', '90')]) },
+          { name: '导入 · 更早', g: grp('AND', [mk('imported_at', 'gt', '90')]) }
+        ]
+        for (const b of buckets) {
+          const cj = toJson(b.g)
+          if (countOf(cj) > 0) ensureFolder(b.name, cj)
+        }
+        break
+      }
+      case 'duration': {
+        // 按时长分类：短(<1s) / 中(1-5s) / 长(>5s)
+        const buckets: Array<{ name: string; g: any }> = [
+          { name: '时长 · 短(<1秒)', g: grp('AND', [mk('duration_ms', 'lt', '1000')]) },
+          { name: '时长 · 中(1-5秒)', g: grp('AND', [mk('duration_ms', 'gt', '1000'), mk('duration_ms', 'lt', '5000')]) },
+          { name: '时长 · 长(>5秒)', g: grp('AND', [mk('duration_ms', 'gt', '5000')]) }
+        ]
+        for (const b of buckets) {
+          const cj = toJson(b.g)
+          if (countOf(cj) > 0) ensureFolder(b.name, cj)
+        }
+        break
+      }
+      case 'quality': {
+        // 按 AI 质量评分分类
+        const buckets: Array<{ name: string; g: any }> = [
+          { name: '质量 · 5★', g: grp('AND', [mk('quality_score', 'equals', '5')]) },
+          { name: '质量 · 4★', g: grp('AND', [mk('quality_score', 'equals', '4')]) },
+          { name: '质量 · 3★及以下', g: grp('AND', [mk('quality_score', 'lt', '3')]) }
+        ]
+        for (const b of buckets) {
+          const cj = toJson(b.g)
+          if (countOf(cj) > 0) ensureFolder(b.name, cj)
+        }
+        break
+      }
+      default:
+        return { created: 0, skipped: 0, names: [] }
+    }
+
+    return { created: createdNames.length, skipped: skippedNames.length, names: createdNames }
+  })
+
   // ---- Tag Management ----
 
   ipcMain.handle('tag:delete', (_event, tagId: string) => {

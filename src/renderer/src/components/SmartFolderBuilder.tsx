@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { SmartFolderData, SoundData } from '../../preload/index.d'
-import { FolderCog, Plus, Trash2, Save, Play, Search, X, GripVertical } from 'lucide-react'
+import { FolderCog, Plus, Trash2, Save, Play, Search, X, GripVertical, Wand2 } from 'lucide-react'
 import { useAppStore } from '../stores/appStore'
 import toast from 'react-hot-toast'
 
@@ -153,6 +153,71 @@ export function SmartFolderList(): JSX.Element {
           }}
         />
       )}
+    </div>
+  )
+}
+
+// 一键智能分类面板：按不同维度自动生成智能文件夹
+const CLASSIFY_DIMS = [
+  { dim: 'scenario', label: '按适用场景' },
+  { dim: 'emotion', label: '按情绪' },
+  { dim: 'ai_tags', label: '按AI标签' },
+  { dim: 'filename', label: '按文件名' },
+  { dim: 'file_ext', label: '按格式' },
+  { dim: 'imported', label: '按导入时间' },
+  { dim: 'duration', label: '按时长' },
+  { dim: 'quality', label: '按质量' }
+]
+
+export function SmartClassifyPanel(): JSX.Element {
+  const refreshSmartFolders = useAppStore((s) => s.refreshSmartFolders)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const onClassify = async (dim: string, label: string) => {
+    if (busy) return
+    setBusy(dim)
+    try {
+      const res = await window.api.autoClassify(dim)
+      if (res.created > 0) {
+        toast.success(
+          `已生成 ${res.created} 个智能文件夹` +
+          (res.skipped > 0 ? `（${res.skipped} 个已存在）` : '')
+        )
+        await refreshSmartFolders()
+      } else if (res.skipped > 0) {
+        toast(`「${label}」分类已存在，未重复创建`)
+      } else {
+        toast(`没有可用于「${label}」的音效`)
+      }
+    } catch {
+      toast.error('分类失败')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="px-2 py-2 border-b border-[#2a2a28]">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Wand2 size={13} className="text-accent" />
+        <span className="text-2xs font-medium text-muted-light">一键智能分类</span>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {CLASSIFY_DIMS.map((d) => (
+          <button
+            key={d.dim}
+            disabled={busy !== null}
+            onClick={() => onClassify(d.dim, d.label)}
+            title={`按「${d.label}」自动生成智能文件夹`}
+            className="text-2xs text-muted-light bg-surface-card hover:bg-accent/20 hover:text-accent-light border border-surface-border rounded-md px-2 py-1.5 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed truncate"
+          >
+            {busy === d.dim ? '生成中…' : d.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-muted mt-2 leading-relaxed">
+        按维度一键生成智能文件夹，点击即筛选对应音效；重复点击不会重复创建。
+      </p>
     </div>
   )
 }
