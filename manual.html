@@ -161,38 +161,6 @@
   .callout.tip{border-left-color:var(--green)}
   .callout.warn{border-left-color:var(--amber)}
 
-  /* ── Layout diagram (界面速览) ── */
-  .appmock{
-    margin-top:30px;border:1px solid var(--border-2);border-radius:16px;overflow:hidden;
-    background:var(--bg-2);font-size:12.5px;
-  }
-  .appmock .bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--border)}
-  .appmock .bar .lg{display:flex;align-items:center;gap:6px;color:var(--text);font-weight:700}
-  .appmock .bar .lg .mk{width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,var(--accent),var(--accent-2))}
-  .appmock .bar .ib{width:22px;height:22px;border-radius:6px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;color:var(--muted)}
-  .appmock .bar .sp{margin-left:auto;display:flex;gap:6px}
-  .appmock .main{display:grid;grid-template-columns:200px 1fr 300px;min-height:340px}
-  .appmock .side{border-right:1px solid var(--border);padding:10px;background:var(--surface-panel)}
-  .appmock .side .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:8px}
-  .appmock .side .tabs .t{flex:1;text-align:center;padding:6px 0;color:var(--muted)}
-  .appmock .side .tabs .t.on{color:var(--accent-2);border-bottom:2px solid var(--accent)}
-  .appmock .side .it{height:9px;border-radius:4px;background:var(--surface-2);margin:6px 0}
-  .appmock .side .it.a{background:var(--accent-soft)}
-  .appmock .center{padding:10px;display:flex;flex-direction:column;gap:8px}
-  .appmock .toolbar{display:flex;gap:6px;align-items:center;padding:7px 9px;border:1px solid var(--border);border-radius:9px;background:var(--surface)}
-  .appmock .toolbar .srch{flex:1;height:18px;border-radius:6px;background:var(--bg-2);border:1px solid var(--border)}
-  .appmock .toolbar .tb{width:18px;height:18px;border-radius:5px;background:var(--surface-2)}
-  .appmock .grid2{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex:1;align-content:start}
-  .appmock .card2{height:62px;border-radius:9px;background:var(--surface);border:1px solid var(--border);display:flex;flex-direction:column;justify-content:flex-end;padding:7px}
-  .appmock .card2 .wv{height:18px;border-radius:3px;background:var(--accent-soft);margin-bottom:5px}
-  .appmock .card2 .nm{height:6px;width:70%;border-radius:3px;background:var(--surface-2)}
-  .appmock .detail{margin:0;border:none;border-left:1px solid var(--border);border-radius:0;background:var(--surface-panel);padding:10px}
-  .appmock .detail .ln{height:7px;border-radius:3px;background:var(--surface-2);margin:7px 0}
-  .appmock .detail .ln.hl{background:var(--accent-soft);width:55%}
-  .appmock .detail .play{height:26px;border-radius:8px;background:var(--accent-soft);margin:8px 0}
-  .ztag{display:inline-block;font-size:10.5px;color:var(--accent-2);background:var(--accent-soft);
-    border:1px solid rgba(124,114,230,.25);border-radius:6px;padding:1px 6px;margin:3px 3px 0 0}
-
   /* ── FAQ ── */
   .faq{display:flex;flex-direction:column;gap:12px;margin-top:30px}
   .qa{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 22px}
@@ -286,55 +254,19 @@
   <h2>主界面长什么样</h2>
   <p class="lead">打开软件后，窗口分为三块：<b style="color:var(--text)">左侧栏</b>（导航与筛选）、<b style="color:var(--text)">中间主区</b>（工具栏 + 音效网格/列表）、<b style="color:var(--text)">右侧详情面板</b>（选中音效的播放与分析）。先认识一下，后面每一步都对得上。</p>
 
-  <div class="appmock">
-    <div class="bar">
-      <div class="lg"><span class="mk"></span> SoundVault</div>
-      <div class="ib">⤓</div>
-      <div class="ib">⚙</div>
-      <div class="sp">
-        <div class="ib">▢</div><div class="ib">▢</div><div class="ib">✕</div>
-      </div>
-    </div>
-    <div class="main">
-      <div class="side">
-        <div class="tabs">
-          <div class="t on">标签</div><div class="t">收藏夹</div>
-          <div class="t">智能</div><div class="t">回收站</div>
-        </div>
-        <div class="it a"></div><div class="it"></div>
-        <div class="it"></div><div class="it a"></div><div class="it"></div>
-      </div>
-      <div class="center">
-        <div class="toolbar">
-          <div class="srch"></div><div class="tb"></div>
-          <div class="tb"></div><div class="tb"></div><div class="tb"></div>
-          <div class="tb"></div><div class="tb"></div>
-        </div>
-        <div class="grid2">
-          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
-          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
-          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
-          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
-          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
-          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
-          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
-          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
-        </div>
-      </div>
-      <div class="detail">
-        <div class="ln hl"></div><div class="ln"></div>
-        <div class="play"></div>
-        <div class="ln hl"></div><div class="ln"></div><div class="ln"></div>
-      </div>
-    </div>
-  </div>
+  <!-- 界面截图（基于真实 UI 组件结构 + 假数据渲染） -->
+  <img src="manual-assets/ui-main.png" alt="SoundVault 主界面完整截图"
+       style="width:100%;border-radius:14px;border:1px solid var(--border);
+              box-shadow:0 6px 32px rgba(0,0,0,.35);display:block" />
 
-  <div style="margin-top:18px;display:flex;flex-wrap:wrap">
-    <span class="ztag">① 左侧栏顶部：logo + 「导入」⤓ + 「AI 模型配置」⚙ 两个图标按钮</span>
-    <span class="ztag">② 左侧栏 4 个 Tab：标签 / 收藏夹 / 智能 / 回收站</span>
-    <span class="ztag">③ 中间顶部工具栏：搜索框 · 导出⤓ / 导入⤒ · 字号 · 筛选排序 · 网格/列表 · 窗口控制</span>
-    <span class="ztag">④ 中间主区：音效卡片网格（或列表）</span>
-    <span class="ztag">⑤ 右侧详情面板：播放器 + AI 分析 + 标签 + 技术信息</span>
+  <div style="margin-top:18px;display:flex;flex-wrap:wrap;gap:8px">
+    <span class="ztag">① 左侧栏顶部 — SoundVault logo / 导入按钮 / AI 配置</span>
+    <span class="ztag">② 四个导航 Tab（标签 · 收藏夹 · 智能 · 回收站）</span>
+    <span class="ztag">③ 标签树 — 八大分类可展开，点击即筛选中间网格</span>
+    <span class="ztag">④ 工具栏 — 搜索框 · 导出/导入 · 字号调节 · 筛排 · 网格/列表切换 · 窗口控制</span>
+    <span class="ztag">⑤ 音效卡片网格 — 波形图 + 文件名 + AI 描述 + 时长/格式/大小，悬停预览</span>
+    <span class="ztag">⑥ 右侧详情面板 — 音频播放器、AI 描述、适用场景、情绪、标签、质量评分、技术信息、操作按钮</span>
+    <span class="ztag">⑦ 底部状态栏 — 总量 / 收藏数 / 文件总大小 / 选中数量</span>
   </div>
 </section>
 
