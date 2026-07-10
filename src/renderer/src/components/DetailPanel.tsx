@@ -15,7 +15,8 @@ import {
   SkipBack,
   SkipForward,
   Edit3,
-  Check
+  Check,
+  Repeat
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
@@ -145,6 +146,36 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       toast.error('操作失败')
     }
   }, [sound.file_path])
+
+  // 首尾无缝循环：调用后端 ffmpeg 交叉淡变，生成 * _loop.wav
+  const [loopMs, setLoopMs] = useState(30)
+  const [looping, setLooping] = useState(false)
+  const handleSeamlessLoop = useCallback(async () => {
+    if (looping) return
+    setLooping(true)
+    try {
+      const res = await window.api.seamlessLoop(sound.id, loopMs)
+      if (res.success && res.outPath) {
+        toast.success(
+          <span>
+            已生成无缝循环文件（交叉 {res.crossfadeMs}ms）
+            <button
+              onClick={() => window.api.openPath(res.outPath!)}
+              style={{ marginLeft: 8, textDecoration: 'underline' }}
+            >
+              打开位置
+            </button>
+          </span>
+        )
+      } else {
+        toast.error(res.message || '生成失败')
+      }
+    } catch {
+      toast.error('生成失败')
+    } finally {
+      setLooping(false)
+    }
+  }, [sound.id, loopMs, looping])
 
   const handleStar = useCallback(async () => {
     try {
@@ -600,6 +631,35 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
             <FolderOpen size={15} />
             打开文件位置
           </button>
+
+          <div className="mt-1 rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-[#8a8a82] flex items-center gap-1.5">
+                <Repeat size={13} className="text-accent" />
+                首尾无缝循环
+              </span>
+              <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
+                交叉
+                <input
+                  type="number" min={10} max={500} value={loopMs}
+                  onChange={(e) => setLoopMs(Math.max(10, Math.min(500, Number(e.target.value) || 30)))}
+                  className="w-12 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center"
+                />
+                ms
+              </label>
+            </div>
+            <button
+              onClick={handleSeamlessLoop}
+              disabled={looping}
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
+            >
+              <Repeat size={13} />
+              {looping ? '生成中…' : '生成无缝循环文件'}
+            </button>
+            <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
+              用 ffmpeg 把尾音交叉淡入开头，在原文件同目录生成 <code className="text-[#8a8a82]">*_loop.wav</code>（不覆盖原文件）。
+            </p>
+          </div>
         </div>
       </div>
     </div>

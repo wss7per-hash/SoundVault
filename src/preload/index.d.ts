@@ -31,6 +31,7 @@ export interface SoundVaultAPI {
   copyFileTo: (soundId: string, targetDir: string) => Promise<{ success: boolean; path?: string; message?: string }>
   moveFileTo: (soundId: string, targetDir: string) => Promise<{ success: boolean; path?: string; message?: string }>
   trashFile: (soundId: string) => Promise<{ success: boolean; message?: string }>
+  seamlessLoop: (soundId: string, crossfadeMs?: number) => Promise<{ success: boolean; outPath?: string; crossfadeMs?: number; message?: string }>
 
   // AI Analysis
   getAIConfig: () => Promise<AIConfig>

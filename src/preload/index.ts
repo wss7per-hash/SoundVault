@@ -40,6 +40,10 @@ const api = {
   moveFileTo: (soundId: string, targetDir: string) => ipcRenderer.invoke('file:moveTo', soundId, targetDir),
   trashFile: (soundId: string) => ipcRenderer.invoke('file:trash', soundId),
 
+  // Seamless Loop (ffmpeg crossfade)
+  seamlessLoop: (soundId: string, crossfadeMs?: number) =>
+    ipcRenderer.invoke('audio:seamlessLoop', soundId, crossfadeMs),
+
   // AI Analysis
   getAIConfig: () => ipcRenderer.invoke('ai:getConfig'),
   saveAIConfig: (config: any) => ipcRenderer.invoke('ai:saveConfig', config),

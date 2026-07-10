@@ -1,5 +1,8 @@
 import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron'
 import { readdir, stat, readFile, writeFile, copyFile, rename, mkdir, access, rm } from 'fs/promises'
+import { execFile } from 'child_process'
+// @ts-ignore - ffmpeg-static 无类型声明，但运行期返回二进制路径字符串
+import ffmpegPath from 'ffmpeg-static'
 import { existsSync } from 'fs'
 import { createHash } from 'crypto'
 import { join, extname, basename, dirname, parse, format } from 'path'
@@ -1447,6 +1450,51 @@ function ensureParentCategory(category: string, now: string): string | null {
       await shell.trashItem(row.file_path)
       db.prepare('UPDATE sounds SET is_trashed = 1, updated_at = ? WHERE id = ?').run(new Date().toISOString(), soundId)
       return { success: true }
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
+    }
+  })
+
+  // ---- 首尾无缝循环：ffmpeg 把「尾音」交叉淡入到「开头」，生成新的天生无缝循环文件 ----
+  ipcMain.handle('audio:seamlessLoop', async (_event, soundId: string, crossfadeMs = 30) => {
+    try {
+      const row = db.prepare('SELECT file_path, duration_ms FROM sounds WHERE id = ?')
+        .get(soundId) as { file_path: string; duration_ms: number } | undefined
+      if (!row) return { success: false, message: '找不到文件记录' }
+
+      const durSec = (row.duration_ms || 0) / 1000
+      // 交叉长度限制 10–500ms，避免过短无声 / 过长改变听感
+      const L = Math.max(10, Math.min(500, crossfadeMs)) / 1000
+      if (durSec <= L * 2 + 0.1) {
+        return {
+          success: false,
+          message: `音效太短（${durSec.toFixed(2)}s），无法生成无缝循环，至少需要 ${(L * 2).toFixed(2)}s`
+        }
+      }
+      const DURM = (durSec - L).toFixed(4)
+      const dir = dirname(row.file_path)
+      const { name } = parse(row.file_path)
+      const outPath = join(dir, `${name}_loop.wav`)
+
+      const filter = [
+        '[0:a]asplit=3[s1][s2][s3]',
+        `[s1]atrim=0:${DURM}[a]`,
+        `[s2]atrim=${DURM}[tail]`,
+        `[s3]atrim=0:${L}[head]`,
+        `[tail][head]acrossfade=d=${L}:curve1=esin:curve2=esin[cf]`,
+        `[a][cf]concat=n=2:v=0:a=1[out]`
+      ].join(';')
+
+      await new Promise<void>((resolve, reject) => {
+        execFile(
+          ffmpegPath,
+          ['-i', row.file_path, '-filter_complex', filter, '-map', '[out]', '-c:a', 'pcm_s16le', '-y', outPath],
+          { windowsHide: true, timeout: 120000 },
+          (err, _stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve())
+        )
+      })
+
+      return { success: true, outPath, crossfadeMs: Math.round(L * 1000) }
     } catch (err) {
       return { success: false, message: (err as Error).message }
     }
