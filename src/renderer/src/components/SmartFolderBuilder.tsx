@@ -172,23 +172,44 @@ const CLASSIFY_DIMS = [
 export function SmartClassifyPanel(): JSX.Element {
   const refreshSmartFolders = useAppStore((s) => s.refreshSmartFolders)
   const [busy, setBusy] = useState<string | null>(null)
+  // 聚类参数：控制生成的文件夹数量与噪声阈值
+  const [maxGroups, setMaxGroups] = useState(8)
+  const [minPerGroup, setMinPerGroup] = useState(2)
+
+  const runOne = async (dim: string, label: string): Promise<number> => {
+    const res = await window.api.autoClassify(dim, { maxGroups, minPerGroup })
+    if (res.created > 0) {
+      toast.success(`「${label}」已生成 ${res.created} 个智能文件夹` +
+        (res.skipped > 0 ? `（${res.skipped} 个已存在）` : ''))
+    } else if (res.skipped > 0) {
+      toast(`「${label}」分类已存在，未重复创建`)
+    } else {
+      toast(`没有可用于「${label}」的音效`)
+    }
+    return res.created
+  }
 
   const onClassify = async (dim: string, label: string) => {
     if (busy) return
     setBusy(dim)
     try {
-      const res = await window.api.autoClassify(dim)
-      if (res.created > 0) {
-        toast.success(
-          `已生成 ${res.created} 个智能文件夹` +
-          (res.skipped > 0 ? `（${res.skipped} 个已存在）` : '')
-        )
-        await refreshSmartFolders()
-      } else if (res.skipped > 0) {
-        toast(`「${label}」分类已存在，未重复创建`)
-      } else {
-        toast(`没有可用于「${label}」的音效`)
-      }
+      await runOne(dim, label)
+      await refreshSmartFolders()
+    } catch {
+      toast.error('分类失败')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const onClassifyAll = async () => {
+    if (busy) return
+    setBusy('__all__')
+    try {
+      let total = 0
+      for (const d of CLASSIFY_DIMS) total += await runOne(d.dim, d.label)
+      await refreshSmartFolders()
+      toast.success(`智能整理完成，共生成 ${total} 个智能文件夹`)
     } catch {
       toast.error('分类失败')
     } finally {
@@ -202,6 +223,7 @@ export function SmartClassifyPanel(): JSX.Element {
         <Wand2 size={13} className="text-accent" />
         <span className="text-2xs font-medium text-muted-light">一键智能分类</span>
       </div>
+
       <div className="grid grid-cols-2 gap-1.5">
         {CLASSIFY_DIMS.map((d) => (
           <button
@@ -215,8 +237,39 @@ export function SmartClassifyPanel(): JSX.Element {
           </button>
         ))}
       </div>
+
+      <button
+        disabled={busy !== null}
+        onClick={onClassifyAll}
+        className="mt-1.5 w-full text-2xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 rounded-md px-2 py-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {busy === '__all__' ? '整理中…' : '⚡ 一键整理全部维度'}
+      </button>
+
+      <div className="flex items-center gap-2 mt-2">
+        <label className="flex items-center gap-1 text-[10px] text-muted">
+          上限
+          <input
+            type="number" min={2} max={20} value={maxGroups}
+            onChange={(e) => setMaxGroups(Math.max(2, Math.min(20, Number(e.target.value) || 8)))}
+            className="w-11 bg-surface-input border border-surface-border rounded px-1 py-0.5 text-[10px] text-muted-light text-center"
+          />
+          个
+        </label>
+        <label className="flex items-center gap-1 text-[10px] text-muted">
+          忽略&lt;
+          <input
+            type="number" min={1} max={20} value={minPerGroup}
+            onChange={(e) => setMinPerGroup(Math.max(1, Math.min(20, Number(e.target.value) || 2)))}
+            className="w-11 bg-surface-input border border-surface-border rounded px-1 py-0.5 text-[10px] text-muted-light text-center"
+          />
+          个素材
+        </label>
+      </div>
+
       <p className="text-[10px] text-muted mt-2 leading-relaxed">
-        按维度一键生成智能文件夹，点击即筛选对应音效；重复点击不会重复创建。
+        开放维度（场景/情绪/标签）会先按<strong className="text-muted-light">主题词典</strong>归并成少量「主题文件夹」，
+        不再一个值一个夹；固定维度（格式/时间/时长/质量）直接分组。可调整上限与噪声阈值。
       </p>
     </div>
   )

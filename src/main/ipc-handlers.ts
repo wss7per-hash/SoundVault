@@ -1034,14 +1034,19 @@ function ensureParentCategory(category: string, now: string): string | null {
     }
   })
 
-  // ---- 智能分类：一键自动生成智能文件夹 ----
+  // ---- 智能分类：一键自动生成智能文件夹（语义聚类版） ----
   // 维度：scenario(适用场景) / emotion(情绪) / ai_tags(已分析文件按AI标签)
   //       / filename(文件名关键词) / file_ext(格式) / imported(导入时间段)
   //       / duration(时长) / quality(质量评分)
+  // 设计：开放维度（场景/情绪/标签）先按主题词典聚成少量「主题文件夹」，
+  //       不再「一值一夹」；并以 maxGroups 上限 + minPerGroup 频率阈值控制数量。
   type AutoClassifyResult = { created: number; skipped: number; names: string[] }
+  type AutoClassifyOptions = { maxGroups?: number; minPerGroup?: number }
 
-  ipcMain.handle('smartFolder:autoClassify', (_event, dimension: string): AutoClassifyResult => {
+  ipcMain.handle('smartFolder:autoClassify', (_event, dimension: string, options?: AutoClassifyOptions): AutoClassifyResult => {
     const now = new Date().toISOString()
+    const maxGroups = Math.max(2, Math.min(20, options?.maxGroups ?? 8))
+    const minPerGroup = Math.max(1, options?.minPerGroup ?? 2)
     const createdNames: string[] = []
     const skippedNames: string[] = []
 
@@ -1050,6 +1055,8 @@ function ensureParentCategory(category: string, now: string): string | null {
       const ex = db.prepare('SELECT id FROM smart_folders WHERE name = ?').get(name) as
         { id: string } | undefined
       if (ex) { skippedNames.push(name); return false }
+      // 频率阈值：命中素材数低于 minPerGroup 的噪声分类直接跳过
+      if (countOf(conditionsJson) < minPerGroup) return false
       db.prepare(
         'INSERT INTO smart_folders (id, name, conditions, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
       ).run(uuidv4(), name, conditionsJson, now, now)
@@ -1066,58 +1073,108 @@ function ensureParentCategory(category: string, now: string): string | null {
     const grp = (logic: 'AND' | 'OR', conditions: any[]) => ({ logic, conditions })
     const toJson = (g: any) => JSON.stringify([g])
 
+    // 主题词典：把零散的「场景/情绪/标签」值，按关键词归并成少量「主题文件夹」
+    const THEME_DICTS: Record<string, Array<{ theme: string; kws: string[] }>> = {
+      scenario: [
+        { theme: '战斗与动作', kws: ['战斗', '打斗', '格斗', '技能', '攻击', '打击', '枪', '炮', '爆炸', '爆破', '武器', '剑', '刀', '拳', '踢', '撞击', '射击', '施法'] },
+        { theme: '环境与自然', kws: ['环境', '氛围', '自然', '雨', '风', '海', '浪', '森林', '城市', '街道', '水', '火', '雷', '鸟', '虫', '天气', '山', '河', 'ambience', 'rain', 'wind', 'water', 'fire', 'forest', 'city', 'nature', 'weather', 'ocean', 'river'] },
+        { theme: '角色与生物', kws: ['人声', '角色', '脚步', '动物', '怪兽', '龙', '鬼', '哭', '笑', '喊', '呼吸', '生物', '兽', 'voice', 'vocal', 'human', 'animal', 'creature', 'footstep', 'character', 'beast'] },
+        { theme: 'UI与交互', kws: ['UI', '界面', '点击', '按钮', '菜单', '提示', '通知', '弹出', '滑动', '悬停', '交互', 'click', 'pop', 'button', 'menu', 'notify', 'alert', 'transition', 'hover'] },
+        { theme: '机械与科技', kws: ['机械', '机器', '引擎', '科技', '电子', '机器人', '激光', '能量', '电路', '电流', '齿轮', 'engine', 'machine', 'tech', 'robot', 'laser', 'energy', 'circuit', 'mechanical'] },
+        { theme: '音乐与节奏', kws: ['音乐', '旋律', '节奏', '钢琴', '吉他', '鼓', '弦乐', '管乐', '背景乐', '配乐', 'music', 'piano', 'guitar', 'drum', 'bass', 'melody'] },
+        { theme: '魔法与特效', kws: ['魔法', '科幻', '恐怖', '故障', '传送', '时空', '空间', '特效', 'magic', 'scifi', 'horror', 'glitch', 'whoosh', 'explosion', 'boom', 'spatial'] },
+        { theme: '物体与生活', kws: ['日常', '物体', '玻璃', '木头', '纸', '金属', '门', '钟', '铃', '厨房', 'kitchen', 'glass', 'wood', 'metal', 'door', 'bell', 'object'] }
+      ],
+      emotion: [
+        { theme: '紧张刺激', kws: ['紧张', '刺激', '惊险', '压迫', '危机', '危险', 'tense', 'thrill'] },
+        { theme: '轻松愉快', kws: ['轻松', '愉快', '欢快', '开心', '活泼', '搞笑', 'calm', 'relax', 'happy', 'playful', 'cheerful'] },
+        { theme: '悲伤忧郁', kws: ['悲伤', '忧郁', '孤独', '失落', '哀伤', 'sad', 'melancholy', 'lonely'] },
+        { theme: '神秘悬疑', kws: ['神秘', '悬疑', '诡异', '阴森', '未知', 'mysterious', 'eerie', 'spooky'] },
+        { theme: '激昂史诗', kws: ['激昂', '史诗', '宏大', '壮丽', 'heroic', 'epic', 'grand'] },
+        { theme: '温暖治愈', kws: ['温暖', '治愈', '柔情', '感动', 'warm', 'healing', 'tender'] }
+      ]
+    }
+    // 标签维度复用场景的主题词典（领域覆盖一致）
+    THEME_DICTS.ai_tags = THEME_DICTS.scenario
+
+    // 把「值→频次」聚成 ≤ maxGroups 个主题，每个主题是一个 OR 条件组
+    const clusterIntoThemes = (
+      tally: Map<string, number>,
+      dict: Array<{ theme: string; kws: string[] }>
+    ): Array<{ theme: string; values: string[]; count: number }> => {
+      const byTheme = new Map<string, { values: string[]; count: number }>()
+      for (const [val, cnt] of tally) {
+        let theme = '其他'
+        const low = val.toLowerCase()
+        for (const d of dict) {
+          if (d.kws.some((k) => low.includes(k.toLowerCase()))) { theme = d.theme; break }
+        }
+        const cur = byTheme.get(theme) ?? { values: [], count: 0 }
+        cur.values.push(val); cur.count += cnt
+        byTheme.set(theme, cur)
+      }
+      let arr = [...byTheme.entries()].map(([theme, v]) => ({ theme, values: v.values, count: v.count }))
+      arr.sort((a, b) => b.count - a.count)
+      if (arr.length > maxGroups) {
+        const keep = arr.slice(0, maxGroups - 1)
+        const merged = arr.slice(maxGroups - 1)
+        const mv = merged.flatMap((m) => m.values)
+        const mc = merged.reduce((s, m) => s + m.count, 0)
+        keep.push({ theme: '其他', values: mv, count: mc })
+        arr = keep
+      }
+      return arr.filter((a) => a.count >= minPerGroup)
+    }
+
     switch (dimension) {
       case 'scenario': {
-        // 按 AI 适用场景分类：拆分 use_cases 逗号/顿号，统计频次取前 40
+        // 语义聚类：把零散场景值按主题词典归并成少量「主题文件夹」
         const rows = db.prepare(
           "SELECT use_cases FROM sounds WHERE use_cases IS NOT NULL AND use_cases <> ''"
         ).all() as Array<{ use_cases: string }>
         const tally = new Map<string, number>()
         for (const r of rows) {
-          for (const p of r.use_cases.split(/[、,，]/).map((s) => s.trim()).filter((s) => !!s)) {
+          for (const p of r.use_cases.split(/[、,，/]/).map((s) => s.trim()).filter((s) => !!s)) {
             tally.set(p, (tally.get(p) || 0) + 1)
           }
         }
-        ;[...tally.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 40)
-          .forEach(([val]) => {
-            const cj = toJson(grp('AND', [mk('use_cases', 'contains', val)]))
-            if (countOf(cj) > 0) ensureFolder(`场景 · ${val}`, cj)
-          })
+        clusterIntoThemes(tally, THEME_DICTS.scenario).forEach(({ theme, values }) => {
+          const cj = toJson(grp('OR', values.map((v) => mk('use_cases', 'contains', v))))
+          ensureFolder(`场景 · ${theme}`, cj)
+        })
         break
       }
       case 'emotion': {
-        // 按 AI 情绪分类
+        // 语义聚类：把零散情绪值归并成少量「情绪主题文件夹」
         const rows = db.prepare(
           "SELECT emotion FROM sounds WHERE emotion IS NOT NULL AND emotion <> ''"
         ).all() as Array<{ emotion: string }>
         const tally = new Map<string, number>()
         for (const r of rows) {
-          for (const p of r.emotion.split(/[/、,，]/).map((s) => s.trim()).filter((s) => !!s)) {
+          for (const p of r.emotion.split(/[、,，/]/).map((s) => s.trim()).filter((s) => !!s)) {
             tally.set(p, (tally.get(p) || 0) + 1)
           }
         }
-        ;[...tally.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 40)
-          .forEach(([val]) => {
-            const cj = toJson(grp('AND', [mk('emotion', 'contains', val)]))
-            if (countOf(cj) > 0) ensureFolder(`情绪 · ${val}`, cj)
-          })
+        clusterIntoThemes(tally, THEME_DICTS.emotion).forEach(({ theme, values }) => {
+          const cj = toJson(grp('OR', values.map((v) => mk('emotion', 'contains', v))))
+          ensureFolder(`情绪 · ${theme}`, cj)
+        })
         break
       }
       case 'ai_tags': {
-        // 自动分类「已 AI 分析」的文件：按其实际带有的 AI 标签建文件夹
+        // 已分析文件按「实际 AI 标签」聚类：标签值 → 主题词典归并
         const rows = db.prepare(`
-          SELECT DISTINCT tg.name FROM tags tg
+          SELECT tg.name, COUNT(st.sound_id) AS cnt FROM tags tg
           JOIN sound_tags st ON tg.id = st.tag_id
           JOIN sounds s ON s.id = st.sound_id
           WHERE s.ai_analyzed_at IS NOT NULL
-        `).all() as Array<{ name: string }>
-        rows.slice(0, 60).forEach((r) => {
-          const cj = toJson(grp('AND', [mk('tags', 'contains', r.name)]))
-          if (countOf(cj) > 0) ensureFolder(`标签 · ${r.name}`, cj)
+          GROUP BY tg.name
+        `).all() as Array<{ name: string; cnt: number }>
+        const tally = new Map<string, number>()
+        for (const r of rows) tally.set(r.name, r.cnt)
+        clusterIntoThemes(tally, THEME_DICTS.ai_tags).forEach(({ theme, values }) => {
+          const cj = toJson(grp('OR', values.map((v) => mk('tags', 'contains', v))))
+          ensureFolder(`标签 · ${theme}`, cj)
         })
         break
       }

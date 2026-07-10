@@ -774,7 +774,10 @@ win.innerHTML =
       <p>智能文件夹不是物理文件夹，而是一组<strong style="color:var(--text)">自动归类条件</strong>。建好后符合条件的音效自动出现其中。</p>
       <div class="callout tip" style="margin-top:12px"><b>✨ 一键智能分类</b>：智能 Tab 顶部新增「一键智能分类」面板，按维度自动生成智能文件夹，无需手动写规则。</div>
       <div class="detail" style="margin-top:10px">
-        <div class="row"><span class="k">8 个维度</span><span class="v"><b>按适用场景</b>（拆 AI 场景自动归类）/ <b>按情绪</b> / <b>按 AI 标签</b>（已分析文件按它们实际带有的标签建夹）/ <b>按文件名</b>（内置中英文关键词词典）/ <b>按格式</b> / <b>按导入时间</b>（今天 · 近7天 · 近30天 · 近90天 · 更早）/ <b>按时长</b>（短&lt;1秒 · 中1-5秒 · 长&gt;5秒）/ <b>按质量评分</b>（5★ · 4★ · 3★及以下）</span></div>
+        <div class="row"><span class="k">8 个维度</span><span class="v"><b>按适用场景</b> / <b>按情绪</b> / <b>按 AI 标签</b> / <b>按文件名</b>（内置中英文关键词词典）/ <b>按格式</b> / <b>按导入时间</b>（今天 · 近7天 · 近30天 · 近90天 · 更早）/ <b>按时长</b>（短&lt;1秒 · 中1-5秒 · 长&gt;5秒）/ <b>按质量评分</b>（5★ · 4★ · 3★及以下）</span></div>
+        <div class="row"><span class="k">🧠 语义聚类</span><span class="v">开放的三个维度（<b>场景 / 情绪 / AI标签</b>）不会「一个值一个夹」——而是先把零散值按<strong style="color:var(--text)">主题词典</strong>归并成少量「主题文件夹」（如「战斗与动作」「环境与自然」「UI与交互」「紧张刺激」…），每个主题夹内含全部相关音效。避免几十个碎夹。</span></div>
+        <div class="row"><span class="k">数量可控</span><span class="v">面板下方有两个可调参数：<b>上限</b>（每个维度最多生成几个文件夹，默认 8）与<b>忽略 &lt; N 个素材</b>（低于该数量的噪声分类直接跳过，默认 2）。超出的主题会合并进「其他」。</span></div>
+        <div class="row"><span class="k">一键整理全部</span><span class="v">面板底部「⚡ 一键整理全部维度」按钮，按当前上限/阈值一次性跑完 8 个维度，省去逐个点击。</span></div>
         <div class="row"><span class="k">幂等安全</span><span class="v">重复点击不会刷出重复文件夹；某维度没有可归类的音效时会提示「没有可用于该维度的音效」。</span></div>
         <div class="row"><span class="k">即用</span><span class="v">生成后同名智能文件夹直接出现在列表，点一下即筛选对应音效，后续新增素材也会自动归位。</span></div>
       </div>
