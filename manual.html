@@ -7,9 +7,10 @@
 <style>
   :root{
     --bg:#0d0d10; --bg-2:#121116; --surface:#18171e; --surface-2:#211f29;
+    --surface-panel:#1e1e1c;
     --border:rgba(255,255,255,.08); --border-2:rgba(255,255,255,.14);
-    --text:#ECEAF2; --muted:#9b97ad; --muted-2:#6f6b80;
-    --accent:#7C5CFC; --accent-2:#B06BF7; --accent-soft:rgba(124,92,252,.14);
+    --text:#ECEAEF; --muted:#9b97ad; --muted-2:#6f6b80;
+    --accent:#7C72E6; --accent-2:#B06BF7; --accent-soft:rgba(124,114,230,.14);
     --green:#3ddc97; --amber:#F5B53D; --red:#E85D75;
     --font:"SF Pro Display","PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -42,7 +43,7 @@
     width:26px;height:26px;border-radius:8px;
     background:linear-gradient(135deg,var(--accent),var(--accent-2));
     display:grid;place-items:center;font-size:13px;font-weight:800;color:#fff;
-    box-shadow:0 4px 14px rgba(124,92,252,.5);
+    box-shadow:0 4px 14px rgba(124,114,230,.5);
   }
   .nav-links{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
   .nav-links a{
@@ -52,7 +53,7 @@
   .nav-links a:hover{color:var(--text);background:var(--surface-2)}
 
   /* ── Layout ── */
-  .wrap{max-width:980px;margin:0 auto;padding:0 26px}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 26px}
   section{padding:62px 0;border-bottom:1px solid var(--border)}
   .eyebrow{
     display:inline-flex;align-items:center;gap:7px;font-size:12px;letter-spacing:2px;
@@ -60,7 +61,7 @@
   }
   .eyebrow::before{content:"";width:22px;height:1px;background:var(--accent-2);opacity:.6}
   h2{font-size:30px;font-weight:750;letter-spacing:-.4px;margin-bottom:10px}
-  .lead{color:var(--muted);font-size:15.5px;max-width:680px}
+  .lead{color:var(--muted);font-size:15.5px;max-width:700px}
 
   /* ── Hero ── */
   .hero{padding:78px 0 56px;text-align:center;position:relative}
@@ -84,12 +85,11 @@
     padding:12px 22px;border-radius:12px;transition:.2s;cursor:pointer;border:1px solid transparent;
   }
   .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;
-    box-shadow:0 10px 30px -8px rgba(124,92,252,.7)}
-  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 16px 36px -8px rgba(124,92,252,.85)}
+    box-shadow:0 10px 30px -8px rgba(124,114,230,.7)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 16px 36px -8px rgba(124,114,230,.85)}
   .btn-ghost{border-color:var(--border-2);color:var(--text);background:var(--surface)}
   .btn-ghost:hover{background:var(--surface-2)}
 
-  /* sound-wave */
   .wave{display:flex;gap:4px;justify-content:center;align-items:flex-end;height:54px;margin:40px auto 0;max-width:340px}
   .wave span{flex:1;background:linear-gradient(180deg,var(--accent),var(--accent-2));
     border-radius:3px;animation:wf 1.6s ease-in-out infinite;opacity:.85}
@@ -110,7 +110,7 @@
     transition:.22s;position:relative;overflow:hidden;
   }
   .card:hover{transform:translateY(-4px);border-color:var(--border-2);
-    box-shadow:0 22px 48px -22px rgba(124,92,252,.5)}
+    box-shadow:0 22px 48px -22px rgba(124,114,230,.5)}
   .card .ico{
     width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
     background:var(--accent-soft);color:var(--accent-2);margin-bottom:15px;border:1px solid var(--border);
@@ -120,7 +120,7 @@
 
   /* ── Manual steps ── */
   .step{
-    display:grid;grid-template-columns:54px 1fr;gap:22px;padding:26px 0;
+    display:grid;grid-template-columns:54px 1fr;gap:22px;padding:28px 0;
     border-bottom:1px dashed var(--border);
   }
   .step:last-child{border-bottom:none}
@@ -128,7 +128,7 @@
     width:54px;height:54px;border-radius:15px;display:grid;place-items:center;
     font-size:21px;font-weight:800;color:#fff;
     background:linear-gradient(135deg,var(--accent),var(--accent-2));
-    box-shadow:0 8px 22px -8px rgba(124,92,252,.7);
+    box-shadow:0 8px 22px -8px rgba(124,114,230,.7);
   }
   .step h3{font-size:19px;font-weight:700;margin-bottom:9px}
   .step p{color:var(--muted);font-size:14.5px;margin-bottom:10px}
@@ -138,6 +138,20 @@
     border-radius:2px;background:linear-gradient(135deg,var(--accent),var(--accent-2))}
   .chip{display:inline-block;font-family:var(--mono);font-size:12px;background:var(--surface-2);
     border:1px solid var(--border);border-radius:7px;padding:2px 8px;color:#cfc6ff;margin:2px 4px 2px 0}
+  .path{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--accent-2);
+    background:var(--accent-soft);border:1px solid rgba(124,114,230,.25);
+    border-radius:999px;padding:3px 12px;margin:0 0 12px;font-weight:600}
+  .path svg{width:13px;height:13px}
+  .detail{
+    border:1px solid var(--border);border-left:3px solid var(--accent);
+    background:var(--surface);border-radius:0 12px 12px 0;padding:14px 18px;margin:10px 0 4px;font-size:13.2px;color:var(--muted);
+  }
+  .detail b{color:var(--text)}
+  .detail .row{display:flex;gap:10px;padding:4px 0;border-bottom:1px dashed rgba(255,255,255,.05)}
+  .detail .row:last-child{border-bottom:none}
+  .detail .k{color:var(--accent-2);font-family:var(--mono);font-size:12px;min-width:108px;flex-shrink:0;padding-top:1px}
+  .detail .v{color:#cfccda;flex:1}
+  .detail .v .go{color:var(--accent-2);font-weight:600}
 
   .callout{
     border:1px solid var(--border-2);border-left:3px solid var(--accent);
@@ -147,10 +161,41 @@
   .callout.tip{border-left-color:var(--green)}
   .callout.warn{border-left-color:var(--amber)}
 
+  /* ── Layout diagram (界面速览) ── */
+  .appmock{
+    margin-top:30px;border:1px solid var(--border-2);border-radius:16px;overflow:hidden;
+    background:var(--bg-2);font-size:12.5px;
+  }
+  .appmock .bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--border)}
+  .appmock .bar .lg{display:flex;align-items:center;gap:6px;color:var(--text);font-weight:700}
+  .appmock .bar .lg .mk{width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,var(--accent),var(--accent-2))}
+  .appmock .bar .ib{width:22px;height:22px;border-radius:6px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;color:var(--muted)}
+  .appmock .bar .sp{margin-left:auto;display:flex;gap:6px}
+  .appmock .main{display:grid;grid-template-columns:200px 1fr 300px;min-height:340px}
+  .appmock .side{border-right:1px solid var(--border);padding:10px;background:var(--surface-panel)}
+  .appmock .side .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:8px}
+  .appmock .side .tabs .t{flex:1;text-align:center;padding:6px 0;color:var(--muted)}
+  .appmock .side .tabs .t.on{color:var(--accent-2);border-bottom:2px solid var(--accent)}
+  .appmock .side .it{height:9px;border-radius:4px;background:var(--surface-2);margin:6px 0}
+  .appmock .side .it.a{background:var(--accent-soft)}
+  .appmock .center{padding:10px;display:flex;flex-direction:column;gap:8px}
+  .appmock .toolbar{display:flex;gap:6px;align-items:center;padding:7px 9px;border:1px solid var(--border);border-radius:9px;background:var(--surface)}
+  .appmock .toolbar .srch{flex:1;height:18px;border-radius:6px;background:var(--bg-2);border:1px solid var(--border)}
+  .appmock .toolbar .tb{width:18px;height:18px;border-radius:5px;background:var(--surface-2)}
+  .appmock .grid2{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex:1;align-content:start}
+  .appmock .card2{height:62px;border-radius:9px;background:var(--surface);border:1px solid var(--border);display:flex;flex-direction:column;justify-content:flex-end;padding:7px}
+  .appmock .card2 .wv{height:18px;border-radius:3px;background:var(--accent-soft);margin-bottom:5px}
+  .appmock .card2 .nm{height:6px;width:70%;border-radius:3px;background:var(--surface-2)}
+  .appmock .detail{margin:0;border:none;border-left:1px solid var(--border);border-radius:0;background:var(--surface-panel);padding:10px}
+  .appmock .detail .ln{height:7px;border-radius:3px;background:var(--surface-2);margin:7px 0}
+  .appmock .detail .ln.hl{background:var(--accent-soft);width:55%}
+  .appmock .detail .play{height:26px;border-radius:8px;background:var(--accent-soft);margin:8px 0}
+  .ztag{display:inline-block;font-size:10.5px;color:var(--accent-2);background:var(--accent-soft);
+    border:1px solid rgba(124,114,230,.25);border-radius:6px;padding:1px 6px;margin:3px 3px 0 0}
+
   /* ── FAQ ── */
   .faq{display:flex;flex-direction:column;gap:12px;margin-top:30px}
   .qa{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 22px}
-  .qa q{quotes:none}
   .qa .q{font-weight:700;font-size:15px;margin-bottom:6px;display:flex;gap:10px;align-items:flex-start}
   .qa .q::before{content:"Q";font-family:var(--mono);font-size:12px;color:#fff;background:var(--accent);
     width:22px;height:22px;border-radius:6px;display:grid;place-items:center;flex-shrink:0;margin-top:2px}
@@ -167,6 +212,10 @@
   .pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--green);
     border:1px solid rgba(61,220,151,.3);background:rgba(61,220,151,.08);
     padding:3px 10px;border-radius:999px;margin-bottom:14px}
+  @media(max-width:780px){
+    .appmock .main{grid-template-columns:1fr}
+    .appmock .side,.appmock .detail{display:none}
+  }
   @media(max-width:680px){
     .grid{grid-template-columns:1fr}
     .hero h1{font-size:42px}
@@ -183,6 +232,7 @@
   <a class="nav-logo" href="#top"><span class="mark">SV</span> SoundVault</a>
   <div class="nav-links">
     <a href="#intro">软件介绍</a>
+    <a href="#layout">界面速览</a>
     <a href="#features">核心特性</a>
     <a href="#manual">使用手册</a>
     <a href="#faq">常见问题</a>
@@ -230,11 +280,69 @@
   </div>
 </section>
 
+<!-- ═══════════ LAYOUT 速览 ═══════════ -->
+<section class="wrap" id="layout">
+  <div class="eyebrow">界面速览</div>
+  <h2>主界面长什么样</h2>
+  <p class="lead">打开软件后，窗口分为三块：<b style="color:var(--text)">左侧栏</b>（导航与筛选）、<b style="color:var(--text)">中间主区</b>（工具栏 + 音效网格/列表）、<b style="color:var(--text)">右侧详情面板</b>（选中音效的播放与分析）。先认识一下，后面每一步都对得上。</p>
+
+  <div class="appmock">
+    <div class="bar">
+      <div class="lg"><span class="mk"></span> SoundVault</div>
+      <div class="ib">⤓</div>
+      <div class="ib">⚙</div>
+      <div class="sp">
+        <div class="ib">▢</div><div class="ib">▢</div><div class="ib">✕</div>
+      </div>
+    </div>
+    <div class="main">
+      <div class="side">
+        <div class="tabs">
+          <div class="t on">标签</div><div class="t">收藏夹</div>
+          <div class="t">智能</div><div class="t">回收站</div>
+        </div>
+        <div class="it a"></div><div class="it"></div>
+        <div class="it"></div><div class="it a"></div><div class="it"></div>
+      </div>
+      <div class="center">
+        <div class="toolbar">
+          <div class="srch"></div><div class="tb"></div>
+          <div class="tb"></div><div class="tb"></div><div class="tb"></div>
+          <div class="tb"></div><div class="tb"></div>
+        </div>
+        <div class="grid2">
+          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
+          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
+          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
+          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
+          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
+          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
+          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
+          <div class="card2"><div class="wv"></div><div class="nm"></div></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div class="ln hl"></div><div class="ln"></div>
+        <div class="play"></div>
+        <div class="ln hl"></div><div class="ln"></div><div class="ln"></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:18px;display:flex;flex-wrap:wrap">
+    <span class="ztag">① 左侧栏顶部：logo + 「导入」⤓ + 「AI 模型配置」⚙ 两个图标按钮</span>
+    <span class="ztag">② 左侧栏 4 个 Tab：标签 / 收藏夹 / 智能 / 回收站</span>
+    <span class="ztag">③ 中间顶部工具栏：搜索框 · 导出⤓ / 导入⤒ · 字号 · 筛选排序 · 网格/列表 · 窗口控制</span>
+    <span class="ztag">④ 中间主区：音效卡片网格（或列表）</span>
+    <span class="ztag">⑤ 右侧详情面板：播放器 + AI 分析 + 标签 + 技术信息</span>
+  </div>
+</section>
+
 <!-- ═══════════ FEATURES ═══════════ -->
 <section class="wrap" id="features">
   <div class="eyebrow">核心特性</div>
   <h2>它能为你做什么</h2>
-  <p class="lead">从导入到复用，覆盖音效管理的完整链路。</p>
+  <p class="lead">从导入到复用，覆盖音效管理的完整链路。下面的「八步手册」会逐条教你怎么操作。</p>
   <div class="grid">
 
     <div class="card">
@@ -246,13 +354,13 @@
     <div class="card">
       <div class="ico">🗂️</div>
       <h3>八大分类标签体系</h3>
-      <p>人声 / 动物 / 环境氛围 / 动作物品 / UI交互 / 乐器音乐 / 机械科技 / 特殊效果。AI 分析结果自动归入对应父分类，标签树点击即筛选。</p>
+      <p>人声 / 动物 / 环境氛围 / 动作物品 / UI交互 / 乐器音乐 / 机械科技 / 特殊效果。AI 分析结果自动归入对应父分类，左侧标签树点击即筛选。</p>
     </div>
 
     <div class="card">
       <div class="ico">🎚️</div>
       <h3>波形播放器</h3>
-      <p>内置音频波形与进度条，支持音量调节与拖动定位。私有 <code class="chip">sv://</code> 协议流式加载，大文件也能秒开、可精准 seek。</p>
+      <p>右侧详情面板内置音频波形与进度条，支持播放/暂停、±5 秒快退快进、点击波形任意位置定位。私有 <code class="chip">sv://</code> 协议流式加载，大文件也能秒开、可精准 seek。</p>
     </div>
 
     <div class="card">
@@ -282,7 +390,7 @@
     <div class="card">
       <div class="ico">♻️</div>
       <h3>回收站与隐私优先</h3>
-      <p>删除的音效先进回收站，可恢复。整个软件<strong style="color:var(--text)">离线运行</strong>，AI 服务商可自定义（OpenAI / DeepSeek / Anthropic / Gemini / Ollama / TokenDance / 自定义 OpenAI 兼容网关），Key 仅存本地。</p>
+      <p>删除的音效先进回收站，可恢复。整个软件<strong style="color:var(--text)">离线运行</strong>，AI 服务商可自定义（DeepSeek / OpenAI / 通义千问 / Kimi / 豆包 / 硅基流动 / Claude / Gemini / Azure / Ollama / TokenDance / 自定义网关），Key 仅存本地。</p>
     </div>
 
   </div>
@@ -292,19 +400,29 @@
 <section class="wrap" id="manual">
   <div class="eyebrow">使用手册</div>
   <h2>八步上手 SoundVault</h2>
-  <p class="lead">从空白到井井有条，跟着走一遍即可。所有操作都在主界面的工具栏与左侧栏完成。</p>
+  <p class="lead">从空白到井井有条，跟着走一遍即可。每一步都标注了<b style="color:var(--text)">操作路径</b>（在哪点）和<b style="color:var(--text)">界面细节</b>（会看到什么、字段叫什么）。</p>
 
   <!-- Step 1 -->
   <div class="step">
     <div class="num">1</div>
     <div>
       <h3>导入音频</h3>
-      <p>点击窗口右上角或工具栏的「扫描 / 导入」入口，选择<strong style="color:var(--text)">单个文件或整个文件夹</strong>。SoundVault 会递归读取常见格式（mp3 / wav / flac / ogg / m4a / aiff 等）。</p>
+      <span class="path">① 左侧栏顶部「导入」图标 ⤓ &nbsp;或&nbsp; 中间空状态的导入入口</span>
+      <p>点击后弹出「扫描音效文件夹」对话框，分五步走完导入。</p>
+      <div class="detail">
+        <div class="row"><span class="k">对话框步骤</span><span class="v"><b>config</b>（配置）→ <b>scanning</b>（扫描中）→ <b>preview</b>（扫描结果）→ <b>importing</b>（导入中）→ <b>done</b>（完成）</span></div>
+        <div class="row"><span class="k">目标文件夹</span><span class="v">点「点击选择文件夹」选一个目录；可点「+ 添加更多文件夹」一次选多个</span></div>
+        <div class="row"><span class="k">快速选项</span><span class="v"><span class="go">递归子目录</span>（默认勾选）· <span class="go">跳过隐藏文件</span>（默认勾选）· <span class="go">包含视频文件</span></span></div>
+        <div class="row"><span class="k">高级过滤 ▸</span><span class="v">展开后：<b>文件名包含</b>（如 <code class="chip">sword,impact</code>）、<b>文件名排除</b>（如 <code class="chip">temp,draft</code>）、<b>最小/最大大小(KB)</b></span></div>
+        <div class="row"><span class="k">自动标记</span><span class="v"><span class="go">按文件夹结构自动标记标签</span>（默认勾选，按目录层级生成标签）</span></div>
+        <div class="row"><span class="k">开始</span><span class="v">选好文件夹后点右下角紫色「<b>开始扫描</b>」按钮</span></div>
+        <div class="row"><span class="k">结果页</span><span class="v">四张统计卡（总计 / 新文件 / 已导入 / 总大小）+ 格式分布条 + 可勾选文件列表（<span class="go">全选</span>/取消）+ 可选「导入后自动 AI 分析」→ 点「导入选中 (N)」</span></div>
+      </div>
       <ul>
-        <li>导入时自动计算文件哈希，<b>重复文件不会重复入库</b>。</li>
+        <li>导入时自动计算文件哈希，<b>重复文件不会重复入库</b>（已在库里的会标在「已导入」计数里跳过）。</li>
         <li>音频本体复制进本地库目录，<code class="chip">file_path</code> 指向本机位置——这也是它能离线工作的原因。</li>
+        <li>导入完成后音效出现在中间主区；若文件本体丢失，会标记为「缺失」但仍保留元数据。</li>
       </ul>
-      <div class="callout">导入完成后，音效会显示在右侧主区域。若文件本体丢失，会标记为「缺失」但仍保留元数据。</div>
     </div>
   </div>
 
@@ -313,11 +431,19 @@
     <div class="num">2</div>
     <div>
       <h3>播放与管理</h3>
-      <p>点击任意音效卡片，详情面板展示波形、播放 / 暂停、音量滑块与可拖动的进度条。</p>
+      <span class="path">中间主区 &nbsp;·&nbsp; 单击卡片打开右侧详情面板</span>
+      <p>单击任意音效卡片，右侧详情面板展开，含播放器与全部元信息。</p>
+      <div class="detail">
+        <div class="row"><span class="k">播放器</span><span class="v">60 根波形条（已播部分紫色、未播灰色）；底部「<b>▢ 后退5秒</b> / <b>圆形播放暂停</b> / <b>前进5秒 ▣</b>」；时间显示 <code class="chip">0:03 / 1:24</code>；<b>点击波形任意位置可拖动定位</b></span></div>
+        <div class="row"><span class="k">无法播放</span><span class="v">不支持的格式会显示「无法播放此格式」（不影响元数据管理）</span></div>
+        <div class="row"><span class="k">视图切换</span><span class="v">工具栏右侧「<b>▦ 网格</b> / <b>☰ 列表</b>」两个图标按钮切换</span></div>
+        <div class="row"><span class="k">多选</span><span class="v">按住 Ctrl/Shift 点卡片可多选，多选后工具栏「导出」会多出「选中项导出」</span></div>
+        <div class="row"><span class="k">右键卡片</span><span class="v">弹出菜单：打开文件位置 / 重命名 / 加入收藏夹 / AI 分析 / 删除</span></div>
+      </div>
       <ul>
         <li>工具栏可切换 <code class="chip">网格视图</code> 与 <code class="chip">列表视图</code>。</li>
         <li>右键音效可：打开文件位置、复制、重命名、收藏、AI 分析、删除等。</li>
-        <li>按 <code class="chip">文件名 / 时长 / 大小 / 导入时间</code> 排序，支持升 / 降序与格式过滤。</li>
+        <li>按 <code class="chip">文件名 / 时长 / 大小 / 导入时间</code> 排序，支持升 / 降序与格式过滤（见 Step 8）。</li>
       </ul>
     </div>
   </div>
@@ -327,12 +453,18 @@
     <div class="num">3</div>
     <div>
       <h3>AI 语义分析</h3>
-      <p>在详情面板或右键菜单点「AI 分析」。AI 会输出：形象描述、使用场景、关联关键词、拟声词，以及一组语义标签。</p>
+      <span class="path">右侧详情面板 &nbsp;·&nbsp; 顶部醒目「AI 分析」按钮</span>
+      <p>点「AI 分析」按钮，AI 会输出：形象描述、使用场景、关联关键词、拟声词，以及一组语义标签。</p>
+      <div class="detail">
+        <div class="row"><span class="k">按钮状态</span><span class="v">未分析＝紫色「<b>AI 分析</b>」；分析中＝「<b>分析中…（点击取消）</b>」可随时取消；已分析＝「<b>重新 AI 分析</b>」</span></div>
+        <div class="row"><span class="k">输出位置</span><span class="v">描述进「AI 描述」区、场景进「适用场景」chip、情绪进「情绪」、标签进「标签」区并归入左侧八大分类</span></div>
+        <div class="row"><span class="k">首次配置</span><span class="v">没配 Key 时点分析→ 弹友好引导提示并<b>自动弹出模型配置面板</b>（见 Step 9 细节）</span></div>
+        <div class="row"><span class="k">批量分析</span><span class="v">右侧面板可对每个音效单独分析；「导入时勾选自动分析」可批量完成</span></div>
+      </div>
       <ul>
         <li>首次使用前，在「设置 / 模型配置」里选择服务商并填入 API Key（仅存本机）。</li>
-        <li><strong style="color:var(--text)">没配 Key 也不慌</strong>：点分析不会弹出看不懂的报错，而是显示一条友好引导提示，并<strong style="color:var(--text)">自动弹出模型配置面板</strong>，按提示选服务商、填 Key 即可。</li>
-        <li>支持<strong style="color:var(--text)">并发批量分析</strong>，并可在进行中随时取消。</li>
-        <li>分析结果会自动归入<strong style="color:var(--text)">八大分类</strong>父节点，形成「分类 → 子标签」层级。</li>
+        <li><strong style="color:var(--text)">没配 Key 也不慌</strong>：点分析不会弹出看不懂的报错，而是显示友好引导提示并自动弹出模型配置面板，按提示选服务商、填 Key 即可。</li>
+        <li>分析结果自动归入<strong style="color:var(--text)">八大分类</strong>父节点，形成「分类 → 子标签」层级。</li>
       </ul>
       <div class="callout tip">小技巧：标签是检索的核心。分析得越充分，后面用智能文件夹与搜索时能筛得越准。</div>
     </div>
@@ -343,7 +475,13 @@
     <div class="num">4</div>
     <div>
       <h3>标签体系与筛选</h3>
-      <p>左侧「标签」栏呈现八大分类树。点击任意标签，右侧立即过滤出带该标签的音效。</p>
+      <span class="path">左侧栏 &nbsp;·&nbsp; 第一个 Tab「标签」</span>
+      <p>左侧「标签」栏呈现八大分类树。点击任意标签，中间主区立即过滤出带该标签的音效。</p>
+      <div class="detail">
+        <div class="row"><span class="k">八大分类</span><span class="v">人声 / 动物 / 环境氛围 / 动作物品 / UI交互 / 乐器音乐 / 机械科技 / 特殊效果（点击父节点展开子标签）</span></div>
+        <div class="row"><span class="k">手动加标签</span><span class="v">右侧面板「标签」区输入框打字→ 自动补全已有标签→ 回车或点「+」添加；手动标签前带 ✎ 标记，可点 × 移除</span></div>
+        <div class="row"><span class="k">搜索框</span><span class="v">顶部工具栏搜索框输入文件名 / 场景 / 情绪关键词，实时检索</span></div>
+      </div>
       <ul>
         <li>右键音效可<strong style="color:var(--text)">手动添加标签</strong>，手动标签与 AI 标签统一管理。</li>
         <li>顶部搜索框支持按文件名、场景、情绪关键词实时检索。</li>
@@ -356,7 +494,14 @@
     <div class="num">5</div>
     <div>
       <h3>收藏与收藏夹</h3>
+      <span class="path">左侧栏 &nbsp;·&nbsp; 第二个 Tab「收藏夹」&nbsp; 或 &nbsp; 右键卡片 → 加入收藏夹</span>
       <p>两种「收藏」方式并存，各司其职：</p>
+      <div class="detail">
+        <div class="row"><span class="k">⭐ 收藏（星标）</span><span class="v">右侧面板「收藏」按钮一键点亮，是全局「我喜欢」扁平清单；左侧收藏夹栏顶部有虚拟「<b>收藏</b>」项汇总所有星标音效</span></div>
+        <div class="row"><span class="k">📁 收藏夹</span><span class="v">左侧栏的<strong style="color:var(--text)">命名分组</strong>。点「+」新建（内联输入名称→ 回车创建）；列表项 hover 显示 ✎重命名 / 🗑删除</span></div>
+        <div class="row"><span class="k">加入流程</span><span class="v">右键卡片 →「加入收藏夹」→ 飞出子菜单：选已有文件夹，或「新建收藏夹」输入名称→ <b>创建并加入</b></span></div>
+        <div class="row"><span class="k">点击筛选</span><span class="v">点某个收藏夹 → 中间主区只显示该夹内音效（自动切到收藏夹 Tab）</span></div>
+      </div>
       <ul>
         <li><b>⭐ 收藏（星标）</b>：详情面板一键点亮，是全局「我喜欢」的扁平清单；状态栏实时显示「X 个收藏」。</li>
         <li><b>📁 收藏夹</b>：左侧栏的<strong style="color:var(--text)">命名分组</strong>。右键音效 → 「加入收藏夹」→ 选择已有文件夹，或当场输入名称<strong style="color:var(--text)">新建并加入</strong>。</li>
@@ -370,10 +515,17 @@
     <div class="num">6</div>
     <div>
       <h3>智能文件夹</h3>
-      <p>左侧点「智能」→ 点 <code class="chip">+</code> 新建规则。它不是物理文件夹，而是一组<strong style="color:var(--text)">自动归类条件</strong>。</p>
+      <span class="path">左侧栏 &nbsp;·&nbsp; 第三个 Tab「智能」&nbsp; → &nbsp; 点「+」新建规则</span>
+      <p>智能文件夹不是物理文件夹，而是一组<strong style="color:var(--text)">自动归类条件</strong>。建好后符合条件的音效自动出现其中。</p>
+      <div class="detail">
+        <div class="row"><span class="k">规则弹窗</span><span class="v">520px 弹窗：顶部名称输入框 + 条件区 + 底部「<b>当前匹配 N 个音效</b>」实时计数 + 「保存并应用」</span></div>
+        <div class="row"><span class="k">11 个字段</span><span class="v">文件名 / AI描述 / 情绪 / 适用场景 / 标签分类 / 文件格式 / 时长(ms) / 质量评分 / 已收藏 / 文件缺失 / 分析状态 / 导入时间(天)</span></div>
+        <div class="row"><span class="k">操作符</span><span class="v">包含 / 不含 / 等于 / 开头是 / 大于 / 小于 / 是（布尔字段用「是/否」，分析状态用「已分析/未分析」）</span></div>
+        <div class="row"><span class="k">多条件</span><span class="v">每组内可「+ 添加条件」；「<b>AND·全部满足</b>」按钮切换为「<b>OR·任一满足</b>」；「+ 添加条件组」增加一组（组间默认 AND）</span></div>
+        <div class="row"><span class="k">列表项</span><span class="v">智能 Tab 内点击即应用筛选；hover 显示编辑 / 删除</span></div>
+      </div>
       <ul>
-        <li>支持 11 个字段：文件名、描述、情绪、适用场景、标签、格式、时长、质量评分、是否收藏、是否缺失、导入时间。</li>
-        <li>多条件可分组，组内「与 / 或」自由组合。</li>
+        <li>支持 11 个字段，多条件可分组，组内「与 / 或」自由组合。</li>
         <li>编辑时底部<strong style="color:var(--text)">实时显示「当前匹配 N 个音效」</strong>，调条件即刻看到结果。</li>
         <li>保存后，符合条件的音效会自动出现在该智能文件夹里，新增素材也会自动归位。</li>
       </ul>
@@ -385,9 +537,17 @@
     <div class="num">7</div>
     <div>
       <h3>资源库导出 / 导入（跨电脑迁移）</h3>
-      <p>工具栏的 <code class="chip">导出库 / 导入库</code> 按钮，生成类似 Eagle 的便携式资源包。</p>
+      <span class="path">中间工具栏右侧 &nbsp;·&nbsp; 「导出」⤓ / 「导入」⤒ 图标</span>
+      <p>工具栏的「导出 / 导入」按钮，生成类似 Eagle 的便携式资源包。</p>
+      <div class="detail">
+        <div class="row"><span class="k">导出范围</span><span class="v">点「⤓ 导出」→ 弹面板：<b>全部导出</b> / <b>选中项导出</b>（需先多选）/ <b>按收藏夹导出</b>（列出收藏夹供选）</span></div>
+        <div class="row"><span class="k">导出进度</span><span class="v">全屏面板：进度条 +「已处理 X / 总数」+ <b>实时用时</b> + 当前正在复制的文件名 + 已复制/缺失计数 +「<b>取消导出</b>」按钮（取消自动清理半成品）</span></div>
+        <div class="row"><span class="k">完成提示</span><span class="v">弹出<strong style="color:var(--text)">含总用时</strong>的成功 toast（复制 N 个音频 / 缺失 M 个）+「打开文件夹」按钮一键定位</span></div>
+        <div class="row"><span class="k">导入</span><span class="v">点「⤒ 导入」→ 选导出包目录→ 全屏「正在导入资源库…」遮罩→ 自动<strong style="color:var(--text)">合并</strong>进当前库</span></div>
+        <div class="row"><span class="k">文件名</span><span class="v">导出<b>保留原始文件名</b>，仅在同名冲突时自动追加 <code class="chip">_2</code> <code class="chip">_3</code> 序号</span></div>
+      </div>
       <ul>
-        <li><b>导出</b>：点击后先选范围——<strong style="color:var(--text)">全部 / 选中项 / 指定收藏夹</strong>，再选保存位置。导出过程中会显示<strong style="color:var(--text)">实时进度面板</strong>：进度条、已处理 / 总数、当前正在复制的文件名、<strong style="color:var(--text)">实时用时</strong>、已复制 / 缺失计数，并随时可<strong style="color:var(--text)">取消</strong>（取消会自动清理半成品）。完成后弹出<strong style="color:var(--text)">含总用时的成功提示</strong>，并提供「打开文件夹」按钮。</li>
+        <li><b>导出</b>：选范围 → 选保存位置 → 看实时进度 → 完成弹含用时的提示。</li>
         <li><b>导入</b>：选择导出包目录，自动<strong style="color:var(--text)">合并</strong>进当前库——按哈希去重、标签按名复用、收藏夹按名合并，已有数据不丢失。</li>
         <li>导出的音频会复制到本机库目录并更新路径，因此换一台电脑也能正常播放。</li>
       </ul>
@@ -399,11 +559,43 @@
   <div class="step">
     <div class="num">8</div>
     <div>
-      <h3>界面与效率</h3>
+      <h3>排序、筛选与界面效率</h3>
+      <span class="path">中间工具栏右侧 &nbsp;·&nbsp; 「⚙ 筛选排序」图标 / 字号控件 / 窗口控制</span>
+      <p>工具栏右侧集中了所有浏览与窗口控制。</p>
+      <div class="detail">
+        <div class="row"><span class="k">筛选排序 ▸</span><span class="v"><b>排序方式</b>：导入时间 / 文件名 / 时长 / 大小；<b>排序方向</b>：升序 / 降序；<b>格式过滤</b>：全部 / MP3 / WAV / FLAC / OGG / M4A / AIFF（已激活的筛选会在按钮上显示小圆点）</span></div>
+        <div class="row"><span class="k">搜索框</span><span class="v">可拖动右边缘调整宽度（180–680px），有内容时显示「清除」；宽度会被记住</span></div>
+        <div class="row"><span class="k">字号控件</span><span class="v">「<b>A 字号</b>」药丸：− / 数字 / +，范围 <b>12–20px</b>，适配不同屏幕与视力</span></div>
+        <div class="row"><span class="k">窗口控制</span><span class="v">无边框窗口，右上角「<b>▁ 最小化</b> / <b>▢ 最大化·还原</b> / <b>✕ 关闭</b>」；最大化后再次点还原</span></div>
+        <div class="row"><span class="k">回收站</span><span class="v">左侧第四个 Tab「回收站」查看已删音效，可在此恢复</span></div>
+      </div>
       <ul>
         <li>工具栏右侧可<strong style="color:var(--text)">调节界面字号</strong>（12–20px），适配不同屏幕与视力。</li>
         <li>无边框窗口，右上角提供最小化 / 最大化 / 关闭。</li>
         <li>删除的音效先进入<strong style="color:var(--text)">回收站</strong>，误删可恢复。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Step 9 (config detail) -->
+  <div class="step">
+    <div class="num">9</div>
+    <div>
+      <h3>配置 AI 模型（首次必看）</h3>
+      <span class="path">左侧栏顶部「⚙ 模型配置」&nbsp; 或 &nbsp; 未配 Key 时点分析自动弹出</span>
+      <p>这个 580px 的弹窗决定 AI 用哪家、怎么连。所有 Key 只存在你本机。</p>
+      <div class="detail">
+        <div class="row"><span class="k">服务商</span><span class="v">网格选一个：<b>DeepSeek</b>（默认，高性价比中文强）/ OpenAI / 通义千问 / Kimi / 豆包 / 硅基流动 / Claude / Gemini / Azure OpenAI / Ollama（本地）/ TokenDance / 自定义</span></div>
+        <div class="row"><span class="k">API Key</span><span class="v">password 框，右侧眼睛图标切换显示/隐藏；选服务商后 placeholder 自动变「输入 XXX API Key」；下方提示「Key 仅存储在本地」</span></div>
+        <div class="row"><span class="k">Endpoint</span><span class="v">选服务商后自动填默认地址（自定义留空需手填）</span></div>
+        <div class="row"><span class="k">模型名称</span><span class="v">默认填充（如 <code class="chip">deepseek-chat</code> / <code class="chip">gpt-4o</code>），可改</span></div>
+        <div class="row"><span class="k">高级参数</span><span class="v"><b>Max Tokens</b> 100–4000 · <b>Temperature</b> 0–2（步长 0.1，默认 0.3）</span></div>
+        <div class="row"><span class="k">测试 & 保存</span><span class="v">填 Key 后可点「<b>测试连接</b>」验证（绿勾=成功）；确认无误点「<b>保存配置</b>」</span></div>
+      </div>
+      <ul>
+        <li>首次使用前必须在此填好服务商与 Key，否则点「AI 分析」会被引导回来配置。</li>
+        <li>Key <strong style="color:var(--text)">只存在本地</strong>，不会上传任何服务器；只有分析时把文本描述发给所选模型。</li>
+        <li>想换模型随时回来改，保存后立即生效。</li>
       </ul>
     </div>
   </div>
@@ -421,7 +613,7 @@
     </div>
     <div class="qa">
       <div class="q">点「AI 分析」提示要配置 API Key，怎么办？</div>
-      <div class="a">这是正常的首次引导，不是报错。SoundVault 会弹出一条友好的提示，并<strong style="color:var(--text)">自动打开模型配置面板</strong>。你在面板里选好服务商（如 OpenAI / DeepSeek）、粘贴 API Key 保存后，关掉面板重新点「AI 分析」即可。Key 只存在你本机，不会外泄。</div>
+      <div class="a">这是正常的首次引导，不是报错。SoundVault 会弹出一条友好的提示，并<strong style="color:var(--text)">自动打开模型配置面板</strong>。你在面板里选好服务商（如 DeepSeek / OpenAI）、粘贴 API Key 保存后，关掉面板重新点「AI 分析」即可。Key 只存在你本机，不会外泄。</div>
     </div>
     <div class="qa">
       <div class="q">为什么某个音效在收藏夹里看不到？</div>
@@ -438,6 +630,14 @@
     <div class="qa">
       <div class="q">导出能不能看进度 / 中途取消？</div>
       <div class="a">可以。导出时弹出进度面板，显示<strong style="color:var(--text)">进度条、已处理数量、当前文件名、实时用时</strong>，并有「取消导出」按钮；取消会自动删除未完成的半成品包。完成后还会弹一条<strong style="color:var(--text)">带总用时</strong>的提示，可一键打开导出文件夹。</div>
+    </div>
+    <div class="qa">
+      <div class="q">导入时文件太多，能只导一部分吗？</div>
+      <div class="a">可以。扫描结果页的文件列表可勾选，或用「高级过滤」按文件名包含/排除、大小范围预先筛掉；也可以先建好收藏夹，之后用「按收藏夹导出」只带走那一组。</div>
+    </div>
+    <div class="qa">
+      <div class="q">启动后为什么要先看一段动画？</div>
+      <div class="a">那是品牌启动动画（粒子 + 声波 + 均衡器音柱），最短展示约 1.4 秒、最长 4.5 秒兜底，期间在做数据库与界面初始化。若你用的是单文件便携版 exe，双击后还会先有一次性的自解压（约 1–2 秒黑屏），这是打包形态固有的，安装版/解压目录版无此等待。</div>
     </div>
   </div>
 </section>
@@ -462,6 +662,7 @@
   <div class="tagline">本地音效库管理 · AI 语义标注 · 智能分类 · 隐私优先</div>
   <div class="links">
     <a href="#intro">软件介绍</a>
+    <a href="#layout">界面速览</a>
     <a href="#features">核心特性</a>
     <a href="#manual">使用手册</a>
     <a href="#faq">常见问题</a>
