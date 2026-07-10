@@ -164,6 +164,9 @@
   footer .links a:hover{color:var(--accent-2)}
 
   .tagline{font-size:12.5px;color:var(--muted-2);margin-top:8px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--green);
+    border:1px solid rgba(61,220,151,.3);background:rgba(61,220,151,.08);
+    padding:3px 10px;border-radius:999px;margin-bottom:14px}
   @media(max-width:680px){
     .grid{grid-template-columns:1fr}
     .hero h1{font-size:42px}
@@ -175,7 +178,7 @@
 <body>
 <div class="ambient"></div>
 
-<!-- ══════════════ NAV ══════════════ -->
+<!-- ═══════════ NAV ═══════════ -->
 <nav>
   <a class="nav-logo" href="#top"><span class="mark">SV</span> SoundVault</a>
   <div class="nav-links">
@@ -187,7 +190,7 @@
   </div>
 </nav>
 
-<!-- ══════════════ HERO ══════════════ -->
+<!-- ═══════════ HERO ═══════════ -->
 <header class="hero wrap" id="top">
   <div class="badge"><span class="dot"></span> 本地优先 · 隐私安全 · 离线可用</div>
   <h1>你的<span class="grad">音效库</span><br/>值得被智能整理</h1>
@@ -213,7 +216,7 @@
   </div>
 </header>
 
-<!-- ══════════════ INTRO ══════════════ -->
+<!-- ═══════════ INTRO ═══════════ -->
 <section class="wrap" id="intro">
   <div class="eyebrow">软件介绍</div>
   <h2>SoundVault 是什么？</h2>
@@ -222,9 +225,12 @@
   <div class="callout tip" style="margin-top:24px">
     <b>为什么不用网盘 + 文件夹？</b> 当素材超过几百条，「按文件名猜内容」就会崩溃。SoundVault 让每段音频自带结构化描述与标签——你可以用「战斗、紧张、金属」这样的语义组合来检索，而不是记住每段文件的名字。
   </div>
+  <div class="callout" style="margin-top:14px;border-left-color:var(--accent-2)">
+    <b>全新品牌标识</b> 本次版本启用全新图标——金属质感的 <b>SV 立方体</b>，融合音箱、声波与音符元素，呼应「声音保险库（Sound Vault）」的定位。
+  </div>
 </section>
 
-<!-- ══════════════ FEATURES ══════════════ -->
+<!-- ═══════════ FEATURES ═══════════ -->
 <section class="wrap" id="features">
   <div class="eyebrow">核心特性</div>
   <h2>它能为你做什么</h2>
@@ -276,13 +282,13 @@
     <div class="card">
       <div class="ico">♻️</div>
       <h3>回收站与隐私优先</h3>
-      <p>删除的音效先进回收站，可恢复。整个软件<strong style="color:var(--text)">离线运行</strong>，AI 服务商可自定义（OpenAI / DeepSeek / Claude / Gemini / Ollama 等），Key 仅存本地。</p>
+      <p>删除的音效先进回收站，可恢复。整个软件<strong style="color:var(--text)">离线运行</strong>，AI 服务商可自定义（OpenAI / DeepSeek / Anthropic / Gemini / Ollama / TokenDance / 自定义 OpenAI 兼容网关），Key 仅存本地。</p>
     </div>
 
   </div>
 </section>
 
-<!-- ══════════════ MANUAL ══════════════ -->
+<!-- ═══════════ MANUAL ═══════════ -->
 <section class="wrap" id="manual">
   <div class="eyebrow">使用手册</div>
   <h2>八步上手 SoundVault</h2>
@@ -324,6 +330,7 @@
       <p>在详情面板或右键菜单点「AI 分析」。AI 会输出：形象描述、使用场景、关联关键词、拟声词，以及一组语义标签。</p>
       <ul>
         <li>首次使用前，在「设置 / 模型配置」里选择服务商并填入 API Key（仅存本机）。</li>
+        <li><strong style="color:var(--text)">没配 Key 也不慌</strong>：点分析不会弹出看不懂的报错，而是显示一条友好引导提示，并<strong style="color:var(--text)">自动弹出模型配置面板</strong>，按提示选服务商、填 Key 即可。</li>
         <li>支持<strong style="color:var(--text)">并发批量分析</strong>，并可在进行中随时取消。</li>
         <li>分析结果会自动归入<strong style="color:var(--text)">八大分类</strong>父节点，形成「分类 → 子标签」层级。</li>
       </ul>
@@ -365,7 +372,7 @@
       <h3>智能文件夹</h3>
       <p>左侧点「智能」→ 点 <code class="chip">+</code> 新建规则。它不是物理文件夹，而是一组<strong style="color:var(--text)">自动归类条件</strong>。</p>
       <ul>
-        <li>支持 11 个字段：文件名、描述、情绪、适用场景、标签、格式、时长、质量评分、是否收藏、是否缺失、分析时间、导入时间。</li>
+        <li>支持 11 个字段：文件名、描述、情绪、适用场景、标签、格式、时长、质量评分、是否收藏、是否缺失、导入时间。</li>
         <li>多条件可分组，组内「与 / 或」自由组合。</li>
         <li>编辑时底部<strong style="color:var(--text)">实时显示「当前匹配 N 个音效」</strong>，调条件即刻看到结果。</li>
         <li>保存后，符合条件的音效会自动出现在该智能文件夹里，新增素材也会自动归位。</li>
@@ -380,7 +387,7 @@
       <h3>资源库导出 / 导入（跨电脑迁移）</h3>
       <p>工具栏的 <code class="chip">导出库 / 导入库</code> 按钮，生成类似 Eagle 的便携式资源包。</p>
       <ul>
-        <li><b>导出</b>：点击后先选范围——<strong style="color:var(--text)">全部 / 选中项 / 指定收藏夹</strong>，再选保存位置。包内含 <code class="chip">library.json</code>（元数据）+ <code class="chip">audios/</code>（真实音频，保留原始文件名）+ 说明文档。</li>
+        <li><b>导出</b>：点击后先选范围——<strong style="color:var(--text)">全部 / 选中项 / 指定收藏夹</strong>，再选保存位置。导出过程中会显示<strong style="color:var(--text)">实时进度面板</strong>：进度条、已处理 / 总数、当前正在复制的文件名、<strong style="color:var(--text)">实时用时</strong>、已复制 / 缺失计数，并随时可<strong style="color:var(--text)">取消</strong>（取消会自动清理半成品）。完成后弹出<strong style="color:var(--text)">含总用时的成功提示</strong>，并提供「打开文件夹」按钮。</li>
         <li><b>导入</b>：选择导出包目录，自动<strong style="color:var(--text)">合并</strong>进当前库——按哈希去重、标签按名复用、收藏夹按名合并，已有数据不丢失。</li>
         <li>导出的音频会复制到本机库目录并更新路径，因此换一台电脑也能正常播放。</li>
       </ul>
@@ -403,7 +410,7 @@
 
 </section>
 
-<!-- ══════════════ FAQ ══════════════ -->
+<!-- ═══════════ FAQ ═══════════ -->
 <section class="wrap" id="faq">
   <div class="eyebrow">常见问题</div>
   <h2>你可能想问</h2>
@@ -411,6 +418,10 @@
     <div class="qa">
       <div class="q">我的音频会被上传到云端吗？</div>
       <div class="a">不会。SoundVault 完全本地运行，音频文件只存在你电脑上。只有当你配置并启用了 AI 分析时，才会把<em>文本描述</em>发送给你所选的模型服务商（Key 仅存本机）；音频本体不上传。</div>
+    </div>
+    <div class="qa">
+      <div class="q">点「AI 分析」提示要配置 API Key，怎么办？</div>
+      <div class="a">这是正常的首次引导，不是报错。SoundVault 会弹出一条友好的提示，并<strong style="color:var(--text)">自动打开模型配置面板</strong>。你在面板里选好服务商（如 OpenAI / DeepSeek）、粘贴 API Key 保存后，关掉面板重新点「AI 分析」即可。Key 只存在你本机，不会外泄。</div>
     </div>
     <div class="qa">
       <div class="q">为什么某个音效在收藏夹里看不到？</div>
@@ -424,10 +435,14 @@
       <div class="q">换了电脑，导入后还能播放吗？</div>
       <div class="a">可以。导入时会把音频文件复制到新电脑的库目录并更新路径，所以迁移后照常播放，不依赖旧机器的文件路径。</div>
     </div>
+    <div class="qa">
+      <div class="q">导出能不能看进度 / 中途取消？</div>
+      <div class="a">可以。导出时弹出进度面板，显示<strong style="color:var(--text)">进度条、已处理数量、当前文件名、实时用时</strong>，并有「取消导出」按钮；取消会自动删除未完成的半成品包。完成后还会弹一条<strong style="color:var(--text)">带总用时</strong>的提示，可一键打开导出文件夹。</div>
+    </div>
   </div>
 </section>
 
-<!-- ══════════════ ROADMAP ══════════════ -->
+<!-- ═══════════ ROADMAP ═══════════ -->
 <section class="wrap" id="roadmap">
   <div class="eyebrow">未来计划</div>
   <h2>路线图（规划中）</h2>
@@ -441,7 +456,7 @@
   <div class="callout" style="margin-top:22px">生成类功能需接入外部音频生成 API 或本地部署模型（Stable Audio / AudioCraft），可能按次计费或需 GPU。Suno / Udio 偏音乐、API 受限，暂不纳入。</div>
 </section>
 
-<!-- ══════════════ FOOTER ══════════════ -->
+<!-- ═══════════ FOOTER ═══════════ -->
 <footer class="wrap">
   <div class="mark">SOUNDVAULT</div>
   <div class="tagline">本地音效库管理 · AI 语义标注 · 智能分类 · 隐私优先</div>
