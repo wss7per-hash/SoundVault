@@ -24,6 +24,8 @@ export interface SoundVaultAPI {
   incrementPlayCount: (id: string) => Promise<void>
   searchSounds: (query: string) => Promise<SoundData[]>
   getStats: () => Promise<StatsData>
+  // 清理无效文件：扫描本地音频丢失的条目。mode='scan' 仅返回统计；'remove' 永久删除缺失条目
+  cleanupMissing: (mode: 'scan' | 'remove') => Promise<{ success: boolean; total: number; missing: number; removed: number; message?: string }>
   renameSound: (id: string, newName: string) => Promise<{ success: boolean; fileName?: string; message?: string }>
 
   // File Operations (Context Menu)

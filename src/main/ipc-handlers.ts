@@ -183,6 +183,7 @@ export function registerIpcHandlers(): void {
          JOIN sound_tags st ON t.id = st.tag_id
          WHERE st.sound_id = s.id) AS tags
       FROM sounds s
+      WHERE s.is_trashed = 0 OR s.is_trashed IS NULL
       ORDER BY s.imported_at DESC
     `).all()
   })
@@ -214,7 +215,7 @@ export function registerIpcHandlers(): void {
          JOIN sound_tags st ON t.id = st.tag_id
          WHERE st.sound_id = s.id) AS tags
       FROM sounds s
-      WHERE s.is_starred = 1
+      WHERE s.is_starred = 1 AND (s.is_trashed = 0 OR s.is_trashed IS NULL)
       ORDER BY s.imported_at DESC
     `).all()
   })
@@ -246,6 +247,7 @@ export function registerIpcHandlers(): void {
            JOIN sound_tags st ON t.id = st.tag_id
            WHERE st.sound_id = s.id) AS tags
         FROM sounds s
+        WHERE s.is_trashed = 0 OR s.is_trashed IS NULL
         ORDER BY s.imported_at DESC
       `).all()
     }
@@ -258,7 +260,8 @@ export function registerIpcHandlers(): void {
          JOIN sound_tags st ON t.id = st.tag_id
          WHERE st.sound_id = s.id) AS tags
       FROM sounds s
-      WHERE s.file_name LIKE ? OR s.description LIKE ? OR s.emotion LIKE ?
+      WHERE (s.file_name LIKE ? OR s.description LIKE ? OR s.emotion LIKE ?)
+        AND (s.is_trashed = 0 OR s.is_trashed IS NULL)
       ORDER BY s.imported_at DESC
     `).all(like, like, like)
   })
@@ -270,6 +273,40 @@ export function registerIpcHandlers(): void {
     const totalSize = (db.prepare('SELECT COALESCE(SUM(file_size), 0) as total FROM sounds').get() as { total: number }).total
 
     return { total, starred, missing, totalSize }
+  })
+
+  // 清理无效文件：扫描所有音效，检测本地音频是否仍存在
+  // mode='scan'  仅更新 is_missing 标记并返回统计（不删记录）
+  // mode='remove' 标记并把确实缺失的条目从库中永久删除（含关联标签/收藏，FK 级联）
+  ipcMain.handle('sound:cleanupMissing', async (_event, mode: 'scan' | 'remove') => {
+    try {
+      const all = db.prepare(
+        "SELECT id, file_path FROM sounds WHERE is_trashed = 0 OR is_trashed IS NULL"
+      ).all() as Array<{ id: string; file_path: string }>
+      const missingIds: string[] = []
+      for (const r of all) {
+        let exists = false
+        try { await access(r.file_path); exists = true } catch { exists = false }
+        const flag = exists ? 0 : 1
+        db.prepare('UPDATE sounds SET is_missing = ? WHERE id = ?').run(flag, r.id)
+        if (!exists) missingIds.push(r.id)
+      }
+      if (mode === 'remove' && missingIds.length > 0) {
+        const placeholders = missingIds.map(() => '?').join(',')
+        db.prepare(`DELETE FROM sounds WHERE id IN (${placeholders})`).run(...missingIds)
+      }
+      const total = (db.prepare(
+        "SELECT COUNT(*) as c FROM sounds WHERE is_trashed = 0 OR is_trashed IS NULL"
+      ).get() as { c: number }).c
+      return {
+        success: true,
+        total,
+        missing: missingIds.length,
+        removed: mode === 'remove' ? missingIds.length : 0
+      }
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
+    }
   })
 
   // ---- AI Analysis ----
@@ -479,7 +516,7 @@ function ensureParentCategory(category: string, now: string): string | null {
     return db.prepare(`
       SELECT s.* FROM sounds s
       JOIN collection_sounds cs ON s.id = cs.sound_id
-      WHERE cs.collection_id = ?
+      WHERE cs.collection_id = ? AND (s.is_trashed = 0 OR s.is_trashed IS NULL)
       ORDER BY cs.sort_order
     `).all(collectionId)
   })
@@ -1003,6 +1040,9 @@ function ensureParentCategory(category: string, now: string): string | null {
     let groups: SFGroup[] = []
     try { groups = JSON.parse(conditionsJson) } catch { groups = [] }
     const { where, params } = buildSmartWhere(groups)
+    const trashClaus = where
+      ? where + ' AND (s.is_trashed = 0 OR s.is_trashed IS NULL)'
+      : 'WHERE (s.is_trashed = 0 OR s.is_trashed IS NULL)'
     const sql = `
       SELECT s.*,
         (SELECT GROUP_CONCAT(t.name, ',')
@@ -1010,7 +1050,7 @@ function ensureParentCategory(category: string, now: string): string | null {
          JOIN sound_tags st ON t.id = st.tag_id
          WHERE st.sound_id = s.id) AS tags
       FROM sounds s
-      ${where}
+      ${trashClaus}
       ORDER BY s.imported_at DESC
     `
     return db.prepare(sql).all(...params)
@@ -1447,7 +1487,12 @@ function ensureParentCategory(category: string, now: string): string | null {
     try {
       const row = db.prepare('SELECT file_path FROM sounds WHERE id = ?').get(soundId) as { file_path: string } | undefined
       if (!row) return { success: false, message: '找不到文件记录' }
-      await shell.trashItem(row.file_path)
+      // 本地文件可能已被外部删除：存在才送回收站，缺失则跳过（仍标记已删除）
+      let exists = true
+      try { await access(row.file_path) } catch { exists = false }
+      if (exists) {
+        await shell.trashItem(row.file_path)
+      }
       db.prepare('UPDATE sounds SET is_trashed = 1, updated_at = ? WHERE id = ?').run(new Date().toISOString(), soundId)
       return { success: true }
     } catch (err) {
@@ -1495,11 +1540,11 @@ function ensureParentCategory(category: string, now: string): string | null {
 
   // ---- 首尾无缝循环：ffmpeg 把「尾音」交叉淡入到「开头」，生成新的天生无缝循环文件 ----
   // 修复：① 跨盘移动用 safeMove ② 时长用 ffprobe 实际读取 ③ 生成后自动导入音效库
+  //      ④ 继承原文件的 AI 分析/描述/标签等元数据，并额外加 loop 标签 + 循环描述
   ipcMain.handle('audio:seamlessLoop', async (_event, soundId: string, crossfadeMs = 30, loopCount = 1) => {
     const tmpDir = app.getPath('temp')
     try {
-      const row = db.prepare('SELECT file_path, duration_ms FROM sounds WHERE id = ?')
-        .get(soundId) as { file_path: string; duration_ms: number | null } | undefined
+      const row = db.prepare('SELECT * FROM sounds WHERE id = ?').get(soundId) as any
       if (!row) return { success: false, message: '找不到文件记录' }
 
       const N = Math.max(1, Math.min(50, loopCount || 1))
@@ -1568,7 +1613,7 @@ function ensureParentCategory(category: string, now: string): string | null {
         try { await rm(listPath) } catch { /* ignore */ }
       }
 
-      // ---- 自动导入生成的无缝循环文件到音效库 ----
+      // ---- 自动导入生成的无缝循环文件到音效库（继承原文件元数据 + loop 标签） ----
       const outStat = await stat(outPath)
       const outExt = extname(outPath).toLowerCase()
       const outFileName = basename(outPath)
@@ -1576,16 +1621,61 @@ function ensureParentCategory(category: string, now: string): string | null {
       const hash = createHash('sha256').update(buffer).digest('hex')
       const now = new Date().toISOString()
       const newId = uuidv4()
-      // 检查是否已存在（同 hash 去重）
+      // 新文件时长：单周期无缝 ≈ 原时长；N>1 则重复 N 份
+      const newDurationMs = Math.round(durSec * 1000 * N)
+      // 循环描述：原描述已含「循环」字样则不重复追加
+      const origDesc: string = row.description || ''
+      const finalDescription = origDesc.includes('循环')
+        ? origDesc
+        : `${origDesc}${origDesc ? ' ' : ''}无缝循环音频${N > 1 ? `，已重复 ${N} 次` : ''}`
+
       const existing = db.prepare('SELECT id FROM sounds WHERE file_hash = ?').get(hash) as { id: string } | undefined
+      const targetId = existing?.id || newId
       if (!existing) {
         db.prepare(`
-          INSERT OR IGNORE INTO sounds (id, file_path, file_hash, file_name, file_ext, file_size, imported_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(newId, outPath, hash, outFileName, outExt, outStat.size, now, now)
+          INSERT OR IGNORE INTO sounds (
+            id, file_path, file_hash, file_name, file_ext, file_size, duration_ms,
+            sample_rate, bit_depth, channels, bitrate_kbps, loudness_lufs,
+            description, description_en, use_cases, emotion, quality_score,
+            similar_to, best_for, ai_model, ai_analyzed_at,
+            is_missing, is_trashed, imported_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+        `).run(
+          newId, outPath, hash, outFileName, outExt, outStat.size, newDurationMs,
+          row.sample_rate ?? null, row.bit_depth ?? null, row.channels ?? null,
+          row.bitrate_kbps ?? null, row.loudness_lufs ?? null,
+          finalDescription || null, row.description_en ?? null, row.use_cases ?? null,
+          row.emotion ?? null, row.quality_score ?? null,
+          row.similar_to ?? null, row.best_for ?? null, row.ai_model ?? null,
+          row.ai_analyzed_at ?? null,
+          now, now
+        )
+
+        // 继承原文件的所有标签
+        const origTags = db.prepare(
+          'SELECT tag_id, confidence, is_manual FROM sound_tags WHERE sound_id = ?'
+        ).all(soundId) as Array<{ tag_id: string; confidence: number | null; is_manual: number }>
+        const stInsert = db.prepare(
+          'INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)'
+        )
+        for (const t of origTags) {
+          stInsert.run(newId, t.tag_id, t.confidence, t.is_manual)
+        }
       }
 
-      return { success: true, outPath, crossfadeMs: Math.round(L * 1000), loopCount: N, importedId: existing?.id || newId }
+      // 额外添加 loop 标签（确保存在，不论原文件是否已有）
+      const loopTag = db.prepare("SELECT id FROM tags WHERE name = ?").get('loop') as { id: string } | undefined
+      const loopTagId = loopTag?.id || (() => {
+        const id = uuidv4()
+        db.prepare("INSERT OR IGNORE INTO tags (id, name, sort_order, created_at) VALUES (?, ?, ?, ?)")
+          .run(id, 'loop', 999, now)
+        return id
+      })()
+      db.prepare(
+        'INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)'
+      ).run(targetId, loopTagId, 1, 1)
+
+      return { success: true, outPath, crossfadeMs: Math.round(L * 1000), loopCount: N, importedId: targetId }
     } catch (err) {
       return { success: false, message: (err as Error).message }
     }

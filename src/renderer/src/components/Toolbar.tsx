@@ -56,6 +56,13 @@ export function Toolbar(): JSX.Element {
   const exportRef = useRef<HTMLDivElement>(null)
   const filterRef = useRef<HTMLDivElement>(null)
 
+  // 清理无效文件（本地音频已丢失的条目）
+  const [showCleanupDlg, setShowCleanupDlg] = useState(false)
+  const [cleanupCount, setCleanupCount] = useState(0)
+  const [cleanupBusy, setCleanupBusy] = useState(false)
+  const refreshSounds = useAppStore((s) => s.refreshSounds)
+  const refreshStats = useAppStore((s) => s.refreshStats)
+
   // Resizable search box width (persisted in settings)
   const MIN_W = 180
   const MAX_W = 680
@@ -224,6 +231,39 @@ export function Toolbar(): JSX.Element {
     }
   }, [])
 
+  // 清理无效文件：先扫描统计，再确认永久删除缺失条目
+  const handleCleanupScan = useCallback(async () => {
+    try {
+      const res = await window.api.cleanupMissing('scan')
+      if (res.success && res.missing > 0) {
+        setCleanupCount(res.missing)
+        setShowCleanupDlg(true)
+      } else {
+        toast('没有发现无效文件（本地音频均存在）')
+      }
+    } catch {
+      toast.error('检测失败')
+    }
+  }, [])
+
+  const handleCleanupConfirm = useCallback(async () => {
+    setCleanupBusy(true)
+    try {
+      const res = await window.api.cleanupMissing('remove')
+      if (res.success) {
+        toast.success(`已清理 ${res.removed} 个无效文件`)
+        await Promise.all([refreshSounds(), refreshStats()])
+        setShowCleanupDlg(false)
+      } else {
+        toast.error(res.message || '清理失败')
+      }
+    } catch {
+      toast.error('清理失败')
+    } finally {
+      setCleanupBusy(false)
+    }
+  }, [refreshSounds, refreshStats])
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
@@ -368,6 +408,16 @@ export function Toolbar(): JSX.Element {
           title="导入资源库（从另一台电脑迁移）"
         >
           <Upload size={16} />
+        </button>
+
+        {/* 清理无效文件：本地音频已丢失的条目 */}
+        <button
+          onClick={handleCleanupScan}
+          disabled={busy !== null || exportState !== null}
+          className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light disabled:opacity-30 disabled:cursor-default"
+          title="清理无效文件（本地音频已丢失的条目）"
+        >
+          <Ban size={16} />
         </button>
       </div>
 
@@ -584,6 +634,41 @@ export function Toolbar(): JSX.Element {
           <Loader2 size={32} className="text-accent-light animate-spin" />
           <p className="text-sm text-muted-light">正在导入资源库…</p>
           <p className="text-xs text-muted">请稍候，正在复制音频文件</p>
+        </div>
+      )}
+
+      {/* 清理无效文件确认弹窗 */}
+      {showCleanupDlg && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/55 backdrop-blur-sm">
+          <div className="w-[360px] bg-[#1f1f1d] border border-surface-border rounded-2xl shadow-2xl p-5">
+            <div className="flex items-center gap-2.5 mb-3">
+              <AlertTriangle size={18} className="text-amber-400 shrink-0" />
+              <h3 className="text-sm font-semibold text-[#f0ede6]">清理无效文件</h3>
+            </div>
+            <p className="text-xs text-muted-light leading-relaxed mb-1">
+              检测到 <span className="text-amber-400 font-medium">{cleanupCount}</span> 个音效的本地音频文件已不存在（可能被外部删除或移动）。
+            </p>
+            <p className="text-xs text-muted leading-relaxed mb-4">
+              确认后将从音效库中永久移除这些条目（含其标签与收藏关系，不可恢复）。
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setShowCleanupDlg(false)}
+                disabled={cleanupBusy}
+                className="px-3 py-1.5 rounded-lg text-xs text-muted-light hover:bg-surface-hover transition-colors disabled:opacity-40"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleCleanupConfirm}
+                disabled={cleanupBusy}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-red-500/90 text-white hover:bg-red-500 transition-colors disabled:opacity-50"
+              >
+                {cleanupBusy ? <Loader2 size={13} className="animate-spin" /> : <Ban size={13} />}
+                {cleanupBusy ? '清理中…' : `确认清理 ${cleanupCount} 个`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
