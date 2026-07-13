@@ -7,6 +7,8 @@ declare global {
 export interface SoundVaultAPI {
   // App
   getVersion: () => Promise<string>
+  // 系统级文件拖拽（拖到 AE 等外部应用直接导入）
+  startDragFile: (filePath: string) => void
 
   // Dialog
   selectFolder: () => Promise<string[]>

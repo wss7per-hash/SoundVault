@@ -272,6 +272,7 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
               onMouseEnter={(e) => handleMouseEnter(sound, e)}
               onMouseLeave={handleMouseLeave}
               onContextMenu={(e) => handleContextMenu(e, sound)}
+              onDragFile={() => window.api.startDragFile(sound.file_path)}
             />
           ))}
         </div>
@@ -298,6 +299,7 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
               onPlay={() => startPreview(sound)}
               onCheck={(e) => { e.stopPropagation(); toggleSoundSelection(sound.id); setLastClickedIndex(idx) }}
               onContextMenu={(e) => handleContextMenu(e, sound)}
+              onDragFile={() => window.api.startDragFile(sound.file_path)}
             />
           ))}
         </div>
@@ -434,9 +436,10 @@ interface SoundCardProps {
   onMouseEnter: (e: React.MouseEvent) => void
   onMouseLeave: () => void
   onContextMenu: (e: React.MouseEvent) => void
+  onDragFile?: () => void
 }
 
-function SoundCard({ sound, isSelected, isHovered, isPlaying, isChecked, isMultiSelecting, onClick, onCheck, onMouseEnter, onMouseLeave, onContextMenu }: SoundCardProps): JSX.Element {
+function SoundCard({ sound, isSelected, isHovered, isPlaying, isChecked, isMultiSelecting, onClick, onCheck, onMouseEnter, onMouseLeave, onContextMenu, onDragFile }: SoundCardProps): JSX.Element {
   const formatDuration = (ms: number | null): string => {
     if (!ms) return '--:--'
     const s = Math.floor(ms / 1000)
@@ -457,11 +460,14 @@ function SoundCard({ sound, isSelected, isHovered, isPlaying, isChecked, isMulti
   return (
     <div
       data-sound-id={sound.id}
+      draggable
       onClick={onClick}
       onContextMenu={onContextMenu}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className={`relative rounded-xl border cursor-pointer transition-all duration-150 overflow-hidden ${
+      onDragStart={(e) => { e.preventDefault(); onDragFile?.() }}
+      title="拖拽到 After Effects 等应用直接导入"
+      className={`relative rounded-xl border cursor-grab active:cursor-grabbing transition-all duration-150 overflow-hidden ${
         isSelected || isChecked
           ? 'border-accent bg-accent/10'
           : isHovered
@@ -553,9 +559,10 @@ interface SoundListRowProps {
   onPlay: () => void
   onCheck: (e: React.MouseEvent) => void
   onContextMenu: (e: React.MouseEvent) => void
+  onDragFile?: () => void
 }
 
-function SoundListRow({ sound, isSelected, isPlaying, isChecked, isMultiSelecting, onClick, onPlay, onCheck, onContextMenu }: SoundListRowProps): JSX.Element {
+function SoundListRow({ sound, isSelected, isPlaying, isChecked, isMultiSelecting, onClick, onPlay, onCheck, onContextMenu, onDragFile }: SoundListRowProps): JSX.Element {
   const formatDuration = (ms: number | null): string => {
     if (!ms) return '--:--'
     const s = Math.floor(ms / 1000)
@@ -579,9 +586,12 @@ function SoundListRow({ sound, isSelected, isPlaying, isChecked, isMultiSelectin
   return (
     <div
       data-sound-id={sound.id}
+      draggable
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={`grid grid-cols-12 gap-3 px-4 py-3 items-center border-b border-surface-border/50 cursor-pointer transition-all ${
+      onDragStart={(e) => { e.preventDefault(); onDragFile?.() }}
+      title="拖拽到 After Effects 等应用直接导入"
+      className={`grid grid-cols-12 gap-3 px-4 py-3 items-center border-b border-surface-border/50 cursor-grab active:cursor-grabbing transition-all ${
         isSelected || isChecked
           ? 'bg-accent/10'
           : 'hover:bg-surface-card'

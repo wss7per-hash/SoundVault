@@ -4,6 +4,8 @@ import { electronAPI } from '@electron-toolkit/preload'
 const api = {
   // App
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  // 系统级文件拖拽（拖到 AE 等外部应用直接导入）
+  startDragFile: (filePath: string) => ipcRenderer.send('app:dragFile', filePath),
 
   // Dialog
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),

@@ -59,6 +59,22 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
 
+  // 从渲染进程发起系统级文件拖拽：把音频作为真实文件拖出，
+  // 丢进 After Effects（2019+）等外部应用即直接导入该工程。
+  // icon：dev 用项目 resources/icon.png；prod 用 resources 目录；
+  // 都不存在则省略（Windows 回退到文件类型默认图标），不影响功能。
+  ipcMain.on('app:dragFile', (event, filePath: string) => {
+    try {
+      const iconPath = app.isPackaged
+        ? join(process.resourcesPath, 'icon.png')
+        : join(app.getAppPath(), 'resources', 'icon.png')
+      const icon = existsSync(iconPath) ? iconPath : undefined
+      event.sender.startDrag({ file: filePath, icon })
+    } catch (err) {
+      console.error('[dragFile] startDrag failed:', err)
+    }
+  })
+
   ipcMain.handle('dialog:selectFolder', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory', 'multiSelections']
