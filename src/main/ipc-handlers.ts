@@ -2205,7 +2205,7 @@ function ensureParentCategory(category: string, now: string): string | null {
       ).run(targetId, spTagId, 1, 1)
 
       const newDurSec = durSec > 0 ? durSec / factor : 0
-      return { success: true, outPath, speed: factor, newDurationMs, newDurationSec, importedId: targetId }
+      return { success: true, outPath, speed: factor, newDurationMs, newDurationSec: newDurSec, importedId: targetId }
     } catch (err) {
       return { success: false, message: (err as Error).message }
     }
