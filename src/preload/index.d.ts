@@ -44,6 +44,7 @@ export interface SoundVaultAPI {
   trimSound: (soundId: string, startSec: number, endSec: number) => Promise<{ success: boolean; outPath?: string; startSec?: number; endSec?: number; importedId?: string; message?: string }>
   // 格式转换 WAV↔MP3（ffmpeg 转码，自动入库 + 目标格式标签）
   convertSound: (soundId: string, targetFormat: 'wav' | 'mp3', bitrate?: number) => Promise<{ success: boolean; outPath?: string; format?: string; importedId?: string; message?: string }>
+  stretchSound: (soundId: string, speed: number) => Promise<{ success: boolean; outPath?: string; speed?: number; newDurationMs?: number; newDurationSec?: number; importedId?: string; message?: string }>
 
   // AI Analysis
   getAIConfig: () => Promise<AIConfig>

@@ -57,6 +57,9 @@ const api = {
   // 格式转换 WAV↔MP3（ffmpeg 转码，自动入库 + 目标格式标签）
   convertSound: (soundId: string, targetFormat: 'wav' | 'mp3', bitrate?: number) =>
     ipcRenderer.invoke('audio:convert', soundId, targetFormat, bitrate) as Promise<{ success: boolean; outPath?: string; format?: string; importedId?: string; message?: string }>,
+  // 变速不变调（ffmpeg atempo 滤镜，改变速度保持音高，自动入库 + 变速标签）
+  stretchSound: (soundId: string, speed: number) =>
+    ipcRenderer.invoke('audio:stretch', soundId, speed) as Promise<{ success: boolean; outPath?: string; speed?: number; newDurationMs?: number; newDurationSec?: number; importedId?: string; message?: string }>,
 
   // AI Analysis
   getAIConfig: () => ipcRenderer.invoke('ai:getConfig'),

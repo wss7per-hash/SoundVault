@@ -19,7 +19,8 @@ import {
   Check,
   Repeat,
   Scissors,
-  FileAudio
+  FileAudio,
+  Gauge
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
@@ -366,6 +367,40 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       setConverting(false)
     }
   }, [sound.id, convFmt, convBitrate, converting, onUpdate])
+
+  // ===== 变速不变调（Phase 0-4） =====
+  const SPEED_PRESETS = [0.5, 0.75, 1.25, 1.5, 2] as const
+  const [speed, setSpeed] = useState<number>(1.5)
+  const [stretching, setStretching] = useState(false)
+  // 切换音效时重置速度
+  useEffect(() => { setSpeed(1.5) }, [sound.id])
+
+  const handleStretch = useCallback(async () => {
+    if (stretching) return
+    if (Math.abs(speed - 1) < 0.001) { toast.error('请选择不等于 1x 的速度'); return }
+    setStretching(true)
+    try {
+      const res = await window.api.stretchSound(sound.id, speed)
+      if (res.success && res.outPath) {
+        onUpdate()
+        toast.success(
+          <span>
+            已变速为 {res.speed}x（不变调）并自动导入音效库
+            <button onClick={() => window.api.openPath(res.outPath!)} style={{ marginLeft: 8, textDecoration: 'underline' }}>
+              打开位置
+            </button>
+          </span>,
+          { duration: 5000 }
+        )
+      } else {
+        toast.error(res.message || '变速失败')
+      }
+    } catch {
+      toast.error('变速失败')
+    } finally {
+      setStretching(false)
+    }
+  }, [sound.id, speed, stretching, onUpdate])
 
   const handleStar = useCallback(async () => {
     try {
@@ -782,6 +817,37 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
           </button>
           <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
             生成 <code className="text-[#8a8a82]">原名_conv.{convFmt}</code> 自动入库，继承原标签并加 {convFmt} 标签。
+          </p>
+        </div>
+
+        {/* ===== 变速不变调（Phase 0-4） ===== */}
+        <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+              <Gauge size={13} className="text-accent" />
+              变速不变调
+            </span>
+            <span className="text-[10px] text-[#6a6a64]">改变速度 · 保持音高</span>
+          </div>
+          <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+            {SPEED_PRESETS.map((s) => (
+              <button
+                key={s}
+                onClick={() => setSpeed(s)}
+                className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${speed === s ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}
+              >{s}x</button>
+            ))}
+          </div>
+          <button
+            onClick={handleStretch}
+            disabled={stretching}
+            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
+          >
+            <Gauge size={13} />
+            {stretching ? '变速中…' : `变速为 ${speed}x（不变调）`}
+          </button>
+          <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
+            生成 <code className="text-[#8a8a82]">原名_{speed}x.{sound.file_ext?.replace(/^\./, '') || 'wav'}</code> 自动入库，继承原标签并加 变速 标签。
           </p>
         </div>
 

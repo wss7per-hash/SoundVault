@@ -2088,6 +2088,129 @@ function ensureParentCategory(category: string, now: string): string | null {
     }
   })
 
+  // ---- 变速不变调（ffmpeg atempo 滤镜，改变速度但保持音高） ----
+  // 复用 seamlessLoop / convert 的「直写 outPath + 继承元数据 + 加标签」模板
+  ipcMain.handle('audio:stretch', async (_event, soundId: string, speed: number) => {
+    try {
+      const row = db.prepare('SELECT * FROM sounds WHERE id = ?').get(soundId) as any
+      if (!row) return { success: false, message: '找不到文件记录' }
+
+      // 速度倍率：0.25x（放慢 4 倍）~ 4x（加快 4 倍），1x 视为无效
+      const factor = Math.max(0.25, Math.min(4, Number(speed) || 1))
+      if (Math.abs(factor - 1) < 0.001) return { success: false, message: '速度需不等于 1x' }
+
+      // ffmpeg 的 atempo 仅支持 [0.5, 2.0]，超出范围需串联多段
+      const buildAtempo = (f: number): string => {
+        const chain: string[] = []
+        let rem = f
+        while (rem > 2.0001) { chain.push('atempo=2.0'); rem /= 2 }
+        while (rem < 0.4999) { chain.push('atempo=0.5'); rem /= 0.5 }
+        if (rem > 1.0001 || rem < 0.9999) chain.push(`atempo=${rem.toFixed(4)}`)
+        return chain.join(',')
+      }
+      const af = buildAtempo(factor)
+      if (!af) return { success: false, message: '无效的速度值' }
+
+      let durSec = (row.duration_ms && row.duration_ms > 0) ? row.duration_ms / 1000 : 0
+      if (durSec <= 0) durSec = await getDurationFromFile(row.file_path)
+
+      const dir = dirname(row.file_path)
+      const { name } = parse(row.file_path)
+      const curExt = (row.file_ext || extname(row.file_path) || '.wav').replace(/^\./, '').toLowerCase()
+      // 直接写到源文件同目录（避免跨盘 + 同名重跑用 -y 覆盖）
+      const outPath = join(dir, `${name}_${factor}x.${curExt}`)
+
+      const args: string[] = ['-i', row.file_path, '-filter:a', af, '-y', outPath]
+      if (curExt === 'mp3') {
+        const br = Math.max(64, Math.min(320, Number(row.bitrate_kbps) || 192))
+        args.push('-c:a', 'libmp3lame', '-b:a', `${br}k`)
+      } else {
+        args.push('-c:a', 'pcm_s16le')
+      }
+      await new Promise<void>((resolve, reject) => {
+        execFile(
+          ffmpegPath,
+          args,
+          { windowsHide: true, timeout: 120000 },
+          (err, _stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve())
+        )
+      })
+
+      // ---- 自动入库（继承元数据 + 变速标签） ----
+      const outStat = await stat(outPath)
+      const outExt = extname(outPath).toLowerCase()
+      const outFileName = basename(outPath)
+      const buffer = await readFile(outPath, { length: 64 * 1024 })
+      const hash = createHash('sha256').update(buffer).digest('hex')
+      const now = new Date().toISOString()
+      const newId = uuidv4()
+      const newDurationMs = durSec > 0 ? Math.round((durSec / factor) * 1000) : (row.duration_ms || 0)
+      const origDesc: string = row.description || ''
+      const finalDescription = `${origDesc}${origDesc ? ' ' : ''}变速 ${factor}x（不变调）`
+
+      const existing = db.prepare('SELECT id FROM sounds WHERE file_hash = ?').get(hash) as { id: string } | undefined
+      const targetId = existing?.id || newId
+      if (!existing) {
+        db.prepare(`
+          INSERT OR IGNORE INTO sounds (
+            id, file_path, file_hash, file_name, file_ext, file_size, duration_ms,
+            sample_rate, bit_depth, channels, bitrate_kbps, loudness_lufs,
+            description, description_en, use_cases, emotion, quality_score,
+            similar_to, best_for, ai_model, ai_analyzed_at,
+            is_missing, is_trashed, imported_at, updated_at, preview_cache, search_text
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
+        `).run(newId,
+          outPath,
+          hash,
+          outFileName,
+          outExt,
+          outStat.size,
+          newDurationMs,
+          row.sample_rate ?? null,
+          curExt === 'wav' ? (row.bit_depth ?? 16) : null,
+          row.channels ?? null,
+          curExt === 'mp3' ? Math.max(64, Math.min(320, Number(row.bitrate_kbps) || 192)) : null,
+          row.loudness_lufs ?? null,
+          finalDescription || null,
+          row.description_en ?? null,
+          row.use_cases ?? null,
+          row.emotion ?? null,
+          row.quality_score ?? null,
+          row.similar_to ?? null,
+          row.best_for ?? null,
+          row.ai_model ?? null,
+          row.ai_analyzed_at ?? null, now, now, null, null)
+        // 继承原文件的所有标签
+        const origTags = db.prepare(
+          'SELECT tag_id, confidence, is_manual FROM sound_tags WHERE sound_id = ?'
+        ).all(soundId) as Array<{ tag_id: string; confidence: number | null; is_manual: number }>
+        const stInsert = db.prepare(
+          'INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)'
+        )
+        for (const t of origTags) {
+          stInsert.run(newId, t.tag_id, t.confidence, t.is_manual)
+        }
+      }
+
+      // 额外添加 变速 标签（便于按变速结果筛选）
+      const spTag = db.prepare("SELECT id FROM tags WHERE name = ?").get('变速') as { id: string } | undefined
+      const spTagId = spTag?.id || (() => {
+        const id = uuidv4()
+        db.prepare("INSERT OR IGNORE INTO tags (id, name, sort_order, created_at) VALUES (?, ?, ?, ?)")
+          .run(id, '变速', 996, now)
+        return id
+      })()
+      db.prepare(
+        'INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)'
+      ).run(targetId, spTagId, 1, 1)
+
+      const newDurSec = durSec > 0 ? durSec / factor : 0
+      return { success: true, outPath, speed: factor, newDurationMs, newDurationSec, importedId: targetId }
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
+    }
+  })
+
   ipcMain.handle('sound:rename', async (_event, soundId: string, newName: string) => {
     try {
       const row = db.prepare('SELECT file_path, file_name, file_ext FROM sounds WHERE id = ?').get(soundId) as { file_path: string; file_name: string; file_ext: string } | undefined
