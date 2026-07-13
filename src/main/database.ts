@@ -17,6 +17,7 @@ export function initDatabase(): void {
   db.pragma('foreign_keys = ON')
 
   createTables()
+  migrateSoundsNotesColumn()
   seedDefaultCategories()
   cleanupLegacyQualityNotes()
 
@@ -203,6 +204,24 @@ function createTables(): void {
   }
 
   console.log('[Database] Tables created successfully')
+}
+
+/**
+ * 增量迁移：为已有的 sounds 表补充 notes（备注/笔记）字段。
+ * SQLite 不支持 `ADD COLUMN IF NOT EXISTS`，故先检查列是否存在再 ALTER，
+ * 保证老库升级时平滑、幂等。
+ */
+function migrateSoundsNotesColumn(): void {
+  if (!db) return
+  try {
+    const cols = db.prepare('PRAGMA table_info(sounds)').all() as { name: string }[]
+    if (!cols.some((c) => c.name === 'notes')) {
+      db.exec('ALTER TABLE sounds ADD COLUMN notes TEXT')
+      console.log('[Database] Migrated: added notes column to sounds')
+    }
+  } catch (err) {
+    console.warn('[Database] notes-column migration skipped:', (err as Error).message)
+  }
 }
 
 export function getDatabase(): Database.Database {

@@ -31,6 +31,7 @@ export interface SoundVaultAPI {
   // 清理无效文件：扫描本地音频丢失的条目。mode='scan' 仅返回统计；'remove' 永久删除缺失条目
   cleanupMissing: (mode: 'scan' | 'remove') => Promise<{ success: boolean; total: number; missing: number; removed: number; message?: string }>
   renameSound: (id: string, newName: string) => Promise<{ success: boolean; fileName?: string; message?: string }>
+  setNotes: (id: string, notes: string) => Promise<{ success: boolean; message?: string }>
 
   // File Operations (Context Menu)
   showItemInFolder: (soundId: string) => Promise<{ success: boolean; message?: string }>
@@ -189,6 +190,7 @@ export interface SoundData {
   best_for: string | null
   ai_model: string | null
   ai_analyzed_at: string | null
+  notes: string | null
   is_starred: number
   is_missing: number
   is_trashed?: number

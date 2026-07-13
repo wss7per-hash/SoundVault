@@ -38,6 +38,7 @@ const api = {
   searchSounds: (query: string) => ipcRenderer.invoke('sound:search', query),
   getStats: () => ipcRenderer.invoke('sound:getStats'),
   renameSound: (id: string, newName: string) => ipcRenderer.invoke('sound:rename', id, newName),
+  setNotes: (id: string, notes: string) => ipcRenderer.invoke('sound:setNotes', id, notes) as Promise<{ success: boolean; message?: string }>,
 
   // File Operations (Context Menu)
   showItemInFolder: (soundId: string) => ipcRenderer.invoke('file:showItemInFolder', soundId),

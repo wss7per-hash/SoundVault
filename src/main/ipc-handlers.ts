@@ -2228,6 +2228,18 @@ function ensureParentCategory(category: string, now: string): string | null {
     }
   })
 
+  // 备注 / 笔记：更新 sounds.notes 字段（Phase 1-2）
+  ipcMain.handle('sound:setNotes', async (_event, soundId: string, notes: string) => {
+    try {
+      const row = db.prepare('SELECT id FROM sounds WHERE id = ?').get(soundId)
+      if (!row) return { success: false, message: '找不到文件记录' }
+      db.prepare('UPDATE sounds SET notes = ?, updated_at = ? WHERE id = ?').run(notes, new Date().toISOString(), soundId)
+      return { success: true }
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
+    }
+  })
+
   // Window Controls (frameless mode)
   ipcMain.handle('window:minimize', () => {
     BrowserWindow.getFocusedWindow()?.minimize()

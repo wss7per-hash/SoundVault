@@ -41,6 +41,8 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
   const [descValue, setDescValue] = useState(sound.description || '')
   const [bestForEditing, setBestForEditing] = useState(false)
   const [bestForValue, setBestForValue] = useState(sound.best_for || '')
+  const [notesValue, setNotesValue] = useState(sound.notes || '')
+  const [notesEditing, setNotesEditing] = useState(false)
 
   // Audio player state
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -63,9 +65,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       window.api.getTags().then(setAllTags).catch(() => {})
       setDescValue(sound.description || '')
       setBestForValue(sound.best_for || '')
+      setNotesValue(sound.notes || '')
       setTagsLoaded(true)
     }
-  }, [sound.id, sound.description, sound.best_for])
+  }, [sound.id, sound.description, sound.best_for, sound.notes])
 
   // Audio element setup — reset + rewire on sound switch
   useEffect(() => {
@@ -469,6 +472,18 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       toast.error('保存失败')
     }
   }, [bestForValue, sound.id, onUpdate])
+
+  // Save notes (备注/笔记)
+  const handleSaveNotes = useCallback(async () => {
+    try {
+      await window.api.setNotes(sound.id, notesValue)
+      toast.success('备注已保存')
+      setNotesEditing(false)
+      onUpdate()
+    } catch {
+      toast.error('保存失败')
+    }
+  }, [notesValue, sound.id, onUpdate])
 
   const formatTime = (sec: number): string => {
     if (!isFinite(sec) || sec <= 0) return '0:00'
@@ -967,6 +982,40 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
             <p className="text-sm text-[#c8c8c4]">{sound.emotion}</p>
           </div>
         )}
+
+        {/* ===== NOTES (EDITABLE) ===== */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-[#6a6a64] uppercase tracking-wider">备注 / 笔记</p>
+            <button
+              onClick={() => { if (!notesEditing) { setNotesValue(sound.notes || ''); setNotesEditing(true) } else { setNotesEditing(false) } }}
+              className="p-0.5 hover:bg-[#252524] rounded text-[#6a6a64] hover:text-[#b8b8b4] transition-colors"
+            >
+              {notesEditing ? <X size={14} /> : <Edit3 size={13} />}
+            </button>
+          </div>
+          {notesEditing ? (
+            <div className="flex flex-col gap-1.5">
+              <textarea
+                value={notesValue}
+                onChange={(e) => setNotesValue(e.target.value)}
+                className="w-full bg-[#141412] border border-[#2a2a28] rounded-md p-2.5 text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] resize-none focus:outline-none focus:border-accent/50 min-h-[60px] leading-relaxed"
+                placeholder="记录使用心得、来源、版权信息..."
+                rows={3}
+              />
+              <button
+                onClick={handleSaveNotes}
+                className="self-end flex items-center gap-1 px-3 py-1.5 rounded-md text-xs bg-accent text-white hover:bg-accent/80 transition-colors"
+              >
+                <Check size={13} /> 保存
+              </button>
+            </div>
+          ) : sound.notes ? (
+            <p className="text-sm text-[#c8c8c4] leading-relaxed whitespace-pre-wrap">{sound.notes}</p>
+          ) : (
+            <p className="text-sm text-[#5a5a54] italic">暂无备注，点击右上角编辑</p>
+          )}
+        </div>
 
         {/* ===== TAGS (EDITABLE) ===== */}
         <div>
