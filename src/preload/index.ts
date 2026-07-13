@@ -140,7 +140,29 @@ const api = {
   // Window Controls (frameless mode)
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   maximizeRestoreWindow: () => ipcRenderer.invoke('window:maximizeRestore'),
-  closeWindow: () => ipcRenderer.invoke('window:close')
+  closeWindow: () => ipcRenderer.invoke('window:close'),
+
+  // Global Quick Search (Spotlight overlay)
+  hideSpotlight: () => ipcRenderer.send('spotlight:hide'),
+  revealSound: (soundId: string) => ipcRenderer.send('spotlight:reveal', soundId),
+  // 设置新的呼出快捷键（主进程重注册 + 持久化到 settings 表）
+  setSpotlightShortcut: (accelerator: string) => ipcRenderer.invoke('spotlight:setShortcut', accelerator),
+  // 从主窗口/工具栏呼出搜索浮层
+  openSpotlight: () => ipcRenderer.send('spotlight:open'),
+  // 拖动浮层：渲染进程按屏幕坐标增量上报，主进程 setPosition（透明窗口下 -webkit-app-region 不可靠）
+  moveSpotlight: (dx: number, dy: number) => ipcRenderer.send('spotlight:move', dx, dy),
+  // spotlight 窗口被呼出时的通知（清空/聚焦输入）
+  onSpotlightOpened: (cb: () => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('spotlight:opened', listener)
+    return () => ipcRenderer.removeListener('spotlight:opened', listener)
+  },
+  // 主窗口收到「定位选中某音效」的推送
+  onSelectSound: (cb: (soundId: string) => void) => {
+    const listener = (_e: unknown, soundId: string): void => cb(soundId)
+    ipcRenderer.on('main:selectSound', listener)
+    return () => ipcRenderer.removeListener('main:selectSound', listener)
+  }
 }
 
 if (process.contextIsolated) {

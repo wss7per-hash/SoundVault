@@ -112,6 +112,15 @@ export interface SoundVaultAPI {
   getSetting: (key: string) => Promise<string | null>
   setSetting: (key: string, value: string) => Promise<{ success: boolean }>
 
+  // Global Quick Search (Spotlight overlay)
+  hideSpotlight: () => void
+  revealSound: (soundId: string) => void
+  setSpotlightShortcut: (accelerator: string) => Promise<{ success: boolean; shortcut?: string; error?: string }>
+  openSpotlight: () => void
+  moveSpotlight: (dx: number, dy: number) => void
+  onSpotlightOpened: (cb: () => void) => () => void
+  onSelectSound: (cb: (soundId: string) => void) => () => void
+
   // Window Controls (frameless mode)
   minimizeWindow: () => Promise<void>
   maximizeRestoreWindow: () => Promise<void>

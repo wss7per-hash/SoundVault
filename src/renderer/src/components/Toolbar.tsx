@@ -71,6 +71,27 @@ export function Toolbar(): JSX.Element {
   const widthRef = useRef(searchWidth)
   widthRef.current = searchWidth
 
+  // 全局快捷搜索的呼出快捷键（用于界面提示徽标）
+  const [spotShortcut, setSpotShortcut] = useState('Ctrl+Shift+Space')
+  useEffect(() => {
+    window.api?.getSetting('spotlight.shortcut').then((v) => {
+      if (v) {
+        const isMac = /mac/i.test(navigator.platform)
+        const disp = v
+          .split('+')
+          .map((p: string) =>
+            p === 'CommandOrControl' ? (isMac ? 'Cmd' : 'Ctrl')
+            : p === 'Command' ? 'Cmd'
+            : p === 'Control' ? 'Ctrl'
+            : p === 'Space' ? 'Space'
+            : p
+          )
+          .join('+')
+        setSpotShortcut(disp)
+      }
+    }).catch(() => {})
+  }, [])
+
   useEffect(() => {
     window.api?.getSetting('toolbar.searchWidth').then((v) => {
       if (v) {
@@ -318,6 +339,16 @@ export function Toolbar(): JSX.Element {
           </button>
         )}
       </div>
+
+      {/* 全局快捷搜索入口提示（点击呼出） */}
+      <button
+        onClick={() => window.api?.openSpotlight?.()}
+        title="点击呼出全局快捷搜索（也可随时按快捷键）"
+        className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-muted hover:bg-surface-hover hover:text-muted-light transition-colors shrink-0 no-drag"
+      >
+        <span className="text-[13px] leading-none">⌨</span>
+        <span className="tabular-nums">{spotShortcut}</span>
+      </button>
 
       {/* Drag handle to resize search box */}
       <div

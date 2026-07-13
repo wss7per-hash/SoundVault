@@ -387,10 +387,18 @@ export function registerIpcHandlers(): void {
          JOIN sound_tags st ON t.id = st.tag_id
          WHERE st.sound_id = s.id) AS tags
       FROM sounds s
-      WHERE (s.file_name LIKE ? OR s.description LIKE ? OR s.emotion LIKE ?)
+      WHERE (
+          s.file_name LIKE ? OR s.description LIKE ? OR s.emotion LIKE ?
+          OR s.notes LIKE ? OR s.search_text LIKE ? OR s.best_for LIKE ?
+          OR EXISTS (
+            SELECT 1 FROM sound_tags st2
+            JOIN tags t2 ON t2.id = st2.tag_id
+            WHERE st2.sound_id = s.id AND t2.name LIKE ?
+          )
+        )
         AND (s.is_trashed = 0 OR s.is_trashed IS NULL)
       ORDER BY s.imported_at DESC
-    `).all(like, like, like)
+    `).all(like, like, like, like, like, like, like)
   })
 
   ipcMain.handle('sound:getStats', () => {

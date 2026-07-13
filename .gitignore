@@ -15,3 +15,14 @@ npm-debug.log*
 
 # electron-vite generated temp configs (regenerated every build, never commit)
 electron.vite.config.*.mjs
+
+# packaging / debug scratch artifacts (never commit)
+dist_test/
+distlist.txt
+procs.txt
+dist_old/
+dist2/
+dist3/
+dist4/
+dist5/
+dist6/

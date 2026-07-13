@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Menu, protocol, net } from 'electron'
+import { app, BrowserWindow, shell, Menu, protocol, net, globalShortcut, ipcMain } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { existsSync, readFileSync, statSync } from 'fs'
@@ -36,6 +36,80 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let mainWindow: BrowserWindow | null = null
+let spotlightWindow: BrowserWindow | null = null
+// 全局快捷搜索快捷键（持久化在 settings 表，key=spotlight.shortcut）
+const DEFAULT_SPOTLIGHT_SHORTCUT = 'CommandOrControl+Shift+Space'
+let currentSpotlightShortcut: string = DEFAULT_SPOTLIGHT_SHORTCUT
+
+/**
+ * 从 settings 表读取已保存的呼出快捷键；无记录则返回默认。
+ */
+function loadSpotlightShortcut(): string {
+  try {
+    const db = getDatabase()
+    const row = db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .get('spotlight.shortcut') as { value: string } | undefined
+    return row?.value || DEFAULT_SPOTLIGHT_SHORTCUT
+  } catch {
+    return DEFAULT_SPOTLIGHT_SHORTCUT
+  }
+}
+
+/**
+ * 全局快捷搜索 overlay 窗口（复用同一个 renderer bundle，通过 #spotlight
+ * hash 分支渲染 Spotlight 组件，避免多入口构建配置）。懒加载：首次呼出才创建。
+ */
+function createSpotlightWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 640,
+    height: 440,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: true,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    transparent: true,
+    backgroundColor: '#00000000',
+    center: true,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      webSecurity: true
+    }
+  })
+
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#spotlight`)
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'spotlight' })
+  }
+
+  // 失焦即隐藏（点到别处/切走应用），像系统 Spotlight 一样
+  win.on('blur', () => {
+    if (spotlightWindow && !spotlightWindow.isDestroyed()) spotlightWindow.hide()
+  })
+  win.on('closed', () => {
+    spotlightWindow = null
+  })
+  return win
+}
+
+function toggleSpotlight(): void {
+  if (!spotlightWindow || spotlightWindow.isDestroyed()) {
+    spotlightWindow = createSpotlightWindow()
+  }
+  if (spotlightWindow.isVisible()) {
+    spotlightWindow.hide()
+  } else {
+    spotlightWindow.center()
+    spotlightWindow.show()
+    spotlightWindow.focus()
+    // 通知渲染端清空/聚焦输入框
+    spotlightWindow.webContents.send('spotlight:opened')
+  }
+}
 
 function createWindow(): void {
   try {
@@ -179,11 +253,76 @@ app.whenReady().then(() => {
   registerIpcHandlers()
   createWindow()
 
+  // 全局快捷搜索：注册系统级快捷键（默认 Ctrl/Cmd+Shift+Space，可在 Spotlight 内自定义并持久化）
+  currentSpotlightShortcut = loadSpotlightShortcut()
+  const ok = globalShortcut.register(currentSpotlightShortcut, toggleSpotlight)
+  if (!ok) console.warn(`[globalShortcut] 注册 ${currentSpotlightShortcut} 失败（可能被占用）`)
+
+  // spotlight → 隐藏自身
+  ipcMain.on('spotlight:hide', () => {
+    if (spotlightWindow && !spotlightWindow.isDestroyed()) spotlightWindow.hide()
+  })
+  // spotlight → 在主窗口中定位并选中某音效
+  ipcMain.on('spotlight:reveal', (_e, soundId: string) => {
+    if (spotlightWindow && !spotlightWindow.isDestroyed()) spotlightWindow.hide()
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+      mainWindow.webContents.send('main:selectSound', soundId)
+    }
+  })
+  // spotlight → 重新注册呼出快捷键（unregister 旧 + register 新，并持久化）
+  ipcMain.handle('spotlight:setShortcut', (_e, accelerator: string) => {
+    try {
+      globalShortcut.unregister(currentSpotlightShortcut)
+    } catch {
+      /* 旧的可能本就未注册，忽略 */
+    }
+    const ok = globalShortcut.register(accelerator, toggleSpotlight)
+    if (ok) {
+      currentSpotlightShortcut = accelerator
+      try {
+        const db = getDatabase()
+        db.prepare(`
+          INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?
+        `).run(
+          'spotlight.shortcut',
+          accelerator,
+          new Date().toISOString(),
+          accelerator,
+          new Date().toISOString()
+        )
+      } catch {
+        /* 持久化失败不阻断本次注册 */
+      }
+      return { success: true, shortcut: accelerator }
+    }
+    // 注册失败：回退到旧快捷键，避免搜索彻底失效
+    globalShortcut.register(currentSpotlightShortcut, toggleSpotlight)
+    return { success: false, error: '该快捷键可能已被系统或其他程序占用' }
+  })
+  // spotlight → 从主窗口 / 工具栏呼出搜索浮层
+  ipcMain.on('spotlight:open', () => {
+    toggleSpotlight()
+  })
+  // spotlight → 拖动浮层（渲染进程按屏幕坐标增量上报，主进程 setPosition）
+  ipcMain.on('spotlight:move', (_e, dx: number, dy: number) => {
+    if (!spotlightWindow || spotlightWindow.isDestroyed()) return
+    const [x, y] = spotlightWindow.getPosition()
+    spotlightWindow.setPosition(Math.round(x + dx), Math.round(y + dy))
+  })
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
     }
   })
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
 })
 
 app.on('window-all-closed', () => {

@@ -113,6 +113,23 @@ export default function App(): JSX.Element {
     document.documentElement.style.fontSize = `${fontSize}px`
   }, [fontSize])
 
+  // 全局快捷搜索定位：spotlight 选中某音效后，清掉过滤条件、回到主视图、
+  // 刷新并选中目标，保证它在网格里可见并打开详情面板。
+  useEffect(() => {
+    const unsub = window.api.onSelectSound(async (soundId: string) => {
+      const store = useAppStore.getState()
+      store.setSidebarTab('tags')
+      store.setSelectedTag(null)
+      store.setActiveCollection(null)
+      store.setActiveSmartFolder(null)
+      store.setFormatFilter(null)
+      store.setSearchQuery('')
+      await store.refreshSounds()
+      store.selectSound(soundId)
+    })
+    return unsub
+  }, [])
+
   // Ctrl+A / Ctrl+D select all
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
