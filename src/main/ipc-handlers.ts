@@ -401,6 +401,89 @@ export function registerIpcHandlers(): void {
     `).all(like, like, like, like, like, like, like)
   })
 
+  // ── 相似音频推荐：以音搜音（标签 0.7 + 文本 0.3 加权相似度）──
+  // 不用 SQLite || 拼接 / GROUP_CONCAT（better-sqlite3 默认 || 是加法），
+  // 改为两次查询 + JS 分组，规避编译歧义。
+  ipcMain.handle('sound:similar', (_event, soundId: string) => {
+    const target = db.prepare(`
+      SELECT id, file_name, use_cases, emotion
+      FROM sounds WHERE id = ?
+    `).get(soundId) as any
+    if (!target) return []
+
+    // 目标音效的标签（name -> confidence）
+    const myTagRows = db.prepare(`
+      SELECT t.name, st.confidence
+      FROM sound_tags st JOIN tags t ON t.id = st.tag_id
+      WHERE st.sound_id = ?
+    `).all(soundId) as Array<{ name: string; confidence: number }>
+    const myTags = new Map<string, number>()
+    for (const r of myTagRows) myTags.set(r.name, r.confidence ?? 0.8)
+    const myTagSum = [...myTags.values()].reduce((a, b) => a + b, 0)
+
+    // 目标文本 token（使用场景词 + 情绪）
+    const myText = new Set<string>()
+    if (target.use_cases) target.use_cases.split(/[,;，；、]/).forEach((w: string) => { const t = w.trim(); if (t) myText.add(t) })
+    if (target.emotion) myText.add(String(target.emotion).trim())
+
+    // 候选（排除自身 / 已删除 / 缺失）
+    const cands = db.prepare(`
+      SELECT id, file_name, use_cases, emotion
+      FROM sounds
+      WHERE id <> ?
+        AND (is_trashed = 0 OR is_trashed IS NULL)
+        AND (is_missing = 0 OR is_missing IS NULL)
+    `).all(soundId) as Array<{ id: string; file_name: string; use_cases: string | null; emotion: string | null }>
+
+    // 候选标签一次聚合（JS 分组）
+    const candTagRows = db.prepare(`
+      SELECT st.sound_id, t.name, st.confidence
+      FROM sound_tags st JOIN tags t ON t.id = st.tag_id
+      WHERE st.sound_id <> ?
+    `).all(soundId) as Array<{ sound_id: string; name: string; confidence: number }>
+    const candTags = new Map<string, Map<string, number>>()
+    for (const r of candTagRows) {
+      if (!candTags.has(r.sound_id)) candTags.set(r.sound_id, new Map())
+      candTags.get(r.sound_id)!.set(r.name, r.confidence ?? 0.8)
+    }
+
+    const out: Array<{ id: string; file_name: string; score: number; reasons: string[] }> = []
+    for (const c of cands) {
+      // 标签相似度：加权 Jaccard（min-pool）
+      const cTags = candTags.get(c.id) || new Map<string, number>()
+      let shared = 0
+      for (const [name, conf] of myTags) {
+        const oc = cTags.get(name)
+        if (oc !== undefined) shared += Math.min(conf, oc)
+      }
+      const cTagSum = [...cTags.values()].reduce((a, b) => a + b, 0)
+      const union = myTagSum + cTagSum - shared
+      const simTags = union > 0 ? shared / union : 0
+
+      // 文本相似度：使用场景词 + 情绪重叠 / 目标词数
+      const cText = new Set<string>()
+      if (c.use_cases) c.use_cases.split(/[,;，；、]/).forEach((w: string) => { const t = w.trim(); if (t) cText.add(t) })
+      if (c.emotion) cText.add(String(c.emotion).trim())
+      let textShared = 0
+      for (const t of myText) if (cText.has(t)) textShared++
+      const simText = myText.size > 0 ? textShared / myText.size : 0
+
+      const score = 0.7 * simTags + 0.3 * simText
+      if (score <= 0.08) continue
+
+      // 匹配原因
+      const reasons: string[] = []
+      let n = 0
+      for (const [name] of myTags) {
+        if (cTags.has(name) && n < 3) { reasons.push(`标签「${name}」`); n++ }
+      }
+      if (textShared > 0) reasons.push('使用场景相近')
+      out.push({ id: c.id, file_name: c.file_name, score, reasons })
+    }
+    out.sort((a, b) => b.score - a.score)
+    return out.slice(0, 8)
+  })
+
   ipcMain.handle('sound:getStats', () => {
     const total = (db.prepare('SELECT COUNT(*) as count FROM sounds').get() as { count: number }).count
     const starred = (db.prepare('SELECT COUNT(*) as count FROM sounds WHERE is_starred = 1').get() as { count: number }).count

@@ -1,5 +1,5 @@
 import { useCallback, useState, useRef, useEffect } from 'react'
-import type { SoundData, TagWithMeta, TagData } from '../../preload/index.d'
+import type { SoundData, TagWithMeta, TagData, SimilarSound } from '../../preload/index.d'
 import {
   X,
   Play,
@@ -44,6 +44,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
   const [notesValue, setNotesValue] = useState(sound.notes || '')
   const [notesEditing, setNotesEditing] = useState(false)
 
+  // 相似音频推荐（以音搜音）
+  const [similar, setSimilar] = useState<SimilarSound[]>([])
+  const [similarLoading, setSimilarLoading] = useState(false)
+
   // Audio player state
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -69,6 +73,18 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       setTagsLoaded(true)
     }
   }, [sound.id, sound.description, sound.best_for, sound.notes])
+
+  // 相似音频：切换音效时基于标签+文本加权相似度重新计算
+  useEffect(() => {
+    if (!sound.id) return
+    let cancelled = false
+    setSimilar([])
+    setSimilarLoading(true)
+    window.api.getSimilarSounds(sound.id)
+      .then((res) => { if (!cancelled) { setSimilar(res || []); setSimilarLoading(false) } })
+      .catch(() => { if (!cancelled) { setSimilar([]); setSimilarLoading(false) } })
+    return () => { cancelled = true }
+  }, [sound.id])
 
   // Audio element setup — reset + rewire on sound switch
   useEffect(() => {
@@ -1084,6 +1100,44 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
               ))
             )}
           </div>
+        </div>
+
+        {/* ===== SIMILAR SOUNDS (以音搜音) ===== */}
+        <div>
+          <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-2">相似音效</p>
+          {similarLoading ? (
+            <p className="text-xs text-[#5a5a54] italic">计算中…</p>
+          ) : similar.length === 0 ? (
+            <p className="text-xs text-[#5a5a54] italic">暂无相似音效（先 AI 分析同库音效，更易匹配）</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {similar.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => window.api.revealSound(s.id)}
+                  className="w-full text-left rounded-md border border-[#2a2a28] bg-[#1a1a18] hover:bg-[#252524] hover:border-accent/40 px-2.5 py-2 transition-colors group"
+                  title="点击跳转到该音效"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-[#c8c8c4] truncate group-hover:text-white">{s.file_name}</span>
+                    <span className="text-[10px] font-mono tabular-nums text-[#8a8a82] shrink-0">{Math.round(s.score * 100)}%</span>
+                  </div>
+                  {s.reasons.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {s.reasons.map((r, i) => (
+                        <span
+                          key={i}
+                          className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#534AB7]/10 text-[#9C92F6] border border-[#534AB7]/20"
+                        >
+                          {r}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ===== QUALITY SCORE ===== */}

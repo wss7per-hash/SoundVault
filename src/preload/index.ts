@@ -36,6 +36,8 @@ const api = {
   getStarred: () => ipcRenderer.invoke('sound:getStarred'),
   incrementPlayCount: (id: string) => ipcRenderer.invoke('sound:incrementPlayCount', id),
   searchSounds: (query: string) => ipcRenderer.invoke('sound:search', query),
+  // 相似音频推荐（以音搜音：标签+文本加权相似度，返回 top 8 + 匹配原因）
+  getSimilarSounds: (soundId: string) => ipcRenderer.invoke('sound:similar', soundId) as Promise<SimilarSound[]>,
   getStats: () => ipcRenderer.invoke('sound:getStats'),
   renameSound: (id: string, newName: string) => ipcRenderer.invoke('sound:rename', id, newName),
   setNotes: (id: string, notes: string) => ipcRenderer.invoke('sound:setNotes', id, notes) as Promise<{ success: boolean; message?: string }>,

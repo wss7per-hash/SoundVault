@@ -27,6 +27,8 @@ export interface SoundVaultAPI {
   getStarred: () => Promise<SoundData[]>
   incrementPlayCount: (id: string) => Promise<void>
   searchSounds: (query: string) => Promise<SoundData[]>
+  // 相似音频推荐（以音搜音）：输入音效 id，返回相似度最高的 top 8
+  getSimilarSounds: (soundId: string) => Promise<SimilarSound[]>
   getStats: () => Promise<StatsData>
   // 清理无效文件：扫描本地音频丢失的条目。mode='scan' 仅返回统计；'remove' 永久删除缺失条目
   cleanupMissing: (mode: 'scan' | 'remove') => Promise<{ success: boolean; total: number; missing: number; removed: number; message?: string }>
@@ -232,6 +234,15 @@ export interface TagStatData {
   name: string
   color: string | null
   count: number
+}
+
+export interface SimilarSound {
+  id: string
+  file_name: string
+  // 综合相似度 0-1（标签 0.7 + 文本 0.3 加权）
+  score: number
+  // 匹配原因（共享标签名 / 使用场景相近）
+  reasons: string[]
 }
 
 export interface CollectionData {

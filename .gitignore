@@ -18,6 +18,8 @@ electron.vite.config.*.mjs
 
 # packaging / debug scratch artifacts (never commit)
 dist_test/
+dist_build/
+dist_release/
 distlist.txt
 procs.txt
 dist_old/
