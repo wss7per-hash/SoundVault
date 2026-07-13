@@ -6,6 +6,7 @@ import {
   Pause,
   Copy,
   FolderOpen,
+  Import,
   Star,
   RefreshCw,
   Loader2,
@@ -180,6 +181,25 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       setLooping(false)
     }
   }, [sound.id, loopMs, loopCount, looping, onUpdate])
+
+  // 一键导入正在运行的 After Effects 工程（官方 ExtendScript importFile）
+  const [importing, setImporting] = useState(false)
+  const handleImportToAE = useCallback(async () => {
+    if (importing) return
+    setImporting(true)
+    try {
+      const res = await window.api.importToAE(sound.file_path)
+      if (res.success) {
+        toast.success(`已导入 After Effects${res.name ? '：' + res.name : ''}`)
+      } else {
+        toast.error(res.message || '导入失败')
+      }
+    } catch {
+      toast.error('导入失败')
+    } finally {
+      setImporting(false)
+    }
+  }, [sound.file_path, importing])
 
   const handleStar = useCallback(async () => {
     try {
@@ -433,6 +453,27 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
           </button>
           <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
             用 ffmpeg 将尾音交叉淡入开头，在原文件同目录生成 <code className="text-[#8a8a82]">原名_loop次数.wav</code>（不覆盖原文件）。
+          </p>
+        </div>
+
+        {/* ===== 一键导入 After Effects ===== */}
+        <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+              <Import size={13} className="text-accent" />
+              导入到 After Effects
+            </span>
+          </div>
+          <button
+            onClick={handleImportToAE}
+            disabled={importing}
+            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
+          >
+            <Import size={13} />
+            {importing ? '导入中…' : '导入到正在运行的 AE 工程'}
+          </button>
+          <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
+            需先在 AE 中开启「编辑 &gt; 首选项 &gt; 脚本和表达式 &gt; 允许脚本写入文件和访问网络」。导入当前打开的工程（Project）。
           </p>
         </div>
 

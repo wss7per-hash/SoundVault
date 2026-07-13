@@ -1,9 +1,10 @@
 import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron'
 import { readdir, stat, readFile, writeFile, copyFile, rename, mkdir, access, rm, unlink } from 'fs/promises'
 import { execFile } from 'child_process'
+import { tmpdir } from 'os'
 // @ts-ignore - ffmpeg-static 无类型声明，但运行期返回二进制路径字符串
 import ffmpegPath from 'ffmpeg-static'
-import { existsSync } from 'fs'
+import { existsSync, readdirSync, writeFileSync, unlinkSync } from 'fs'
 import { createHash } from 'crypto'
 import { join, extname, basename, dirname, parse, format } from 'path'
 import { getDatabase } from './database'
@@ -54,6 +55,111 @@ interface ScanResult {
   }>
 }
 
+// ── 一键导入 After Effects（2019+）─────────────────────────────
+// 机制：写一个临时 .jsx 脚本，用 afterfx.exe -r 在「正在运行的 AE 实例」里执行
+// importFile()，再把结果（导入后的素材名 / 错误）写回临时 .js 让 Node 读回。
+// 前提：AE 需开启「编辑 > 首选项 > 脚本和表达式 > 允许脚本写入文件和访问网络」。
+
+function findAEDir(): string | null {
+  const roots = [
+    'C:\\Program Files\\Adobe',
+    'D:\\Program Files\\Adobe',
+    'C:\\Program Files (x86)\\Adobe',
+    'E:\\Program Files\\Adobe'
+  ]
+  for (const root of roots) {
+    if (!existsSync(root)) continue
+    let subs: string[] = []
+    try { subs = readdirSync(root) } catch { continue }
+    const hit = subs.find((s) => s.includes('Adobe After Effects'))
+    if (hit) return join(root, hit)
+  }
+  return null
+}
+
+function execFileAsync(cmd: string, args: string[], opts: any): Promise<void> {
+  return new Promise((resolve) => {
+    // afterfx.exe -r 即使脚本成功，进程退出码也常非 0，这里忽略错误只等其结束
+    execFile(cmd, args, opts, () => resolve())
+  })
+}
+
+async function importToAE(filePath: string): Promise<{ success: boolean; name?: string; message?: string }> {
+  const aeDir = findAEDir()
+  if (!aeDir) {
+    return { success: false, message: '未找到 After Effects，请确认已安装（默认位于 C:\\Program Files\\Adobe）' }
+  }
+  const supportDir = join(aeDir, 'Support Files')
+  const afterfx = join(supportDir, 'afterfx.exe')
+  if (!existsSync(afterfx)) {
+    return { success: false, message: '未找到 afterfx.exe（AE 安装可能不完整）' }
+  }
+
+  const uid = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+  const resultPath = join(tmpdir(), `ae-result-${uid}.js`)
+  const jsxPath = join(tmpdir(), `ae-cmd-${uid}.jsx`)
+
+  // filePath / resultPath 经 JSON.stringify 正确转义反斜杠，作为 JS 字符串字面量嵌入脚本
+  const p = JSON.stringify(filePath)
+  const rp = JSON.stringify(resultPath)
+
+  const jsx = [
+    'app.beginSuppressDialogs();',
+    'var __r;',
+    'try {',
+    '  var __io = new ImportOptions(File(' + p + '));',
+    '  var __it = app.project.importFile(__io);',
+    '  __r = __it ? __it.name : "imported";',
+    '} catch (e) {',
+    '  __r = "ERROR:" + (e && e.toString ? e.toString() : String(e));',
+    '}',
+    'app.endSuppressDialogs(false);',
+    '(function(){',
+    '  var f = new File(' + rp + ');',
+    '  f.open("w");',
+    '  f.write("module.exports = " + ({ returned: __r }).toSource());',
+    '  f.close();',
+    '})();'
+  ].join('\n')
+
+  try {
+    writeFileSync(jsxPath, jsx, 'utf-8')
+  } catch (err) {
+    return { success: false, message: '写入临时脚本失败：' + (err as Error).message }
+  }
+
+  await execFileAsync('afterfx.exe', ['-r', jsxPath], {
+    cwd: supportDir,
+    windowsHide: true,
+    timeout: 25000
+  })
+
+  // AE 在运行实例里异步执行脚本并写回结果，轮询读取（避免竞态）
+  let result: any = null
+  for (let i = 0; i < 30; i++) {
+    if (existsSync(resultPath)) {
+      try { result = require(resultPath); break } catch { /* 文件未写完，重试 */ }
+    }
+    await new Promise((r) => setTimeout(r, 200))
+  }
+
+  // 清理临时文件
+  try { unlinkSync(jsxPath) } catch { /* ignore */ }
+  try { unlinkSync(resultPath) } catch { /* ignore */ }
+
+  if (!result) {
+    return {
+      success: false,
+      message:
+        'AE 未返回结果。请确认：① AE 正在运行；② 已勾选「编辑 > 首选项 > 脚本和表达式 > 允许脚本写入文件和访问网络」'
+    }
+  }
+  if (result.returned && String(result.returned).startsWith('ERROR:')) {
+    return { success: false, message: String(result.returned) }
+  }
+  return { success: true, name: result.returned }
+}
+
 export function registerIpcHandlers(): void {
   const db = getDatabase()
 
@@ -73,6 +179,11 @@ export function registerIpcHandlers(): void {
     } catch (err) {
       console.error('[dragFile] startDrag failed:', err)
     }
+  })
+
+  // 一键把音频导入正在运行的 After Effects 工程（通过官方 ExtendScript importFile）
+  ipcMain.handle('app:importToAE', async (_event, filePath: string) => {
+    return importToAE(filePath)
   })
 
   ipcMain.handle('dialog:selectFolder', async () => {

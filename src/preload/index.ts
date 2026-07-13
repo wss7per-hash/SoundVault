@@ -6,6 +6,9 @@ const api = {
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
   // 系统级文件拖拽（拖到 AE 等外部应用直接导入）
   startDragFile: (filePath: string) => ipcRenderer.send('app:dragFile', filePath),
+  // 一键导入正在运行的 After Effects（官方 ExtendScript importFile）
+  importToAE: (filePath: string) =>
+    ipcRenderer.invoke('app:importToAE', filePath) as Promise<{ success: boolean; name?: string; message?: string }>,
 
   // Dialog
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),

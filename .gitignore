@@ -12,3 +12,6 @@ Thumbs.db
 test-main*.js
 *.log
 npm-debug.log*
+
+# electron-vite generated temp configs (regenerated every build, never commit)
+electron.vite.config.*.mjs
