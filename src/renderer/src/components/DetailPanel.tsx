@@ -18,7 +18,8 @@ import {
   Edit3,
   Check,
   Repeat,
-  Scissors
+  Scissors,
+  FileAudio
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
@@ -329,6 +330,42 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       setCropping(false)
     }
   }, [sound.id, cropStart, cropEnd, cropping, cropPreview, onUpdate])
+
+  // ===== 格式转换 WAV↔MP3（Phase 0-3） =====
+  const [convFmt, setConvFmt] = useState<'wav' | 'mp3'>('mp3')
+  const [convBitrate, setConvBitrate] = useState(192)
+  const [converting, setConverting] = useState(false)
+  // 默认目标格式取当前格式的反面
+  useEffect(() => {
+    const cur = (sound.file_ext || '').replace(/^\./, '').toLowerCase()
+    setConvFmt(cur === 'wav' ? 'mp3' : 'wav')
+  }, [sound.id, sound.file_ext])
+
+  const handleConvert = useCallback(async () => {
+    if (converting) return
+    setConverting(true)
+    try {
+      const res = await window.api.convertSound(sound.id, convFmt, convBitrate)
+      if (res.success && res.outPath) {
+        onUpdate()
+        toast.success(
+          <span>
+            已转换为 {convFmt.toUpperCase()} 并自动导入音效库
+            <button onClick={() => window.api.openPath(res.outPath!)} style={{ marginLeft: 8, textDecoration: 'underline' }}>
+              打开位置
+            </button>
+          </span>,
+          { duration: 5000 }
+        )
+      } else {
+        toast.error(res.message || '转换失败')
+      }
+    } catch {
+      toast.error('转换失败')
+    } finally {
+      setConverting(false)
+    }
+  }, [sound.id, convFmt, convBitrate, converting, onUpdate])
 
   const handleStar = useCallback(async () => {
     try {
@@ -701,6 +738,50 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
           </button>
           <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
             拖动波形上的把手选取区间，或手动输入起止秒数；生成 <code className="text-[#8a8a82]">原名_clip_起-止.wav</code> 自动入库，继承原标签并加 crop 标签。
+          </p>
+        </div>
+
+        {/* ===== 格式转换 WAV↔MP3（Phase 0-3） ===== */}
+        <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+              <FileAudio size={13} className="text-accent" />
+              格式转换 WAV↔MP3
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              onClick={() => setConvFmt('wav')}
+              className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${convFmt === 'wav' ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}
+            >WAV</button>
+            <button
+              onClick={() => setConvFmt('mp3')}
+              className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${convFmt === 'mp3' ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}
+            >MP3</button>
+          </div>
+          {convFmt === 'mp3' && (
+            <div className="flex items-center gap-2 text-[10px] text-[#6a6a64] mb-2">
+              <span>码率</span>
+              {[128, 192, 256, 320].map((b) => (
+                <button
+                  key={b}
+                  onClick={() => setConvBitrate(b)}
+                  className={`px-1.5 py-0.5 rounded border transition-colors ${convBitrate === b ? 'bg-[#534AB7]/20 text-[#9C92F6] border-[#534AB7]/40' : 'bg-[#252524] text-[#8a8a82] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}
+                >{b}</button>
+              ))}
+              <span>kbps</span>
+            </div>
+          )}
+          <button
+            onClick={handleConvert}
+            disabled={converting}
+            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
+          >
+            <FileAudio size={13} />
+            {converting ? '转换中…' : `转换为 ${convFmt.toUpperCase()}`}
+          </button>
+          <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
+            生成 <code className="text-[#8a8a82]">原名_conv.{convFmt}</code> 自动入库，继承原标签并加 {convFmt} 标签。
           </p>
         </div>
 

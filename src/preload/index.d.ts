@@ -42,6 +42,8 @@ export interface SoundVaultAPI {
   getWaveform: (soundId: string) => Promise<{ success: boolean; peaks?: number[]; cached?: boolean; message?: string }>
   // 裁剪截取片段（ffmpeg 按起止时间精确截取，自动入库 + crop 标签）
   trimSound: (soundId: string, startSec: number, endSec: number) => Promise<{ success: boolean; outPath?: string; startSec?: number; endSec?: number; importedId?: string; message?: string }>
+  // 格式转换 WAV↔MP3（ffmpeg 转码，自动入库 + 目标格式标签）
+  convertSound: (soundId: string, targetFormat: 'wav' | 'mp3', bitrate?: number) => Promise<{ success: boolean; outPath?: string; format?: string; importedId?: string; message?: string }>
 
   // AI Analysis
   getAIConfig: () => Promise<AIConfig>

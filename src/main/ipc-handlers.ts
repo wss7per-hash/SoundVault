@@ -1961,6 +1961,103 @@ function ensureParentCategory(category: string, now: string): string | null {
     }
   })
 
+  // ---- 格式转换 WAV↔MP3：ffmpeg 转码，复用 seamlessLoop 的入库 + 继承元数据模板 ----
+  ipcMain.handle('audio:convert', async (_event, soundId: string, targetFormat: 'wav' | 'mp3', bitrate = 192) => {
+    try {
+      const row = db.prepare('SELECT * FROM sounds WHERE id = ?').get(soundId) as any
+      if (!row) return { success: false, message: '找不到文件记录' }
+
+      const curExt = (row.file_ext || '').replace(/^\./, '').toLowerCase()
+      const tgt = (targetFormat || '').toLowerCase()
+      if (tgt !== 'wav' && tgt !== 'mp3') return { success: false, message: '目标格式仅支持 wav / mp3' }
+      if (tgt === curExt) return { success: false, message: `文件已是 .${curExt} 格式` }
+
+      const dir = dirname(row.file_path)
+      const { name } = parse(row.file_path)
+      const outPath = join(dir, `${name}_conv.${tgt}`)
+
+      const args: string[] = ['-i', row.file_path, '-y', outPath]
+      if (tgt === 'mp3') {
+        const br = Math.max(64, Math.min(320, Number(bitrate) || 192))
+        args.push('-c:a', 'libmp3lame', '-b:a', `${br}k`)
+      } else {
+        args.push('-c:a', 'pcm_s16le')
+      }
+      await new Promise<void>((resolve, reject) => {
+        execFile(
+          ffmpegPath,
+          args,
+          { windowsHide: true, timeout: 120000 },
+          (err, _stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve())
+        )
+      })
+
+      // ---- 自动入库（继承元数据 + 目标格式标签） ----
+      const outStat = await stat(outPath)
+      const outExt = extname(outPath).toLowerCase()
+      const outFileName = basename(outPath)
+      const buffer = await readFile(outPath, { length: 64 * 1024 })
+      const hash = createHash('sha256').update(buffer).digest('hex')
+      const now = new Date().toISOString()
+      const newId = uuidv4()
+      const newDurationMs = row.duration_ms && row.duration_ms > 0 ? row.duration_ms : 0
+      const origDesc: string = row.description || ''
+      const finalDescription = `${origDesc}${origDesc ? ' ' : ''}转换为 ${tgt.toUpperCase()}`
+
+      const existing = db.prepare('SELECT id FROM sounds WHERE file_hash = ?').get(hash) as { id: string } | undefined
+      const targetId = existing?.id || newId
+      if (!existing) {
+        db.prepare(`
+          INSERT OR IGNORE INTO sounds (
+            id, file_path, file_hash, file_name, file_ext, file_size, duration_ms,
+            sample_rate, bit_depth, channels, bitrate_kbps, loudness_lufs,
+            description, description_en, use_cases, emotion, quality_score,
+            similar_to, best_for, ai_model, ai_analyzed_at,
+            is_missing, is_trashed, imported_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+        `).run(
+          newId, outPath, hash, outFileName, outExt, outStat.size, newDurationMs,
+          row.sample_rate ?? null,
+          tgt === 'wav' ? (row.bit_depth ?? 16) : null,
+          row.channels ?? null,
+          tgt === 'mp3' ? Math.max(64, Math.min(320, Number(bitrate) || 192)) : null,
+          row.loudness_lufs ?? null,
+          finalDescription || null, row.description_en ?? null, row.use_cases ?? null,
+          row.emotion ?? null, row.quality_score ?? null,
+          row.similar_to ?? null, row.best_for ?? null, row.ai_model ?? null,
+          row.ai_analyzed_at ?? null,
+          now, now
+        )
+        // 继承原文件的所有标签
+        const origTags = db.prepare(
+          'SELECT tag_id, confidence, is_manual FROM sound_tags WHERE sound_id = ?'
+        ).all(soundId) as Array<{ tag_id: string; confidence: number | null; is_manual: number }>
+        const stInsert = db.prepare(
+          'INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)'
+        )
+        for (const t of origTags) {
+          stInsert.run(newId, t.tag_id, t.confidence, t.is_manual)
+        }
+      }
+
+      // 额外添加目标格式标签（wav / mp3，便于按格式筛选）
+      const fmtTag = db.prepare('SELECT id FROM tags WHERE name = ?').get(tgt) as { id: string } | undefined
+      const fmtTagId = fmtTag?.id || (() => {
+        const id = uuidv4()
+        db.prepare('INSERT OR IGNORE INTO tags (id, name, sort_order, created_at) VALUES (?, ?, ?, ?)')
+          .run(id, tgt, 997, now)
+        return id
+      })()
+      db.prepare(
+        'INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)'
+      ).run(targetId, fmtTagId, 1, 1)
+
+      return { success: true, outPath, format: tgt, importedId: targetId }
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
+    }
+  })
+
   ipcMain.handle('sound:rename', async (_event, soundId: string, newName: string) => {
     try {
       const row = db.prepare('SELECT file_path, file_name, file_ext FROM sounds WHERE id = ?').get(soundId) as { file_path: string; file_name: string; file_ext: string } | undefined

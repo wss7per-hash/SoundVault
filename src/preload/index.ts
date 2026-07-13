@@ -54,6 +54,9 @@ const api = {
   // 裁剪截取片段（ffmpeg 按起止时间精确截取，自动入库 + crop 标签）
   trimSound: (soundId: string, startSec: number, endSec: number) =>
     ipcRenderer.invoke('audio:trim', soundId, startSec, endSec) as Promise<{ success: boolean; outPath?: string; startSec?: number; endSec?: number; importedId?: string; message?: string }>,
+  // 格式转换 WAV↔MP3（ffmpeg 转码，自动入库 + 目标格式标签）
+  convertSound: (soundId: string, targetFormat: 'wav' | 'mp3', bitrate?: number) =>
+    ipcRenderer.invoke('audio:convert', soundId, targetFormat, bitrate) as Promise<{ success: boolean; outPath?: string; format?: string; importedId?: string; message?: string }>,
 
   // AI Analysis
   getAIConfig: () => ipcRenderer.invoke('ai:getConfig'),
