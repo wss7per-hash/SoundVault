@@ -1,14 +1,43 @@
+import { useState, useMemo } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { Trash2, Tags, Wand2, FolderPlus, X, Loader2 } from 'lucide-react'
+import { Trash2, Tags, Wand2, X, Loader2, Check, Plus, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function FloatingQuickBar(): JSX.Element {
   const selectedIds = useAppStore((s) => s.selectedSoundIds)
   const clearSelection = useAppStore((s) => s.clearSelection)
   const refreshSounds = useAppStore((s) => s.refreshSounds)
+  const allTags = useAppStore((s) => s.tags) || []
   const batchAnalyzing = useAppStore((s) => s.batchAnalyzing)
 
+  // 标签选择器弹层状态（必须位于 early return 之前，遵守 Hooks 规则）
+  const [picker, setPicker] = useState<null | 'add' | 'remove'>(null)
+  const [query, setQuery] = useState('')
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+
+  const q = query.trim().toLowerCase()
+  const filtered = useMemo(
+    () => allTags.filter((t) => t.name.toLowerCase().includes(q)),
+    [allTags, q]
+  )
+  const exactExists = q.length > 0 && allTags.some((t) => t.name.toLowerCase() === q)
+
   if (selectedIds.length === 0) return <></>
+
+  const openPicker = (mode: 'add' | 'remove') => {
+    setPicker(mode)
+    setQuery('')
+    setPicked(new Set())
+  }
+
+  const toggle = (name: string) => {
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
 
   const handleBatchDelete = async () => {
     try {
@@ -31,78 +60,154 @@ export function FloatingQuickBar(): JSX.Element {
     if (token) await useAppStore.getState().cancelAnalysis([token])
   }
 
-  const handleBatchTag = async (action: 'add' | 'remove') => {
-    const tagNames = prompt(action === 'add' ? '输入要添加的标签（逗号分隔）：' : '输入要移除的标签（逗号分隔）：')
-    if (!tagNames?.trim()) return
+  const confirmTags = async () => {
+    const names = [...picked]
+    if (!names.length) return
+    const action = picker === 'add' ? 'add' : 'remove'
     try {
-      const result = await window.api.batchTag(selectedIds, tagNames.split(',').map((t) => t.trim()), action)
-      toast.success(`${action === 'add' ? '已添加' : '已移除'}标签，影响 ${result.affected} 条`)
+      const result = await window.api.batchTag(selectedIds, names, action)
+      toast.success(
+        `${action === 'add' ? '已添加' : '已移除'}标签「${names.join('、')}」，影响 ${result.affected} 条`
+      )
       await refreshSounds()
+      setPicker(null)
+      setPicked(new Set())
+      setQuery('')
     } catch {
       toast.error('操作失败')
     }
   }
 
+  const chipBase =
+    'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors'
+  const chipOn = 'bg-[#534AB7]/25 text-[#9C92F6]'
+  const chipOff = 'text-muted-light hover:bg-surface-card'
+
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface-panel border border-surface-border rounded-xl shadow-2xl px-4 py-2.5 flex items-center gap-2 z-40">
-      <span className="text-xs text-muted-light mr-1">
-        已选 <span className="text-accent-light font-medium">{selectedIds.length}</span> 个
-      </span>
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center">
+      {/* 标签选择器弹层（替换原 prompt() 逗号分隔输入） */}
+      {picker && (
+        <div className="mb-2 w-[320px] max-h-[360px] overflow-hidden bg-surface-panel border border-surface-border rounded-xl shadow-2xl flex flex-col">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-surface-border">
+            <Search size={14} className="text-muted" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && picked.size > 0) confirmTags() }}
+              placeholder={picker === 'add' ? '搜索或新建标签' : '搜索要移除的标签'}
+              className="flex-1 bg-transparent outline-none text-xs text-muted-light placeholder:text-muted/60"
+            />
+            <button
+              onClick={() => { setPicker(null); setPicked(new Set()) }}
+              className="p-0.5 hover:bg-surface-card rounded text-muted hover:text-muted-light"
+            >
+              <X size={14} />
+            </button>
+          </div>
 
-      <div className="w-px h-4 bg-surface-border" />
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {/* 添加模式：无精确匹配时可新建 */}
+            {picker === 'add' && q.length > 0 && !exactExists && (
+              <button
+                onClick={() => toggle(query.trim())}
+                className={`${chipBase} ${picked.has(query.trim()) ? chipOn : chipOff} w-full`}
+              >
+                {picked.has(query.trim()) ? <Check size={13} /> : <Plus size={13} />}
+                新建标签「{query.trim()}」
+              </button>
+            )}
 
-      <button
-        onClick={batchAnalyzing ? handleBatchCancel : handleBatchAnalyze}
-        className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-surface-card text-xs text-muted-light hover:text-accent-light transition-colors"
-      >
-        {batchAnalyzing ? (
-          <>
-            <Loader2 size={12} className="animate-spin" />
-            取消
-          </>
-        ) : (
-          <>
-            <Wand2 size={12} />
-            AI分析
-          </>
-        )}
-      </button>
+            {filtered.length > 0 ? (
+              filtered.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => toggle(t.name)}
+                  className={`${chipBase} ${picked.has(t.name) ? chipOn : chipOff} w-full`}
+                >
+                  {picked.has(t.name) ? <Check size={13} className="shrink-0" /> : <span className="w-[13px] shrink-0" />}
+                  <span className="truncate">{t.name}</span>
+                </button>
+              ))
+            ) : (
+              <div className="text-xs text-muted px-2 py-1.5">无匹配标签</div>
+            )}
+          </div>
 
-      <button
-        onClick={() => handleBatchTag('add')}
-        className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-surface-card text-xs text-muted-light hover:text-accent-light transition-colors"
-      >
-        <Tags size={12} />
-        添加标签
-      </button>
+          <div className="flex items-center justify-between px-3 py-2 border-t border-surface-border">
+            <span className="text-[10px] text-muted">已选 {picked.size} 个标签</span>
+            <button
+              disabled={picked.size === 0}
+              onClick={confirmTags}
+              className="px-3 py-1 rounded-lg text-xs font-medium text-white bg-accent/80 hover:bg-accent disabled:opacity-40 transition-colors"
+            >
+              应用到 {selectedIds.length} 个音效
+            </button>
+          </div>
+        </div>
+      )}
 
-      <button
-        onClick={() => handleBatchTag('remove')}
-        className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-surface-card text-xs text-muted-light hover:text-red-400 transition-colors"
-      >
-        <Tags size={12} />
-        移除标签
-      </button>
+      {/* 底部快捷操作栏 */}
+      <div className="bg-surface-panel border border-surface-border rounded-xl shadow-2xl px-4 py-2.5 flex items-center gap-2">
+        <span className="text-xs text-muted-light mr-1">
+          已选 <span className="text-accent-light font-medium">{selectedIds.length}</span> 个
+        </span>
 
-      <div className="w-px h-4 bg-surface-border" />
+        <div className="w-px h-4 bg-surface-border" />
 
-      <button
-        onClick={handleBatchDelete}
-        className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-red-500/10 text-xs text-red-400 transition-colors"
-      >
-        <Trash2 size={12} />
-        删除
-      </button>
+        <button
+          onClick={batchAnalyzing ? handleBatchCancel : handleBatchAnalyze}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-surface-card text-xs text-muted-light hover:text-accent-light transition-colors"
+        >
+          {batchAnalyzing ? (
+            <>
+              <Loader2 size={12} className="animate-spin" />
+              取消
+            </>
+          ) : (
+            <>
+              <Wand2 size={12} />
+              AI分析
+            </>
+          )}
+        </button>
 
-      <div className="w-px h-4 bg-surface-border" />
+        <button
+          onClick={() => openPicker('add')}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-surface-card text-xs text-muted-light hover:text-accent-light transition-colors"
+        >
+          <Tags size={12} />
+          添加标签
+        </button>
 
-      <button
-        onClick={clearSelection}
-        className="p-1 hover:bg-surface-card rounded-lg text-muted hover:text-muted-light transition-colors"
-        title="取消选择"
-      >
-        <X size={14} />
-      </button>
+        <button
+          onClick={() => openPicker('remove')}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-surface-card text-xs text-muted-light hover:text-red-400 transition-colors"
+        >
+          <Tags size={12} />
+          移除标签
+        </button>
+
+        <div className="w-px h-4 bg-surface-border" />
+
+        <button
+          onClick={handleBatchDelete}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-red-500/10 text-xs text-red-400 transition-colors"
+        >
+          <Trash2 size={12} />
+          删除
+        </button>
+
+        <div className="w-px h-4 bg-surface-border" />
+
+        <button
+          onClick={clearSelection}
+          className="p-1 hover:bg-surface-card rounded-lg text-muted hover:text-muted-light transition-colors"
+          title="取消选择"
+        >
+          <X size={14} />
+        </button>
+      </div>
     </div>
   )
 }
