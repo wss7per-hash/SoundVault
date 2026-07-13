@@ -2013,8 +2013,8 @@ function ensureParentCategory(category: string, now: string): string | null {
             sample_rate, bit_depth, channels, bitrate_kbps, loudness_lufs,
             description, description_en, use_cases, emotion, quality_score,
             similar_to, best_for, ai_model, ai_analyzed_at,
-            is_missing, is_trashed, imported_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+            is_missing, is_trashed, imported_at, updated_at, preview_cache
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
         `).run(
           newId, outPath, hash, outFileName, outExt, outStat.size, newDurationMs,
           row.sample_rate ?? null,
@@ -2026,7 +2026,7 @@ function ensureParentCategory(category: string, now: string): string | null {
           row.emotion ?? null, row.quality_score ?? null,
           row.similar_to ?? null, row.best_for ?? null, row.ai_model ?? null,
           row.ai_analyzed_at ?? null,
-          now, now
+          now, now, null
         )
         // 继承原文件的所有标签
         const origTags = db.prepare(
