@@ -1808,6 +1808,62 @@ function ensureParentCategory(category: string, now: string): string | null {
     }
   })
 
+  // ---- 波形峰值：ffmpeg 抽单声道 PCM，前端渲染真实波形（结果缓存进 preview_cache） ----
+  ipcMain.handle('audio:getWaveform', async (_event, soundId: string, bars = 120) => {
+    try {
+      const row = db.prepare('SELECT file_path, preview_cache FROM sounds WHERE id = ?').get(soundId) as
+        { file_path: string; preview_cache: string | null } | undefined
+      if (!row) return { success: false, message: '找不到文件记录' }
+
+      // 已缓存则直接返回，避免重复计算
+      if (row.preview_cache) {
+        try {
+          const cached = JSON.parse(row.preview_cache) as number[]
+          if (Array.isArray(cached) && cached.length > 0) {
+            return { success: true, peaks: cached, cached: true }
+          }
+        } catch { /* ignore，重新计算 */ }
+      }
+
+      // ffmpeg 抽单声道 8kHz 16bit PCM 到内存（stdout）
+      const pcm = await new Promise<Buffer>((resolve, reject) => {
+        execFile(
+          ffmpegPath,
+          ['-i', row.file_path, '-ac', '1', '-ar', '8000', '-f', 's16le', '-'],
+          { windowsHide: true, timeout: 60000, encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 },
+          (err, stdout) => (err ? reject(new Error((err as Error).message)) : resolve(stdout as Buffer))
+        )
+      })
+
+      const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.byteLength / 2))
+      const n = Math.max(16, Math.min(400, bars))
+      const block = Math.max(1, Math.floor(samples.length / n))
+      const raw: number[] = []
+      for (let i = 0; i < n; i++) {
+        let max = 0
+        const start = i * block
+        const end = Math.min(start + block, samples.length)
+        for (let j = start; j < end; j++) {
+          const v = Math.abs(samples[j])
+          if (v > max) max = v
+        }
+        raw.push(samples.length > 0 ? max / 32768 : 0)
+      }
+      // 归一化到峰值 1（保留最小可见高度），观感更饱满
+      const peakMax = Math.max(...raw, 1e-6)
+      const norm = raw.map((p) => Math.max(0.04, p / peakMax))
+
+      // 写回 preview_cache，下次直接读
+      try {
+        db.prepare('UPDATE sounds SET preview_cache = ? WHERE id = ?').run(JSON.stringify(norm), soundId)
+      } catch { /* ignore */ }
+
+      return { success: true, peaks: norm, cached: false }
+    } catch (err) {
+      return { success: false, message: (err as Error).message, peaks: [] }
+    }
+  })
+
   ipcMain.handle('sound:rename', async (_event, soundId: string, newName: string) => {
     try {
       const row = db.prepare('SELECT file_path, file_name, file_ext FROM sounds WHERE id = ?').get(soundId) as { file_path: string; file_name: string; file_ext: string } | undefined

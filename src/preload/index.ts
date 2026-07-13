@@ -48,6 +48,9 @@ const api = {
   // Seamless Loop (ffmpeg crossfade)
   seamlessLoop: (soundId: string, crossfadeMs?: number, loopCount?: number) =>
     ipcRenderer.invoke('audio:seamlessLoop', soundId, crossfadeMs, loopCount),
+  // 波形峰值（ffmpeg 抽 PCM，结果缓存进 preview_cache）
+  getWaveform: (soundId: string) =>
+    ipcRenderer.invoke('audio:getWaveform', soundId) as Promise<{ success: boolean; peaks?: number[]; cached?: boolean; message?: string }>,
 
   // AI Analysis
   getAIConfig: () => ipcRenderer.invoke('ai:getConfig'),

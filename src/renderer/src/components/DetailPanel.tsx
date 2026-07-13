@@ -45,6 +45,8 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [audioError, setAudioError] = useState(false)
+  const [peaks, setPeaks] = useState<number[]>([])
+  const [peaksLoading, setPeaksLoading] = useState(false)
 
   const analyzingIds = useAppStore((s) => s.analyzingIds)
   const analyzeSound = useAppStore((s) => s.analyzeSound)
@@ -96,6 +98,21 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       audio.removeEventListener('ended', onEnded)
       audio.removeEventListener('error', onError)
     }
+  }, [sound.id])
+
+  // 加载波形峰值（后端 ffmpeg 计算并缓存进 preview_cache；切换音效时重新拉取）
+  useEffect(() => {
+    let cancelled = false
+    setPeaks([])
+    setPeaksLoading(true)
+    window.api.getWaveform(sound.id)
+      .then((res) => {
+        if (cancelled) return
+        if (res.success && res.peaks && res.peaks.length) setPeaks(res.peaks)
+        setPeaksLoading(false)
+      })
+      .catch(() => { if (!cancelled) setPeaksLoading(false) })
+    return () => { cancelled = true }
   }, [sound.id])
 
   const togglePlay = useCallback(() => {
@@ -365,24 +382,30 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                 className="h-16 bg-[#141412] rounded-lg cursor-pointer relative overflow-hidden mb-3"
                 onClick={handleSeek}
               >
-                {/* Waveform bars */}
+                {/* Waveform bars (real peaks) */}
                 <svg className="absolute inset-0 w-full h-full" viewBox="0 0 300 64" preserveAspectRatio="none">
-                  {Array.from({ length: 60 }, (_, i) => {
-                    const h = 8 + Math.abs(Math.sin(i * 0.25) * 18) + Math.abs(Math.sin(i * 1.5) * 6) + Math.abs(Math.cos(i * 0.7) * 4)
-                    const barRatio = i / 60
-                    const alreadyPlayed = barRatio <= progressRatio
-                    return (
-                      <rect
-                        key={i}
-                        x={i * 5}
-                        y={32 - h / 2}
-                        width={3}
-                        height={h}
-                        rx={1.5}
-                        fill={alreadyPlayed ? '#534AB7' : '#3a3a38'}
-                      />
-                    )
-                  })}
+                  {peaks.length > 0 ? (
+                    peaks.map((p, i) => {
+                      const h = Math.max(2, p * 56)
+                      const barRatio = (i + 0.5) / peaks.length
+                      const alreadyPlayed = barRatio <= progressRatio
+                      const x = (i * 300) / peaks.length
+                      const w = Math.max(0.8, 300 / peaks.length - 1)
+                      return (
+                        <rect
+                          key={i}
+                          x={x}
+                          y={32 - h / 2}
+                          width={w}
+                          height={h}
+                          rx={0.5}
+                          fill={alreadyPlayed ? '#534AB7' : '#3a3a38'}
+                        />
+                      )
+                    })
+                  ) : (
+                    <line x1="0" y1="32" x2="300" y2="32" stroke="#3a3a38" strokeWidth="1" />
+                  )}
                 </svg>
                 {/* Progress overlay */}
                 <div

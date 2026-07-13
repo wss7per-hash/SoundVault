@@ -38,6 +38,8 @@ export interface SoundVaultAPI {
   moveFileTo: (soundId: string, targetDir: string) => Promise<{ success: boolean; path?: string; message?: string }>
   trashFile: (soundId: string) => Promise<{ success: boolean; message?: string }>
   seamlessLoop: (soundId: string, crossfadeMs?: number, loopCount?: number) => Promise<{ success: boolean; outPath?: string; crossfadeMs?: number; loopCount?: number; importedId?: string; message?: string }>
+  // 波形峰值（ffmpeg 抽 PCM，结果缓存进 preview_cache）
+  getWaveform: (soundId: string) => Promise<{ success: boolean; peaks?: number[]; cached?: boolean; message?: string }>
 
   // AI Analysis
   getAIConfig: () => Promise<AIConfig>
