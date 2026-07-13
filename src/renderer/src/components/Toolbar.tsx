@@ -336,14 +336,14 @@ export function Toolbar(): JSX.Element {
         <button
           onClick={handleExportClick}
           disabled={busy !== null || exportState !== null}
-          className={`p-1.5 rounded-md transition-colors ${
+          className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-colors ${
             showExportMenu
               ? 'bg-accent/20 text-accent-light'
               : 'text-muted hover:bg-surface-hover hover:text-muted-light'
           } disabled:opacity-30 disabled:cursor-default`}
-          title="导出资源库（含音频、AI 分析、标签、收藏夹）"
         >
-          <Download size={16} />
+          <Download size={14} />
+          导出
         </button>
 
         {/* Export scope picker panel */}
@@ -404,20 +404,21 @@ export function Toolbar(): JSX.Element {
         <button
           onClick={handleImport}
           disabled={busy !== null || exportState !== null}
-          className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light disabled:opacity-30 disabled:cursor-default"
-          title="导入资源库（从另一台电脑迁移）"
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-colors text-muted hover:bg-surface-hover hover:text-muted-light disabled:opacity-30 disabled:cursor-default"
         >
-          <Upload size={16} />
+          <Upload size={14} />
+          导入
         </button>
 
         {/* 清理无效文件：本地音频已丢失的条目 */}
         <button
           onClick={handleCleanupScan}
           disabled={busy !== null || exportState !== null}
-          className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light disabled:opacity-30 disabled:cursor-default"
-          title="清理无效文件（本地音频已丢失的条目）"
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-colors text-muted hover:bg-surface-hover hover:text-muted-light disabled:opacity-30 disabled:cursor-default"
+          title="清理本地音频已丢失的无效条目"
         >
-          <Ban size={16} />
+          <Ban size={14} />
+          清理
         </button>
       </div>
 

@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import type { SoundData, CollectionData, TagData } from '../../preload/index.d'
 import {
   Play, Pause, Star, Check, Music, FolderOpen, Folder, Copy, FileInput, Pencil, Tag, FolderPlus,
-  Sparkles, Trash2, X, Volume2, Heart, MoreHorizontal
+  Sparkles, Trash2, X, Volume2, Heart, MoreHorizontal, Film
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
@@ -738,6 +738,20 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     refreshSounds()
   }
 
+  const handleImportToAE = async () => {
+    try {
+      onClose()
+      const res = await window.api.importToAE(sound.file_path)
+      if (res.success) {
+        toast.success('已导入到 After Effects 工程')
+      } else {
+        toast.error(res.message || '导入 AE 失败')
+      }
+    } catch {
+      toast.error('导入 AE 出错')
+    }
+  }
+
   const handleAddTag = async (tagName: string) => {
     const name = tagName.trim()
     if (!name) return
@@ -784,6 +798,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     { icon: FolderPlus, label: '加入收藏夹', action: () => setCollectionMenuVisible(true), hasSubmenu: true },
     { icon: Heart, label: sound.is_starred ? '取消收藏' : '收藏', action: handleStar },
     { icon: Sparkles, label: 'AI 分析', action: handleAnalyze },
+    { icon: Film, label: '导出到 AE 工程', action: handleImportToAE },
     { divider: true },
     { icon: Trash2, label: '删除', action: handleTrash, danger: true },
   ]
