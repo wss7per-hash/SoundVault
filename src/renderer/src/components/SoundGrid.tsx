@@ -465,7 +465,7 @@ function SoundCard({ sound, isSelected, isHovered, isPlaying, isChecked, isMulti
       onContextMenu={onContextMenu}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      onDragStart={(e) => { e.preventDefault(); onDragFile?.() }}
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'copy'; onDragFile?.() }}
       title="拖拽到 After Effects 等应用直接导入"
       className={`relative rounded-xl border cursor-grab active:cursor-grabbing transition-all duration-150 overflow-hidden ${
         isSelected || isChecked
@@ -589,7 +589,7 @@ function SoundListRow({ sound, isSelected, isPlaying, isChecked, isMultiSelectin
       draggable
       onClick={onClick}
       onContextMenu={onContextMenu}
-      onDragStart={(e) => { e.preventDefault(); onDragFile?.() }}
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'copy'; onDragFile?.() }}
       title="拖拽到 After Effects 等应用直接导入"
       className={`grid grid-cols-12 gap-3 px-4 py-3 items-center border-b border-surface-border/50 cursor-grab active:cursor-grabbing transition-all ${
         isSelected || isChecked
