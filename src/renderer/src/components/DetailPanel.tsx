@@ -17,7 +17,8 @@ import {
   SkipForward,
   Edit3,
   Check,
-  Repeat
+  Repeat,
+  Scissors
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
@@ -217,6 +218,117 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       setImporting(false)
     }
   }, [sound.file_path, importing])
+
+  // ===== 裁剪截取片段（Phase 0-2） =====
+  const [cropStart, setCropStart] = useState(0)
+  const [cropEnd, setCropEnd] = useState(0)
+  const [cropping, setCropping] = useState(false)
+  const [cropPreview, setCropPreview] = useState(false)
+  const cropWaveRef = useRef<HTMLDivElement | null>(null)
+  const cropDrag = useRef<'start' | 'end' | null>(null)
+  const cropInitialized = useRef<string>('')
+  const cropEndRef = useRef(0)
+  const cropPreviewRef = useRef(false)
+  cropEndRef.current = cropEnd
+  cropPreviewRef.current = cropPreview
+
+  // 切换音效时重置裁剪选区
+  useEffect(() => {
+    setCropPreview(false)
+    setCropStart(0)
+    setCropEnd(0)
+    cropInitialized.current = ''
+  }, [sound.id])
+
+  // 时长就绪后初始化选区为 [0, duration]
+  useEffect(() => {
+    if (sound.id !== cropInitialized.current && duration > 0) {
+      cropInitialized.current = sound.id
+      setCropStart(0)
+      setCropEnd(duration)
+    }
+  }, [sound.id, duration])
+
+  // 试听选区：播到 cropEnd 自动暂停
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    const onTu = () => {
+      if (cropPreviewRef.current && audio.currentTime >= cropEndRef.current) {
+        audio.pause()
+        setIsPlaying(false)
+        setCropPreview(false)
+      }
+    }
+    audio.addEventListener('timeupdate', onTu)
+    return () => audio.removeEventListener('timeupdate', onTu)
+  }, [sound.id])
+
+  const onCropHandleDown = useCallback((which: 'start' | 'end') => (e: React.PointerEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    cropDrag.current = which
+    try { (e.currentTarget as Element).setPointerCapture(e.pointerId) } catch { /* ignore */ }
+  }, [])
+
+  const onCropWaveMove = useCallback((e: React.PointerEvent) => {
+    if (!cropDrag.current || !cropWaveRef.current || !duration) return
+    const rect = cropWaveRef.current.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    const sec = ratio * duration
+    if (cropDrag.current === 'start') {
+      setCropStart(Math.min(sec, cropEnd - 0.02))
+    } else {
+      setCropEnd(Math.max(sec, cropStart + 0.02))
+    }
+  }, [duration, cropEnd, cropStart])
+
+  const onCropWaveUp = useCallback(() => { cropDrag.current = null }, [])
+
+  const handleCropPreview = useCallback(() => {
+    const audio = audioRef.current
+    if (!audio || audioError || !duration) return
+    if (cropPreview) {
+      audio.pause()
+      setIsPlaying(false)
+      setCropPreview(false)
+      return
+    }
+    if (cropEnd - cropStart < 0.05) { toast.error('选区太短'); return }
+    audio.currentTime = Math.max(0, Math.min(cropStart, duration))
+    audio.play().then(() => {
+      setIsPlaying(true)
+      setCropPreview(true)
+    }).catch(() => setAudioError(true))
+  }, [cropPreview, cropStart, cropEnd, duration, audioError])
+
+  const handleCrop = useCallback(async () => {
+    if (cropping) return
+    if (cropEnd - cropStart < 0.05) { toast.error('选区太短，至少需要 0.05 秒'); return }
+    if (cropPreview) { audioRef.current?.pause(); setCropPreview(false) }
+    setCropping(true)
+    try {
+      const res = await window.api.trimSound(sound.id, cropStart, cropEnd)
+      if (res.success && res.outPath) {
+        onUpdate()
+        toast.success(
+          <span>
+            已截取片段（{res.startSec?.toFixed(2)}–{res.endSec?.toFixed(2)}s）并自动导入音效库
+            <button onClick={() => window.api.openPath(res.outPath!)} style={{ marginLeft: 8, textDecoration: 'underline' }}>
+              打开位置
+            </button>
+          </span>,
+          { duration: 5000 }
+        )
+      } else {
+        toast.error(res.message || '截取失败')
+      }
+    } catch {
+      toast.error('截取失败')
+    } finally {
+      setCropping(false)
+    }
+  }, [sound.id, cropStart, cropEnd, cropping, cropPreview, onUpdate])
 
   const handleStar = useCallback(async () => {
     try {
@@ -476,6 +588,119 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
           </button>
           <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
             用 ffmpeg 将尾音交叉淡入开头，在原文件同目录生成 <code className="text-[#8a8a82]">原名_loop次数.wav</code>（不覆盖原文件）。
+          </p>
+        </div>
+
+        {/* ===== 裁剪截取片段（Phase 0-2） ===== */}
+        <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+              <Scissors size={13} className="text-accent" />
+              裁剪截取片段
+            </span>
+            <button
+              onClick={handleCropPreview}
+              disabled={!duration}
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-[#b8b8b4] bg-[#252524] hover:bg-[#2f2f2c] border border-[#2a2a28] transition-colors disabled:opacity-40"
+            >
+              {cropPreview ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
+              {cropPreview ? '停止试听' : '试听选区'}
+            </button>
+          </div>
+
+          {/* 选区波形 + 拖动把手 */}
+          <div
+            ref={cropWaveRef}
+            className="relative h-16 bg-[#141412] rounded-lg overflow-hidden mb-2 select-none touch-none"
+            onPointerMove={onCropWaveMove}
+            onPointerUp={onCropWaveUp}
+            onPointerLeave={onCropWaveUp}
+          >
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 64" preserveAspectRatio="none">
+              {peaks.length > 0 ? (
+                peaks.map((p, i) => {
+                  const h = Math.max(2, p * 58)
+                  const barTime = ((i + 0.5) / peaks.length) * (duration || 1)
+                  const inSel = barTime >= cropStart && barTime <= cropEnd
+                  const x = (i * 300) / peaks.length
+                  const w = Math.max(0.8, 300 / peaks.length - 1)
+                  return (
+                    <rect
+                      key={i}
+                      x={x}
+                      y={32 - h / 2}
+                      width={w}
+                      height={h}
+                      rx={0.5}
+                      fill={inSel ? '#534AB7' : '#2c2c2a'}
+                    />
+                  )
+                })
+              ) : (
+                <line x1="0" y1="32" x2="300" y2="32" stroke="#2c2c2a" strokeWidth="1" />
+              )}
+            </svg>
+            {/* 选区间覆盖层 */}
+            {duration > 0 && (
+              <div
+                className="absolute top-0 bottom-0 bg-accent/15 border-x border-accent/50 pointer-events-none"
+                style={{ left: `${(cropStart / duration) * 100}%`, width: `${((cropEnd - cropStart) / duration) * 100}%` }}
+              />
+            )}
+            {/* 拖动把手 */}
+            {duration > 0 && (
+              <>
+                <div
+                  className="absolute top-0 bottom-0 w-1.5 -ml-0.5 bg-accent cursor-ew-resize z-10"
+                  style={{ left: `${(cropStart / duration) * 100}%` }}
+                  onPointerDown={onCropHandleDown('start')}
+                />
+                <div
+                  className="absolute top-0 bottom-0 w-1.5 -ml-0.5 bg-accent cursor-ew-resize z-10"
+                  style={{ left: `${(cropEnd / duration) * 100}%` }}
+                  onPointerDown={onCropHandleDown('end')}
+                />
+              </>
+            )}
+          </div>
+
+          {/* 起止数值 */}
+          <div className="flex items-center gap-2 text-[10px] text-[#6a6a64] mb-2">
+            <label className="flex items-center gap-1">
+              起点
+              <input
+                type="number" min={0} max={duration || 0} step={0.1}
+                value={Number(cropStart.toFixed(2))}
+                onChange={(e) => setCropStart(Math.max(0, Math.min(Number(e.target.value) || 0, cropEnd - 0.02)))}
+                className="w-14 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[#b8b8b4] text-center"
+              />
+              s
+            </label>
+            <label className="flex items-center gap-1">
+              终点
+              <input
+                type="number" min={0} max={duration || 0} step={0.1}
+                value={Number(cropEnd.toFixed(2))}
+                onChange={(e) => setCropEnd(Math.max(Number(e.target.value) || 0, cropStart + 0.02))}
+                className="w-14 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[#b8b8b4] text-center"
+              />
+              s
+            </label>
+            <span className="ml-auto font-mono tabular-nums text-[#8a8a82]">
+              {(cropEnd - cropStart).toFixed(2)}s
+            </span>
+          </div>
+
+          <button
+            onClick={handleCrop}
+            disabled={cropping || !duration}
+            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
+          >
+            <Scissors size={13} />
+            {cropping ? '截取中…' : '生成片段'}
+          </button>
+          <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
+            拖动波形上的把手选取区间，或手动输入起止秒数；生成 <code className="text-[#8a8a82]">原名_clip_起-止.wav</code> 自动入库，继承原标签并加 crop 标签。
           </p>
         </div>
 

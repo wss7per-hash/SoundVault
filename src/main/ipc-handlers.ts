@@ -1864,6 +1864,103 @@ function ensureParentCategory(category: string, now: string): string | null {
     }
   })
 
+  // ---- 裁剪截取片段：ffmpeg 按起止时间精确截取，生成新区段文件并自动入库 ----
+  // 复用 seamlessLoop 的「safeMove + 入库 + 继承元数据」模板；结果加 crop 标签
+  ipcMain.handle('audio:trim', async (_event, soundId: string, startSec: number, endSec: number) => {
+    const tmpDir = app.getPath('temp')
+    try {
+      const row = db.prepare('SELECT * FROM sounds WHERE id = ?').get(soundId) as any
+      if (!row) return { success: false, message: '找不到文件记录' }
+
+      let durSec = (row.duration_ms && row.duration_ms > 0) ? row.duration_ms / 1000 : 0
+      if (durSec <= 0) durSec = await getDurationFromFile(row.file_path)
+
+      // 参数校验与归一化（交换确保 start < end）
+      let s = Math.max(0, Math.min(durSec, Number(startSec) || 0))
+      let e = Math.max(0, Math.min(durSec, Number(endSec) || durSec))
+      if (e <= s) { const t = s; s = e; e = t }
+      if (e - s < 0.05) return { success: false, message: '选区太短，至少需要 0.05 秒' }
+
+      const dir = dirname(row.file_path)
+      const { name } = parse(row.file_path)
+      const outPath = join(dir, `${name}_clip_${s.toFixed(2)}-${e.toFixed(2)}.wav`)
+
+      // ffmpeg 精确截取：-ss 快速定位 → -i 输入 → -to 相对时长精确裁剪 → 重编码保证精准
+      const tmpPath = join(tmpDir, `sv_trim_${Date.now()}.wav`)
+      await new Promise<void>((resolve, reject) => {
+        execFile(
+          ffmpegPath,
+          ['-ss', s.toFixed(3), '-i', row.file_path, '-to', (e - s).toFixed(3), '-c:a', 'pcm_s16le', '-y', tmpPath],
+          { windowsHide: true, timeout: 120000 },
+          (err, _stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve())
+        )
+      })
+      // 同盘输出，safeMove 兼容跨盘
+      await safeMove(tmpPath, outPath)
+
+      // ---- 自动入库（继承元数据 + crop 标签） ----
+      const outStat = await stat(outPath)
+      const outExt = extname(outPath).toLowerCase()
+      const outFileName = basename(outPath)
+      const buffer = await readFile(outPath, { length: 64 * 1024 })
+      const hash = createHash('sha256').update(buffer).digest('hex')
+      const now = new Date().toISOString()
+      const newId = uuidv4()
+      const newDurationMs = Math.round((e - s) * 1000)
+      const origDesc: string = row.description || ''
+      const finalDescription = `${origDesc}${origDesc ? ' ' : ''}截取片段（${s.toFixed(2)}–${e.toFixed(2)}s）`
+
+      const existing = db.prepare('SELECT id FROM sounds WHERE file_hash = ?').get(hash) as { id: string } | undefined
+      const targetId = existing?.id || newId
+      if (!existing) {
+        db.prepare(`
+          INSERT OR IGNORE INTO sounds (
+            id, file_path, file_hash, file_name, file_ext, file_size, duration_ms,
+            sample_rate, bit_depth, channels, bitrate_kbps, loudness_lufs,
+            description, description_en, use_cases, emotion, quality_score,
+            similar_to, best_for, ai_model, ai_analyzed_at,
+            is_missing, is_trashed, imported_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+        `).run(
+          newId, outPath, hash, outFileName, outExt, outStat.size, newDurationMs,
+          row.sample_rate ?? null, row.bit_depth ?? null, row.channels ?? null,
+          row.bitrate_kbps ?? null, row.loudness_lufs ?? null,
+          finalDescription || null, row.description_en ?? null, row.use_cases ?? null,
+          row.emotion ?? null, row.quality_score ?? null,
+          row.similar_to ?? null, row.best_for ?? null, row.ai_model ?? null,
+          row.ai_analyzed_at ?? null,
+          now, now
+        )
+        // 继承原文件的所有标签
+        const origTags = db.prepare(
+          'SELECT tag_id, confidence, is_manual FROM sound_tags WHERE sound_id = ?'
+        ).all(soundId) as Array<{ tag_id: string; confidence: number | null; is_manual: number }>
+        const stInsert = db.prepare(
+          'INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)'
+        )
+        for (const t of origTags) {
+          stInsert.run(newId, t.tag_id, t.confidence, t.is_manual)
+        }
+      }
+
+      // 额外添加 crop 标签
+      const cropTag = db.prepare("SELECT id FROM tags WHERE name = ?").get('crop') as { id: string } | undefined
+      const cropTagId = cropTag?.id || (() => {
+        const id = uuidv4()
+        db.prepare("INSERT OR IGNORE INTO tags (id, name, sort_order, created_at) VALUES (?, ?, ?, ?)")
+          .run(id, 'crop', 998, now)
+        return id
+      })()
+      db.prepare(
+        'INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)'
+      ).run(targetId, cropTagId, 1, 1)
+
+      return { success: true, outPath, startSec: s, endSec: e, importedId: targetId }
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
+    }
+  })
+
   ipcMain.handle('sound:rename', async (_event, soundId: string, newName: string) => {
     try {
       const row = db.prepare('SELECT file_path, file_name, file_ext FROM sounds WHERE id = ?').get(soundId) as { file_path: string; file_name: string; file_ext: string } | undefined

@@ -40,6 +40,8 @@ export interface SoundVaultAPI {
   seamlessLoop: (soundId: string, crossfadeMs?: number, loopCount?: number) => Promise<{ success: boolean; outPath?: string; crossfadeMs?: number; loopCount?: number; importedId?: string; message?: string }>
   // 波形峰值（ffmpeg 抽 PCM，结果缓存进 preview_cache）
   getWaveform: (soundId: string) => Promise<{ success: boolean; peaks?: number[]; cached?: boolean; message?: string }>
+  // 裁剪截取片段（ffmpeg 按起止时间精确截取，自动入库 + crop 标签）
+  trimSound: (soundId: string, startSec: number, endSec: number) => Promise<{ success: boolean; outPath?: string; startSec?: number; endSec?: number; importedId?: string; message?: string }>
 
   // AI Analysis
   getAIConfig: () => Promise<AIConfig>
