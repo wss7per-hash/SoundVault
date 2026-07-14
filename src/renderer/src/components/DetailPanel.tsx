@@ -783,7 +783,13 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                 <Volume2 size={13} className="text-accent-light" /> 拟声词
               </p>
               {onoList.length === 0 ? (
-                <span className="text-xs text-[#5a5a54] italic">暂无拟声词（AI 分析后自动生成多语种 + 拼音）</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[#5a5a54] italic">暂无拟声词</span>
+                  <button
+                    onClick={() => analyzeSound(sound.id)}
+                    className="text-xs text-accent-light hover:text-white transition-colors underline underline-offset-2"
+                  >AI 分析生成</button>
+                </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {onoList.map((o, i) => (

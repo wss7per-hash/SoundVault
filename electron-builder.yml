@@ -1,1 +1,43 @@
-{"$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json", "appId": "com.soundvault.app", "productName": "SoundVault", "directories": {"buildResources": "resources", "output": "dist"}, "files": ["!**/.vscode/*", "!src/*", "!electron.vite.config.*", "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}", "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}", "!dist/**", "!dist_test/**", "!distlist.txt", "!procs.txt"], "win": {"target": [{"target": "portable", "arch": ["x64"]}], "icon": "resources/icon.ico"}, "mac": {"target": "dmg", "icon": "resources/icon.icns"}, "linux": {"target": "AppImage", "icon": "resources/icon.png"}, "asarUnpack": ["**/*.node"]}
+appId: com.soundvault.app
+productName: SoundVault
+directories:
+  buildResources: resources
+  output: dist_build
+# 最高压缩，减小便携 exe 体积（ffmpeg 与 Electron 框架为必需项，无法进一步去除）
+compression: maximum
+files:
+  - "**/*"
+  - "!**/.vscode/*"
+  - "!src/*"
+  - "!electron.vite.config.*"
+  - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
+  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
+  - "!dist/**"
+  - "!dist_test/**"
+  - "!dist_build/**"
+  - "!dev/**"
+  - "!.git/**"
+  - "!.github/**"
+  - "!scripts/**"
+  - "!node_modules/.cache/**"
+  # 排除一切媒体文件，确保打包产物不含用户导入的音频
+  - "!*.wav"
+  - "!*.mp3"
+  - "!*.flac"
+  - "!*.ogg"
+  - "!*.m4a"
+  - "!*.aac"
+  - "!test_tone_loop3.wav"
+win:
+  target:
+    - target: portable
+      arch: [x64]
+  icon: resources/icon.ico
+mac:
+  target: dmg
+  icon: resources/icon.icns
+linux:
+  target: AppImage
+  icon: resources/icon.png
+asarUnpack:
+  - "**/*.node"

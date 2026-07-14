@@ -233,7 +233,7 @@ function buildAnalyzePrompt(metadata: AudioMetadata, fileName: string): string {
 1. **形象描述**：用日常语言描述这个声音听起来像什么。比如"清脆的金属叮当声""连绵不断的流水声""密集的哒哒哒枪声"
 2. **使用场景**：具体在什么情况下会用这个声音。比如"玩家射击时""下雨天背景""UI按钮按下反馈""角色跳跃落地"
 3. **关联关键词**：搜索时可能用到的词，包括同义词、近义词、相关词
-4. **拟声词（多语种）**：这个声音的文字化模拟。请挑选 1-3 个最贴切的拟声词，每个都给出：①中文（如 哗啦啦）②日文（如 ザバザバ）③英文（如 splash）④中文拼音（如 huā lā lā）。即使只有中文也能听出来的词也要尽量配上拼音帮助朗读。
+4. **拟声词（多语种，重点）**：这个声音的文字化模拟。**必须给出 3-5 个生动拟声词**（优先叠词/双字，如「哗啦啦」「叮铃当啷」「轰隆隆」「滋溜」，避免单字）。每个都给出：①中文 ②日文 ③英文 ④中文拼音（拼音必填，不认识的字也要标注，如 哗啦啦→huā lā lā；日/英若找不到完全对应的，给最贴近的拟声词，允许留空，但**中文+拼音必须都有**）。若声音平淡、找不到现成拟声词，也要基于音质/能量特征创造贴切的（如低频持续嗡鸣→「嗡——」、连续冲击→「咚咚咚」、尖锐短促→「嗞」）。
 
 ### 绝对禁止：
 - ❌ 不要分析"音色质感""动态范围""频率响应""压缩感""空间宽度"等音频工程术语
@@ -251,7 +251,9 @@ function buildAnalyzePrompt(metadata: AudioMetadata, fileName: string): string {
     {"name": "标签名", "category": "类别", "confidence": 0.95}
   ],
   "onomatopoeia": [
-    {"zh": "哗啦啦", "ja": "ザバザバ", "en": "splash", "pinyin": "huā lā lā", "confidence": 0.95}
+    {"zh": "哗啦啦", "ja": "ザバザバ", "en": "splash", "pinyin": "huā lā lā", "confidence": 0.95},
+    {"zh": "滴答", "ja": "ポタポタ", "en": "drip", "pinyin": "dī dā", "confidence": 0.9},
+    {"zh": "咕噜", "ja": "ゴロゴロ", "en": "gurgle", "pinyin": "gū lū", "confidence": 0.85}
   ],
   "emotion": "情绪感受（如：紧张/欢快/悬疑/震撼/平静/激昂/恐怖/温暖/中性）",
   "qualityScore": 5,
@@ -619,17 +621,36 @@ export function getModelConfig(): ModelConfig {
 
 // 拟声词正则映射：用于无 AI 时的智能回退（从文件名/描述猜拟声词）
 const ONO_MAP: Array<[RegExp, string]> = [
-  [/金币|coin|拾取|获得/, '叮当'],
-  [/金属|击中|clash|clang|cling/, '铛'],
-  [/扫射|机枪|machine|sweep|射击|枪|gun|shoot|突突|哒哒/, '哒哒哒'],
-  [/爆炸|boom|blast|bang/, '轰隆'],
-  [/水|水流|water|rain|雨/, '哗啦啦'],
-  [/风|wind|whoosh/, '呼呼'],
-  [/脚步|foot|step/, '哒哒'],
-  [/跳跃|jump|hop/, '咚'],
-  [/开关门|door/, '咔嚓'],
-  [/火|fire|燃烧/, '噼啪'],
-  [/玻璃|glass|break/, '哐啦'],
+  [/金币|银币|coin|拾取|获得|奖励|钱/, '叮当'],
+  [/金属|击中|撞击|clash|clang|cling|metal|hit/, '铛铛'],
+  [/扫射|机枪|machine.?gun|sweep|射击|枪|gun|shoot|突突|哒哒/, '哒哒哒'],
+  [/爆炸|boom|blast|bang|炮|炸/, '轰隆'],
+  [/水|水流|water|rain|雨|滴|河|river/, '哗啦啦'],
+  [/风|wind|whoosh|气流/, '呼呼'],
+  [/脚步|foot|step|走|跑|run|奔/, '哒哒'],
+  [/跳跃|jump|hop|弹/, '咚'],
+  [/开关门|door|门/, '咔嚓'],
+  [/火|fire|燃烧|burn/, '噼啪'],
+  [/玻璃|glass|break|碎/, '哐啷'],
+  [/电|电流|electric|spark|滋/, '滋滋'],
+  [/雷|thunder|闪电/, '轰隆隆'],
+  [/铃|bell|钟/, '叮铃'],
+  [/哨|whistle|警/, '嘘'],
+  [/车|car|引擎|engine|摩托|motor/, '呜'],
+  [/键盘|keyboard|打字|type/, '嗒嗒'],
+  [/气泡|泡|bubble/, '咕噜'],
+  [/狗|dog|犬/, '汪汪'],
+  [/猫|cat/, '喵喵'],
+  [/牛|cow|牛叫/, '哞'],
+  [/手机|通知|notification|消息|短信/, '叮'],
+  [/剑|sword|刀|挥|,slash|砍/, '唰'],
+  [/魔法|magic|法术|spell/, '嘭'],
+  [/激光|laser|射线/, '咻'],
+  [/海浪|wave|浪|潮/, '哗啦'],
+  [/心跳|heart|鼓动|脉搏/, '咚咚'],
+  [/钟摆|clock|滴答/, '嘀嗒'],
+  [/木头|wood|敲击木|knock/, '笃'],
+  [/气泡水|汽水|fizz|嘶/, '嘶嘶'],
 ]
 
 function generateSmartOnomatopoeia(name: string, description: string): OnomatopoeiaItem[] {
