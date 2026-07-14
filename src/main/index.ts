@@ -153,15 +153,24 @@ function createWindow(): void {
     })
 
     // 拖放导入：主进程原生 drop 事件捕获文件路径（渲染层 File.path 在新版 Chromium 不可靠）
-    mainWindow.on('drop', (_event, files) => {
-      const paths: string[] = []
-      for (const f of files) {
-        if (f && f.path) paths.push(f.path)
-      }
+    // 注意：Electron drop 事件的第二参数是「文件路径字符串数组」，不是对象数组
+    let lastDropAt = 0
+    const handleNativeDrop = (_event: any, files: any): void => {
+      const now = Date.now()
+      if (now - lastDropAt < 600) return // 去重：mainWindow 与 webContents 可能都触发
+      lastDropAt = now
+      const raw = Array.isArray(files) ? files : []
+      const paths: string[] = raw
+        .map((f: any) => (typeof f === 'string' ? f : f?.path))
+        .filter((p: any): p is string => typeof p === 'string' && p.length > 0)
       if (paths.length > 0) {
         mainWindow?.webContents.send('app:drop-paths', paths)
       }
-    })
+    }
+    // drag-over 必须 preventDefault，drop 事件才会触发（阻止系统默认"用关联程序打开文件"）
+    mainWindow.webContents.on('drag-over', (e: any) => e.preventDefault())
+    mainWindow.on('drop', handleNativeDrop)
+    mainWindow.webContents.on('drop', handleNativeDrop)
 
     if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
       console.log('[createWindow] loadURL', process.env['ELECTRON_RENDERER_URL'])
