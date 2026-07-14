@@ -7,6 +7,8 @@ declare global {
 export interface SoundVaultAPI {
   // App
   getVersion: () => Promise<string>
+  // 拖放导入：Electron 32+ 用 webUtils.getPathForFile 取代已移除的 File.path
+  getPathForFile: (file: File) => string
   // 系统级文件拖拽（拖到 AE 等外部应用直接导入）
   startDragFile: (filePath: string) => void
   // 一键导入正在运行的 After Effects（官方 ExtendScript importFile）
@@ -128,8 +130,6 @@ export interface SoundVaultAPI {
   moveSpotlight: (dx: number, dy: number) => void
   onSpotlightOpened: (cb: () => void) => () => void
   onSelectSound: (cb: (soundId: string) => void) => () => void
-  // 主进程原生 drop 事件：系统拖入文件/文件夹时推送路径
-  onDropPaths: (cb: (paths: string[]) => void) => () => void
 
   // Window Controls (frameless mode)
   minimizeWindow: () => Promise<void>

@@ -1,9 +1,17 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
   // App
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  // 拖放导入：Electron 32+ 移除了渲染层 File.path，官方替代为 webUtils.getPathForFile
+  getPathForFile: (file: File): string => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
+  },
   // 系统级文件拖拽（拖到 AE 等外部应用直接导入）
   startDragFile: (filePath: string) => ipcRenderer.send('app:dragFile', filePath),
   // 一键导入正在运行的 After Effects（官方 ExtendScript importFile）
@@ -173,12 +181,6 @@ const api = {
     const listener = (_e: unknown, soundId: string): void => cb(soundId)
     ipcRenderer.on('main:selectSound', listener)
     return () => ipcRenderer.removeListener('main:selectSound', listener)
-  },
-  // 主进程原生 drop 事件：系统拖入文件/文件夹时推送路径（渲染层 File.path 在新版 Chromium 不可靠）
-  onDropPaths: (cb: (paths: string[]) => void) => {
-    const listener = (_e: unknown, paths: string[]): void => cb(paths)
-    ipcRenderer.on('app:drop-paths', listener)
-    return () => ipcRenderer.removeListener('app:drop-paths', listener)
   }
 }
 
