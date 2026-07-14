@@ -910,6 +910,89 @@ win.innerHTML =
       <h3>音频工具（本地 DSP 处理）</h3>
       <span class="path">右侧详情面板 &nbsp;·&nbsp; 切换到「<b>工具</b>」Tab &nbsp; 或 &nbsp; 选中音效后查看顶部 Tab 栏「信息 / 工具」</span>
       <p>工具页提供<strong style="color:var(--text)">纯本地处理</strong>能力（基于 ffmpeg，无需联网），覆盖日常编辑最常用的五个操作。所有处理均生成新文件，不破坏原始素材。</p>
+
+      <!-- 工具页界面示意图 -->
+      <div style="margin:18px 0 6px;display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+        <div style="flex:0 0 auto;width:360px;max-width:100%;background:var(--surface-panel,#1e1e1c);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.4)">
+          <!-- 面板顶：文件名 + Tab -->
+          <div style="padding:14px 16px 0">
+            <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">cinematic_riser_tension.wav</div>
+            <div style="display:flex;gap:6px;margin-top:12px">
+              <div style="flex:1;text-align:center;font-size:12px;padding:7px 0;color:var(--muted);border-bottom:2px solid transparent">信息</div>
+              <div style="flex:1;text-align:center;font-size:12px;font-weight:600;padding:7px 0;color:var(--accent-2);border-bottom:2px solid var(--accent)">工具</div>
+            </div>
+          </div>
+          <div style="height:1px;background:var(--border)"></div>
+          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:13px">
+
+            <!-- 波形 + 裁剪手柄 -->
+            <div>
+              <div style="font-size:10px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">波形 · 点击定位 / 拖动手柄裁剪</div>
+              <div style="position:relative;height:52px;background:var(--surface-2);border-radius:8px;overflow:hidden">
+                <div style="position:absolute;inset:0;display:flex;align-items:center;gap:1px;padding:0 4px">
+                  <span style="flex:1;height:18%;background:#4b4470;border-radius:2px"></span><span style="flex:1;height:34%;background:#4b4470;border-radius:2px"></span><span style="flex:1;height:26%;background:#4b4470;border-radius:2px"></span><span style="flex:1;height:52%;background:#7C72E6;border-radius:2px"></span><span style="flex:1;height:70%;background:#7C72E6;border-radius:2px"></span><span style="flex:1;height:44%;background:#7C72E6;border-radius:2px"></span><span style="flex:1;height:88%;background:#7C72E6;border-radius:2px"></span><span style="flex:1;height:60%;background:#7C72E6;border-radius:2px"></span><span style="flex:1;height:96%;background:#7C72E6;border-radius:2px"></span><span style="flex:1;height:72%;background:#7C72E6;border-radius:2px"></span><span style="flex:1;height:50%;background:#7C72E6;border-radius:2px"></span><span style="flex:1;height:30%;background:#4b4470;border-radius:2px"></span><span style="flex:1;height:22%;background:#4b4470;border-radius:2px"></span><span style="flex:1;height:40%;background:#4b4470;border-radius:2px"></span><span style="flex:1;height:16%;background:#4b4470;border-radius:2px"></span>
+                </div>
+                <!-- 裁剪范围手柄 -->
+                <div style="position:absolute;top:0;bottom:0;left:26%;width:2px;background:var(--green)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:74%;width:2px;background:var(--green)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:26%;right:26%;background:rgba(61,220,151,.08)"></div>
+              </div>
+            </div>
+
+            <!-- 工具区块：首尾无缝循环 -->
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 12px">
+              <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">🔁 首尾无缝循环</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:11px;color:var(--muted)">交叉淡化</span>
+                <div style="flex:1;display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px"><span style="font-size:11px;color:var(--text)">30</span><span style="font-size:10px;color:var(--muted-2)">ms</span></div>
+                <div style="font-size:11px;font-weight:600;color:#fff;background:var(--accent);padding:6px 12px;border-radius:6px">生成循环</div>
+              </div>
+            </div>
+
+            <!-- 工具区块：裁剪片段 -->
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 12px">
+              <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">✂️ 裁剪截取片段</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="flex:1;font-size:11px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 8px">0:14 → 0:41</div>
+                <div style="font-size:11px;font-weight:600;color:#fff;background:var(--accent);padding:6px 12px;border-radius:6px">生成片段</div>
+              </div>
+            </div>
+
+            <!-- 工具区块：格式转换 -->
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 12px">
+              <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">🔄 格式转换</div>
+              <div style="display:flex;gap:8px">
+                <div style="flex:1;text-align:center;font-size:11px;font-weight:600;color:var(--accent-2);background:var(--accent-soft);border:1px solid rgba(124,114,230,.3);padding:7px 0;border-radius:6px">转为 WAV</div>
+                <div style="flex:1;text-align:center;font-size:11px;color:var(--muted);background:var(--bg);border:1px solid var(--border);padding:7px 0;border-radius:6px">转为 MP3</div>
+              </div>
+            </div>
+
+            <!-- 工具区块：变速不变调 -->
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 12px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
+                <span style="font-size:12px;font-weight:600;color:var(--text)">⏩ 变速不变调</span>
+                <span style="font-size:11px;font-weight:700;color:var(--accent-2)">1.5x</span>
+              </div>
+              <div style="position:relative;height:5px;background:var(--bg);border-radius:3px">
+                <div style="position:absolute;left:0;top:0;bottom:0;width:38%;background:var(--accent);border-radius:3px"></div>
+                <div style="position:absolute;left:38%;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;background:#fff;border:3px solid var(--accent);border-radius:50%"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-top:5px"><span style="font-size:9px;color:var(--muted-2)">0.25x</span><span style="font-size:9px;color:var(--muted-2)">4.0x</span></div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 右侧标注 -->
+        <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:9px;padding-top:6px">
+          <span class="ztag" style="align-self:flex-start">① Tab 栏切到「工具」即进入本地处理</span>
+          <span class="ztag" style="align-self:flex-start">② 波形上拖绿色手柄框选裁剪范围</span>
+          <span class="ztag" style="align-self:flex-start">③ 无缝循环：设淡化毫秒 → 生成 loop 文件</span>
+          <span class="ztag" style="align-self:flex-start">④ 一键 WAV ↔ MP3 互转</span>
+          <span class="ztag" style="align-self:flex-start">⑤ 拖滑块变速 0.25x–4x，音高保持不变</span>
+        </div>
+      </div>
+
       <div class="detail">
         <div class="row"><span class="k">🔊 波形可视化</span><span class="v">选中音效后自动显示完整波形图；<b>点击波形任意位置可精确定位播放头</b>，配合播放器做逐段审听；波形颜色随播放进度变化（已播/未播）</span></div>
         <div class="row"><span class="k">✂️ 裁剪取片段</span><span class="v">拖动波形上的起点/终点滑块选取片段范围（精确到毫秒）；确认后点「<b>生成片段</b>」，在原文件同目录输出 <code class="chip">*_clip_起-止.wav</code>（不覆盖原文件）。适合从长录音里截取有用段落。</span></div>
