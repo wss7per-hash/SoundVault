@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
-import { Search, LayoutGrid, List, SlidersHorizontal, Minus, Plus, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Type, Upload, Download, Loader2, Check, Package, FolderOpen, Ban, CheckCircle2 } from 'lucide-react'
+import { Search, LayoutGrid, List, SlidersHorizontal, Minus, Plus, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Type, Upload, Download, Loader2, Check, Package, FolderOpen, Ban, CheckCircle2, BarChart3 } from 'lucide-react'
 
 const SORT_OPTIONS = [
   { value: 'date', label: '导入时间', icon: Calendar },
@@ -146,6 +146,8 @@ export function Toolbar(): JSX.Element {
 
   const viewMode = useAppStore((s) => s.viewMode)
   const setViewMode = useAppStore((s) => s.setViewMode)
+  const activeView = useAppStore((s) => s.activeView)
+  const setActiveView = useAppStore((s) => s.setActiveView)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
   const sortOrder = useAppStore((s) => s.sortOrder)
@@ -593,6 +595,17 @@ export function Toolbar(): JSX.Element {
           title="列表视图"
         >
           <List size={16} />
+        </button>
+        <button
+          onClick={() => setActiveView(activeView === 'stats' ? 'library' : 'stats')}
+          className={`p-1.5 rounded-md transition-colors ${
+            activeView === 'stats'
+              ? 'bg-accent/20 text-accent-light'
+              : 'text-muted hover:bg-surface-hover hover:text-muted-light'
+          }`}
+          title="库洞察 · 统计面板"
+        >
+          <BarChart3 size={16} />
         </button>
       </div>
 

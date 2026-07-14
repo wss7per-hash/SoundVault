@@ -21,8 +21,9 @@ interface AppState {
   activeSmartFolderId: string | null
   searchQuery: string
   viewMode: 'grid' | 'list'
+  activeView: 'library' | 'stats'
   sidebarTab: 'tags' | 'folders' | 'collections' | 'smart' | 'trash'
-  stats: { total: number; starred: number; missing: number; totalSize: number }
+  stats: { total: number; starred: number; missing: number; totalSize: number; totalDurationMs: number; analyzed: number; unanalyzed: number; byExt: { wav: number; mp3: number; flac: number; other: number }; avgQuality: number | null; tagCount: number; taggedSounds: number }
   fontSize: number
   sortBy: 'name' | 'duration' | 'size' | 'date'
   sortOrder: 'asc' | 'desc'
@@ -51,9 +52,10 @@ interface AppState {
   setActiveSmartFolder: (id: string | null) => void
   setSearchQuery: (query: string) => void
   setViewMode: (mode: 'grid' | 'list') => void
+  setActiveView: (view: 'library' | 'stats') => void
   setFontSize: (size: number) => void
   setSidebarTab: (tab: 'tags' | 'folders' | 'collections' | 'smart' | 'trash') => void
-  setStats: (stats: { total: number; starred: number; missing: number; totalSize: number }) => void
+  setStats: (stats: { total: number; starred: number; missing: number; totalSize: number; totalDurationMs: number; analyzed: number; unanalyzed: number; byExt: { wav: number; mp3: number; flac: number; other: number }; avgQuality: number | null; tagCount: number; taggedSounds: number }) => void
   setSortBy: (by: 'name' | 'duration' | 'size' | 'date') => void
   setSortOrder: (order: 'asc' | 'desc') => void
   setFormatFilter: (format: string | null) => void
@@ -89,6 +91,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeSmartFolderId: null,
   searchQuery: '',
   viewMode: 'grid',
+  activeView: 'library',
   sidebarTab: 'tags',
   stats: { total: 0, starred: 0, missing: 0, totalSize: 0 },
   fontSize: 14,
@@ -129,6 +132,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setActiveSmartFolder: (id) => set({ activeSmartFolderId: id }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setViewMode: (mode) => set({ viewMode: mode }),
+  setActiveView: (view) => set({ activeView: view }),
   setFontSize: (size) => set({ fontSize: size }),
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
   setStats: (stats) => set({ stats }),

@@ -273,6 +273,13 @@ export interface StatsData {
   starred: number
   missing: number
   totalSize: number
+  totalDurationMs: number
+  analyzed: number
+  unanalyzed: number
+  byExt: { wav: number; mp3: number; flac: number; other: number }
+  avgQuality: number | null
+  tagCount: number
+  taggedSounds: number
 }
 
 export interface AIConfig {

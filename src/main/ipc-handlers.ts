@@ -485,12 +485,41 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('sound:getStats', () => {
-    const total = (db.prepare('SELECT COUNT(*) as count FROM sounds').get() as { count: number }).count
-    const starred = (db.prepare('SELECT COUNT(*) as count FROM sounds WHERE is_starred = 1').get() as { count: number }).count
-    const missing = (db.prepare('SELECT COUNT(*) as count FROM sounds WHERE is_missing = 1').get() as { count: number }).count
-    const totalSize = (db.prepare('SELECT COALESCE(SUM(file_size), 0) as total FROM sounds').get() as { total: number }).total
+    const total = (db.prepare('SELECT COUNT(*) as c FROM sounds').get() as { c: number }).c
+    const starred = (db.prepare('SELECT COUNT(*) as c FROM sounds WHERE is_starred = 1').get() as { c: number }).c
+    const missing = (db.prepare('SELECT COUNT(*) as c FROM sounds WHERE is_missing = 1').get() as { c: number }).c
+    const totalSize = (db.prepare('SELECT COALESCE(SUM(file_size), 0) as t FROM sounds').get() as { t: number }).t
+    const totalDurationMs = (db.prepare('SELECT COALESCE(SUM(duration_ms), 0) as t FROM sounds').get() as { t: number }).t
+    const analyzed = (db.prepare("SELECT COUNT(*) as c FROM sounds WHERE ai_analyzed_at IS NOT NULL AND ai_analyzed_at != ''").get() as { c: number }).c
+    const avgQuality = (db.prepare('SELECT AVG(quality_score) as a FROM sounds WHERE quality_score IS NOT NULL').get() as { a: number | null }).a
+    const tagCount = (db.prepare('SELECT COUNT(*) as c FROM tags').get() as { c: number }).c
+    const taggedSounds = (db.prepare('SELECT COUNT(DISTINCT sound_id) as c FROM sound_tags').get() as { c: number }).c
 
-    return { total, starred, missing, totalSize }
+    // 按 file_ext 分组后归桶：wav / mp3 / flac / other
+    const extRows = db.prepare('SELECT file_ext as ext, COUNT(*) as c FROM sounds GROUP BY file_ext').all() as Array<{ ext: string; c: number }>
+    const byExt = { wav: 0, mp3: 0, flac: 0, other: 0 }
+    for (const r of extRows) {
+      const e = (r.ext || '').toLowerCase()
+      if (e === 'wav' || e === 'wave') byExt.wav += r.c
+      else if (e === 'mp3') byExt.mp3 += r.c
+      else if (e === 'flac') byExt.flac += r.c
+      else byExt.other += r.c
+    }
+
+    const unanalyzed = Math.max(0, total - analyzed)
+    return {
+      total,
+      starred,
+      missing,
+      totalSize,
+      totalDurationMs,
+      analyzed,
+      unanalyzed,
+      byExt,
+      avgQuality: avgQuality === null ? null : Math.round(avgQuality * 10) / 10,
+      tagCount,
+      taggedSounds
+    }
   })
 
   // 清理无效文件：扫描所有音效，检测本地音频是否仍存在

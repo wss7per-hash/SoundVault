@@ -5,6 +5,7 @@ import { Toolbar } from './components/Toolbar'
 import { SoundGrid } from './components/SoundGrid'
 import { DetailPanel } from './components/DetailPanel'
 import { SimilarSoundsBar } from './components/SimilarSoundsBar'
+import { StatisticsPanel } from './components/StatisticsPanel'
 import { EmptyState } from './components/EmptyState'
 import { FloatingQuickBar } from './components/FloatingQuickBar'
 import { RecycleBin } from './components/RecycleBin'
@@ -21,6 +22,8 @@ export default function App(): JSX.Element {
     sounds,
     sidebarTab,
     activeCollectionId,
+    activeView,
+    setActiveView,
     selectedSoundId,
     showScanDialog,
     showModelConfig,
@@ -177,6 +180,8 @@ export default function App(): JSX.Element {
         <div className="flex-1 flex min-h-0">
           {sidebarTab === 'trash' ? (
             <RecycleBin />
+          ) : activeView === 'stats' ? (
+            <StatisticsPanel onClose={() => setActiveView('library')} />
           ) : (
             <>
               <div className="flex-1 flex flex-col min-w-0">
