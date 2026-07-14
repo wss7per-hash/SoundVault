@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
-import { Search, LayoutGrid, List, SlidersHorizontal, Minus, Plus, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Type, Upload, Download, Loader2, Check, Package, FolderOpen, Ban, CheckCircle2, BarChart3 } from 'lucide-react'
+import { Search, LayoutGrid, List, SlidersHorizontal, Minus, Plus, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Type, Upload, Download, Loader2, Check, Package, FolderOpen, Ban, CheckCircle2, BarChart3, Wand2 } from 'lucide-react'
 
 const SORT_OPTIONS = [
   { value: 'date', label: '导入时间', icon: Calendar },
@@ -606,6 +606,13 @@ export function Toolbar(): JSX.Element {
           title="库洞察 · 统计面板"
         >
           <BarChart3 size={16} />
+        </button>
+        <button
+          onClick={() => useAppStore.getState().toggleGenerate()}
+          className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light"
+          title="AI 生成音效（云端文本→音效）"
+        >
+          <Wand2 size={16} />
         </button>
       </div>
 

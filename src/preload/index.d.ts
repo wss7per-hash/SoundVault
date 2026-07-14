@@ -57,6 +57,11 @@ export interface SoundVaultAPI {
   analyzeBatch: (soundIds: string[], token?: string) => Promise<{ success: boolean; analyzed: number; cancelled?: boolean }>
   cancelAnalysis: (tokens: string[]) => Promise<{ success: boolean; cancelled: number }>
 
+  // 云端音效生成（Fal.ai / ElevenLabs）
+  generateSFX: (opts: GenOptions) => Promise<GenResult>
+  getGenBalance: (provider: GenProvider, apiKey: string) => Promise<{ balance: number | null; message: string }>
+  cancelGeneration: (token: string) => Promise<{ success: boolean; cancelled: boolean }>
+
   // Tags
   getTags: () => Promise<TagData[]>
   getTagsForSound: (soundId: string) => Promise<TagWithMeta[]>
@@ -289,6 +294,38 @@ export interface AIConfig {
   model: string
   maxTokens: number
   temperature: number
+}
+
+// ── 云端音效生成（与 AI 语义分析配置相互独立）──
+export type GenProvider = 'fal' | 'elevenlabs'
+
+export interface GenOptions {
+  token: string // 取消令牌，主进程据此 abort 对应生成
+  provider: GenProvider
+  apiKey: string
+  prompt: string
+  durationSeconds?: number
+  guidanceScale?: number // fal 专用
+  seed?: number // -1 = 随机
+}
+
+export interface GenStats {
+  count: number
+  estCostUSD: number
+  freeRemainingUSD: number | null // 用户手动/自动记录的免费额度剩余
+}
+
+export interface GenResult {
+  success: boolean
+  cancelled?: boolean
+  error?: string
+  soundId?: string
+  filePath?: string
+  fileName?: string
+  durationMs?: number
+  provider?: GenProvider
+  cost?: number
+  stats?: GenStats
 }
 
 export interface AIAnalysisResult {

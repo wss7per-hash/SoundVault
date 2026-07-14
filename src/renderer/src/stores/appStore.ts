@@ -32,6 +32,7 @@ interface AppState {
   // UI modals
   showScanDialog: boolean
   showModelConfig: boolean
+  showGenerate: boolean
   // Per-sound analysis state (allows concurrent analyses + cancellation).
   analyzingIds: string[]
   batchAnalyzing: boolean
@@ -62,6 +63,7 @@ interface AppState {
   getFilteredSounds: () => SoundData[]
   toggleScanDialog: () => void
   toggleModelConfig: () => void
+  toggleGenerate: () => void
   handleAnalyzeError: (msg: string, code: string | undefined, fallback: string) => void
 
   // Refresh
@@ -100,6 +102,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   formatFilter: null,
   showScanDialog: false,
   showModelConfig: false,
+  showGenerate: false,
   analyzingIds: [],
   batchAnalyzing: false,
   batchToken: null,
@@ -141,6 +144,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFormatFilter: (format) => set({ formatFilter: format }),
   toggleScanDialog: () => set((s) => ({ showScanDialog: !s.showScanDialog })),
   toggleModelConfig: () => set((s) => ({ showModelConfig: !s.showModelConfig })),
+  toggleGenerate: () => set((s) => ({ showGenerate: !s.showGenerate })),
 
   handleAnalyzeError: (msg, code, fallback) => {
     if (isApiKeyError(msg, code)) {

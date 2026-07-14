@@ -204,13 +204,13 @@
     <a href="#features">核心特性</a>
     <a href="#manual">使用手册</a>
     <a href="#faq">常见问题</a>
-    <a href="#roadmap">未来计划</a>
+    <a href="#roadmap">路线图</a>
   </div>
 </nav>
 
 <!-- ═══════════ HERO ═══════════ -->
 <header class="hero wrap" id="top">
-  <div class="badge"><span class="dot"></span> 本地优先 · 隐私安全 · 离线可用</div>
+  <div class="badge"><span class="dot"></span> 本地优先 · 隐私安全 · 离线管理</div>
   <h1>你的<span class="grad">音效库</span><br/>值得被智能整理</h1>
   <p class="sub">SoundVault 是一款本地运行的音效素材管理软件——AI 自动理解每段音频的<strong>使用场景、情绪与拟声词</strong>，并按八大分类体系自动打标签，让「找一段合适的音」从翻文件夹变成秒级检索。</p>
   <div class="hero-cta">
@@ -229,8 +229,8 @@
   <div class="stat-row">
     <div class="stat"><b>8</b><span>大智能分类</span></div>
     <div class="stat"><b>11</b><span>种智能过滤字段</span></div>
-    <div class="stat"><b>100%</b><span>本地离线运行</span></div>
-    <div class="stat"><b>0</b><span>音频文件上传云端</span></div>
+    <div class="stat"><b>100%</b><span>本地库管理</span></div>
+    <div class="stat"><b>0</b><span>你的音频外传</span></div>
   </div>
 </header>
 
@@ -651,7 +651,13 @@ win.innerHTML =
     <div class="card">
       <div class="ico">♻️</div>
       <h3>回收站与隐私优先</h3>
-      <p>删除的音效先进回收站，可恢复。整个软件<strong style="color:var(--text)">离线运行</strong>，AI 服务商可自定义（DeepSeek / OpenAI / 通义千问 / Kimi / 豆包 / 硅基流动 / Claude / Gemini / Azure / Ollama / TokenDance / 自定义网关），Key 仅存本地。</p>
+      <p>删除的音效先进回收站，可恢复。核心管理<strong style="color:var(--text)">离线运行</strong>，AI 服务商可自定义（DeepSeek / OpenAI / 通义千问 / Kimi / 豆包 / 硅基流动 / Claude / Gemini / Azure / Ollama / TokenDance / 自定义网关），Key 仅存本地。</p>
+    </div>
+
+    <div class="card">
+      <div class="ico">✨</div>
+      <h3>AI 生成音效（云端）</h3>
+      <p>用<strong style="color:var(--text)">文字描述直接生成音效</strong>并自动入库。双服务商：Fal.ai（Stable Audio 2.5，最长 190s）/ ElevenLabs（SFX V2，音质最佳）。新用户有免费试用金，按次计费，生成前确认花费。</p>
     </div>
 
   </div>
@@ -660,7 +666,7 @@ win.innerHTML =
 <!-- ═══════════ MANUAL ═══════════ -->
 <section class="wrap" id="manual">
   <div class="eyebrow">使用手册</div>
-  <h2>八步上手 SoundVault</h2>
+  <h2>上手 SoundVault</h2>
   <p class="lead">从空白到井井有条，跟着走一遍即可。每一步都标注了<b style="color:var(--text)">操作路径</b>（在哪点）和<b style="color:var(--text)">界面细节</b>（会看到什么、字段叫什么）。</p>
 
   <!-- Step 1 -->
@@ -870,6 +876,33 @@ win.innerHTML =
     </div>
   </div>
 
+  <!-- Step 10 (AI 生成音效) -->
+  <div class="step">
+    <div class="num">10</div>
+    <div>
+      <h3>AI 生成音效（云端 text-to-SFX）</h3>
+      <span class="path">中间工具栏 &nbsp;·&nbsp; 「AI 生成」魔杖按钮 &nbsp;→&nbsp; 打开生成面板</span>
+      <p>用一句文字描述，让云端模型直接「造」出一段音效，并自动落进你的本地音库。</p>
+      <div class="detail">
+        <div class="row"><span class="k">服务商</span><span class="v"><b>Fal.ai</b>（Stable Audio 2.5，最长 190s，国内通常可直连，新用户送 ~$1–5 试用金）/ <b>ElevenLabs</b>（SFX V2，音质最佳，最长 20s，需海外卡 + 代理）</span></div>
+        <div class="row"><span class="k">API Key</span><span class="v">password 框；选好服务商后填对应 Key，点「保存」（<b>仅存本地</b>）；「额度」按钮可查：Fal 直接读账户余额（含免费试用金），ElevenLabs 引导去官网看</span></div>
+        <div class="row"><span class="k">音效描述</span><span class="v">文本框写清场景 / 材质 / 情绪，如「打铁敲击声，金属质感，短促有力，带轻微回响」</span></div>
+        <div class="row"><span class="k">时长</span><span class="v">滑块 1–20s；Fal 最长支持 190s，更长的音频请在描述里说明</span></div>
+        <div class="row"><span class="k">高级（Fal）</span><span class="v">展开「高级参数」调<b>引导系数 guidance</b>（0–10，越高越贴近描述，建议 1–7）</span></div>
+        <div class="row"><span class="k">花费预估</span><span class="v">面板实时显示「本次预计消耗 <b>$0.20</b>（Fal）/ <b>$0.10</b>（ElevenLabs）」+「累计生成 N 次 · 估算 $X」+「免费/账户余额 $X（本地估算）」</span></div>
+        <div class="row"><span class="k">生成前确认</span><span class="v">点「生成音效（约 $X）」→ 弹确认框「将消耗约 $X，生成后自动入库」→「确认生成」</span></div>
+        <div class="row"><span class="k">生成中</span><span class="v">最长约 2 分钟，可随时点「取消生成」；超时 / 网络错会友好报错并提示重试</span></div>
+        <div class="row"><span class="k">完成入库</span><span class="v">成功后自动写入本地库（文件名 <code class="chip">sfx_*.wav</code> / <code class="chip">.mp3</code>），面板内直接试听，点「在库中查看」定位；之后像普通音效一样可分析 / 打标签</span></div>
+      </div>
+      <ul>
+        <li><b>免费额度</b>：Fal.ai 新用户送 ~$1–5 试用金，余额用完自动转付费（按次从账户扣）；ElevenLabs 按次 ~$0.10，免费档额度有限。</li>
+        <li>生成是<strong style="color:var(--text)">可选云端功能</strong>：不填 Key、不生成时，软件仍为 100% 本地离线管理，你的现有音库文件绝不上传。</li>
+        <li>Key 与累计花费只存在本机 <code class="chip">settings</code>，换电脑需重新填 Key；花费为本地估算，以服务商实际扣费为准。</li>
+      </ul>
+      <div class="callout tip">小技巧：生成前先用 AI 语义分析给参考音效打标，把它的「使用场景 / 拟声词」复制进描述框，生成结果会更贴近你要的味道。</div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ═══════════ FAQ ═══════════ -->
@@ -879,7 +912,12 @@ win.innerHTML =
   <div class="faq">
     <div class="qa">
       <div class="q">我的音频会被上传到云端吗？</div>
-      <div class="a">不会。SoundVault 完全本地运行，音频文件只存在你电脑上。只有当你配置并启用了 AI 分析时，才会把<em>文本描述</em>发送给你所选的模型服务商（Key 仅存本机）；音频本体不上传。</div>
+      <div class="a">你<strong style="color:var(--text)">现有音库里的文件绝不会上传</strong>——它们只存在你电脑上，AI 语义分析也只把<em>文本描述</em>发给你所选的模型服务商（Key 仅存本机）。唯一会联网的是可选的「AI 生成音效」功能：它把一句<em>文字描述</em>发给云端模型，再把<em>云端新生成的</em>音频下载进你的库——过程中不会读取或外传你已有的任何音效文件。</div>
+    </div>
+    <div class="qa">
+      <div class="q">AI 生成音效要花钱吗？</div>
+      <div class="a">两项云端服务商都按次计费：Fal.ai 约 <code class="chip">$0.20</code>/次（最长 190s），ElevenLabs 约 <code class="chip">$0.10</code>/次（最长 20s）。Fal.ai 新用户送 ~$1–5 试用金，可点生成面板的「额度」按钮查余额，用完自动转付费。生成前一定会弹「约消耗 $X」确认框，不会静默扣费；累计次数与花费只作本地估算、以服务商实际扣费为准。</div>
+    </div>
     </div>
     <div class="qa">
       <div class="q">点「AI 分析」提示要配置 API Key，怎么办？</div>
@@ -914,13 +952,13 @@ win.innerHTML =
 
 <!-- ═══════════ ROADMAP ═══════════ -->
 <section class="wrap" id="roadmap">
-  <div class="eyebrow">未来计划</div>
-  <h2>路线图（规划中）</h2>
-  <p class="lead">以下方向已在规划中，按优先级推进：</p>
+  <div class="eyebrow">路线图</div>
+  <h2>路线图</h2>
+  <p class="lead">以下为已完成与规划中的方向：</p>
   <ul style="list-style:none;display:flex;flex-direction:column;gap:10px;margin-top:22px">
-    <li style="padding-left:24px;position:relative;color:#cfccda">🔊 <b style="color:var(--text)">提示词生成音效（text-to-SFX）</b>——接入 ElevenLabs SFX / Stable Audio，按文字描述直接生成音效，优先级最高。</li>
-    <li style="padding-left:24px;position:relative;color:#cfccda">🔁 <b style="color:var(--text)">首尾无缝循环</b>——纯 ffmpeg 交叉淡化，无需 AI，性价比最高。</li>
-    <li style="padding-left:24px;position:relative;color:#cfccda">🧬 <b style="color:var(--text)">生成类似音频</b>——用本库 AI 分析结果（场景 / 拟声词）作 prompt 近似实现。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">✅ <b style="color:var(--text)">提示词生成音效（text-to-SFX）· 已完成</b>——Fal.ai（Stable Audio 2.5）/ ElevenLabs（SFX V2）双服务商，文本→音效并自动入库；新用户免费试用金 + 按次计费，生成前确认花费。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">✅ <b style="color:var(--text)">首尾无缝循环 · 已完成</b>——纯 ffmpeg 交叉淡化，生成 <code class="chip">*_loop.wav</code>，不覆盖原文件。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">🧬 <b style="color:var(--text)">生成类似音频</b>——用本库 AI 分析结果（场景 / 拟声词）作 prompt 近似，需 audio-to-audio（可后续接 Stable Audio 2.5 云端）。</li>
     <li style="padding-left:24px;position:relative;color:#cfccda">⏱️ <b style="color:var(--text)">延长当前音频</b>——DSP 时间拉伸或 Stable Audio inpainting。</li>
   </ul>
   <div class="callout" style="margin-top:22px">生成类功能需接入外部音频生成 API 或本地部署模型（Stable Audio / AudioCraft），可能按次计费或需 GPU。Suno / Udio 偏音乐、API 受限，暂不纳入。</div>

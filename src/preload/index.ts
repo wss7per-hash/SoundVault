@@ -72,6 +72,12 @@ const api = {
   analyzeBatch: (soundIds: string[], token?: string) => ipcRenderer.invoke('ai:analyzeBatch', soundIds, token),
   cancelAnalysis: (tokens: string[]) => ipcRenderer.invoke('ai:cancelAnalysis', tokens),
 
+  // 云端音效生成（Fal.ai / ElevenLabs）
+  generateSFX: (opts: GenOptions) => ipcRenderer.invoke('ai:generateSFX', opts) as Promise<GenResult>,
+  getGenBalance: (provider: GenProvider, apiKey: string) =>
+    ipcRenderer.invoke('ai:getGenBalance', provider, apiKey) as Promise<{ balance: number | null; message: string }>,
+  cancelGeneration: (token: string) => ipcRenderer.invoke('ai:cancelGeneration', token),
+
   // Tags
   getTags: () => ipcRenderer.invoke('tag:getAll'),
   getTagsForSound: (soundId: string) => ipcRenderer.invoke('tag:getForSound', soundId),

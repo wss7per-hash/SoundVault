@@ -11,6 +11,7 @@ import { FloatingQuickBar } from './components/FloatingQuickBar'
 import { RecycleBin } from './components/RecycleBin'
 import ScanDialog from './components/ScanDialog'
 import ModelConfig from './components/ModelConfig'
+import GeneratePanel from './components/GeneratePanel'
 import { Toaster } from 'react-hot-toast'
 import { Star } from 'lucide-react'
 import { SplashScreen } from './components/SplashScreen'
@@ -27,6 +28,7 @@ export default function App(): JSX.Element {
     selectedSoundId,
     showScanDialog,
     showModelConfig,
+    showGenerate,
     fontSize,
     sortBy,
     sortOrder,
@@ -41,7 +43,8 @@ export default function App(): JSX.Element {
     refreshSmartFolders,
     selectSound,
     toggleScanDialog,
-    toggleModelConfig
+    toggleModelConfig,
+    toggleGenerate
   } = useAppStore()
 
   const filteredSounds = useMemo(() => {
@@ -213,6 +216,7 @@ export default function App(): JSX.Element {
       {/* Modals */}
       <ScanDialog isOpen={showScanDialog} onClose={() => toggleScanDialog()} />
       <ModelConfig isOpen={showModelConfig} onClose={() => toggleModelConfig()} />
+      <GeneratePanel isOpen={showGenerate} onClose={() => toggleGenerate()} />
     </div>
   )
 }

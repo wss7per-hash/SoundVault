@@ -23,6 +23,15 @@ import {
   type AudioMetadata,
   type AIAnalysisResult
 } from './ai-analyzer'
+import {
+  generateSFX,
+  checkBalance,
+  cancelGeneration,
+  registerGeneration,
+  unregisterGeneration,
+  GEN_COST_USD,
+  type GenProvider
+} from './sfx-generator'
 
 const AUDIO_EXTENSIONS = new Set([
   '.wav', '.mp3', '.aac', '.ogg', '.flac', '.aiff', '.m4a', '.wma', '.opus'
@@ -684,6 +693,148 @@ function ensureParentCategory(category: string, now: string): string | null {
       if (cancelAnalysis(token)) cancelled++
     }
     return { success: true, cancelled }
+  })
+
+  // ---- 云端音效生成（Fal.ai / ElevenLabs）：调 API → 落盘 → 自动入库 ----
+  ipcMain.handle(
+    'ai:generateSFX',
+    async (
+      _event,
+      opts: {
+        token: string
+        provider: GenProvider
+        apiKey: string
+        prompt: string
+        durationSeconds?: number
+        guidanceScale?: number
+        seed?: number
+      }
+    ) => {
+      const controller = new AbortController()
+      registerGeneration(opts.token, controller)
+      const tmpDir = app.getPath('temp')
+      try {
+        const gen = await generateSFX(
+          {
+            provider: opts.provider,
+            apiKey: opts.apiKey,
+            prompt: opts.prompt,
+            durationSeconds: opts.durationSeconds,
+            guidanceScale: opts.guidanceScale,
+            seed: opts.seed
+          },
+          controller.signal
+        )
+
+        // 落盘到 userData/generated（不污染用户素材目录）
+        const genDir = join(app.getPath('userData'), 'generated')
+        await mkdir(genDir, { recursive: true })
+        const tmpPath = join(tmpDir, `sv_gen_${Date.now()}.tmp`)
+        await writeFile(tmpPath, gen.buffer)
+        const ext = (gen.fileName.split('.').pop() || (gen.contentType.includes('wav') ? 'wav' : 'mp3'))
+          .toLowerCase()
+        const outName = `sfx_${Date.now()}.${ext}`
+        const outPath = join(genDir, outName)
+        await safeMove(tmpPath, outPath)
+
+        const outStat = await stat(outPath)
+        const buf = await readFile(outPath, { length: 64 * 1024 })
+        const hash = createHash('sha256').update(buf).digest('hex')
+        const now = new Date().toISOString()
+        const newId = uuidv4()
+        let durationMs = 0
+        try {
+          durationMs = Math.round((await getDurationFromFile(outPath)) * 1000)
+        } catch {
+          durationMs = 0
+        }
+        const promptText = (opts.prompt || '').trim().slice(0, 200)
+        const existing = db.prepare('SELECT id FROM sounds WHERE file_hash = ?').get(hash) as
+          | { id: string }
+          | undefined
+        const targetId = existing?.id || newId
+        if (!existing) {
+          db.prepare(`
+            INSERT OR IGNORE INTO sounds (
+              id, file_path, file_hash, file_name, file_ext, file_size, duration_ms,
+              description, description_en, ai_model, ai_analyzed_at,
+              is_missing, is_trashed, imported_at, updated_at, preview_cache, search_text
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
+          `).run(
+            newId,
+            outPath,
+            hash,
+            outName,
+            `.${ext}`,
+            outStat.size,
+            durationMs,
+            promptText,
+            null,
+            `${opts.provider}:sound-generation`,
+            now,
+            now,
+            now,
+            null,
+            `AI生成 ${promptText}`
+          )
+          // 自动打 AI生成 标签，方便在标签树筛选
+          const tagId = getOrCreateTagId('AI生成', now, null)
+          db.prepare(
+            'INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)'
+          ).run(newId, tagId, 1, 1)
+        }
+
+        // 累计统计（本地估算，以服务商实际扣费为准）
+        const cost = GEN_COST_USD[opts.provider] ?? 0
+        let stats = { count: 0, estCostUSD: 0, freeRemainingUSD: null as number | null }
+        try {
+          const raw = db.prepare('SELECT value FROM settings WHERE key = ?').get('gen:stats') as
+            | { value: string }
+            | undefined
+          if (raw) stats = { ...stats, ...JSON.parse(raw.value) }
+        } catch {
+          // 忽略损坏的统计
+        }
+        stats.count += 1
+        stats.estCostUSD = Math.round((stats.estCostUSD + cost) * 100) / 100
+        if (stats.freeRemainingUSD != null) {
+          stats.freeRemainingUSD = Math.max(0, Math.round((stats.freeRemainingUSD - cost) * 100) / 100)
+        }
+        const statsJson = JSON.stringify(stats)
+        db.prepare(
+          `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+           ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?`
+        ).run('gen:stats', statsJson, now, statsJson, now)
+
+        return {
+          success: true,
+          soundId: targetId,
+          filePath: outPath,
+          fileName: outName,
+          durationMs,
+          provider: opts.provider,
+          cost,
+          stats
+        }
+      } catch (err) {
+        const e = err as Error
+        if (e.name === 'AbortError' || /aborted|已取消/i.test(e.message)) {
+          return { success: false, cancelled: true, error: '已取消' }
+        }
+        return { success: false, error: e.message }
+      } finally {
+        unregisterGeneration(opts.token)
+      }
+    }
+  )
+
+  // 查询账户/试用额度（Fal.ai 可读取余额；ElevenLabs 引导官网）
+  ipcMain.handle('ai:getGenBalance', async (_event, provider: GenProvider, apiKey: string) => {
+    return await checkBalance(provider, apiKey)
+  })
+
+  ipcMain.handle('ai:cancelGeneration', (_event, token: string) => {
+    return { success: true, cancelled: cancelGeneration(token) }
   })
 
   ipcMain.handle('ai:analyzeBatch', async (_event, soundIds: string[], token?: string) => {
