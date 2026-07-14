@@ -1,5 +1,5 @@
 import { useCallback, useState, useRef, useEffect } from 'react'
-import type { SoundData, TagWithMeta, TagData, SimilarSound } from '../../preload/index.d'
+import type { SoundData, TagWithMeta, TagData } from '../../preload/index.d'
 import {
   X,
   Play,
@@ -31,7 +31,10 @@ interface DetailPanelProps {
   onUpdate: () => void
 }
 
+type DetailTab = 'info' | 'tools'
+
 export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX.Element {
+  const [activeTab, setActiveTab] = useState<DetailTab>('info')
   const [tags, setTags] = useState<TagWithMeta[]>([])
   const [tagsLoaded, setTagsLoaded] = useState(false)
   const [allTags, setAllTags] = useState<TagData[]>([])
@@ -43,10 +46,6 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
   const [bestForValue, setBestForValue] = useState(sound.best_for || '')
   const [notesValue, setNotesValue] = useState(sound.notes || '')
   const [notesEditing, setNotesEditing] = useState(false)
-
-  // 相似音频推荐（以音搜音）
-  const [similar, setSimilar] = useState<SimilarSound[]>([])
-  const [similarLoading, setSimilarLoading] = useState(false)
 
   // Audio player state
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -74,26 +73,11 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [sound.id, sound.description, sound.best_for, sound.notes])
 
-  // 相似音频：切换音效时基于标签+文本加权相似度重新计算
-  useEffect(() => {
-    if (!sound.id) return
-    let cancelled = false
-    setSimilar([])
-    setSimilarLoading(true)
-    window.api.getSimilarSounds(sound.id)
-      .then((res) => { if (!cancelled) { setSimilar(res || []); setSimilarLoading(false) } })
-      .catch(() => { if (!cancelled) { setSimilar([]); setSimilarLoading(false) } })
-    return () => { cancelled = true }
-  }, [sound.id])
-
   // Audio element setup — reset + rewire on sound switch
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
 
-    // Reset playback state when switching to a different sound, otherwise a
-    // previous file's error/playing state leaks into the new one and makes
-    // it look like this file "can't be played" too.
     setAudioError(false)
     setIsPlaying(false)
     setCurrentTime(0)
@@ -122,7 +106,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [sound.id])
 
-  // 加载波形峰值（后端 ffmpeg 计算并缓存进 preview_cache；切换音效时重新拉取）
+  // 加载波形峰值
   useEffect(() => {
     let cancelled = false
     setPeaks([])
@@ -133,7 +117,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
         if (res.success && res.peaks && res.peaks.length) setPeaks(res.peaks)
         setPeaksLoading(false)
       })
-      .catch(() => { if (!cancelled) setPeaksLoading(false) })
+      .catch(() => { if (cancelled) return; else setPeaksLoading(false) })
     return () => { cancelled = true }
   }, [sound.id])
 
@@ -187,7 +171,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [sound.file_path])
 
-  // 首尾无缝循环：调用后端 ffmpeg 交叉淡变，生成 *_loopN.wav 并自动导入库
+  // 首尾无缝循环
   const [loopMs, setLoopMs] = useState(30)
   const [loopCount, setLoopCount] = useState(1)
   const [looping, setLooping] = useState(false)
@@ -197,7 +181,6 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     try {
       const res = await window.api.seamlessLoop(sound.id, loopMs, loopCount)
       if (res.success && res.outPath) {
-        // 刷新主列表（让新导入的文件显示出来）
         onUpdate()
         toast.success(
           <span>
@@ -221,7 +204,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [sound.id, loopMs, loopCount, looping, onUpdate])
 
-  // 一键导入正在运行的 After Effects 工程（官方 ExtendScript importFile）
+  // 导入 AE
   const [importing, setImporting] = useState(false)
   const handleImportToAE = useCallback(async () => {
     if (importing) return
@@ -240,7 +223,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [sound.file_path, importing])
 
-  // ===== 裁剪截取片段（Phase 0-2） =====
+  // ===== 裁剪截取片段 =====
   const [cropStart, setCropStart] = useState(0)
   const [cropEnd, setCropEnd] = useState(0)
   const [cropping, setCropping] = useState(false)
@@ -248,12 +231,12 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
   const cropWaveRef = useRef<HTMLDivElement | null>(null)
   const cropDrag = useRef<'start' | 'end' | null>(null)
   const cropInitialized = useRef<string>('')
+
   const cropEndRef = useRef(0)
   const cropPreviewRef = useRef(false)
   cropEndRef.current = cropEnd
   cropPreviewRef.current = cropPreview
 
-  // 切换音效时重置裁剪选区
   useEffect(() => {
     setCropPreview(false)
     setCropStart(0)
@@ -261,7 +244,6 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     cropInitialized.current = ''
   }, [sound.id])
 
-  // 时长就绪后初始化选区为 [0, duration]
   useEffect(() => {
     if (sound.id !== cropInitialized.current && duration > 0) {
       cropInitialized.current = sound.id
@@ -270,7 +252,6 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [sound.id, duration])
 
-  // 试听选区：播到 cropEnd 自动暂停
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
@@ -351,11 +332,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [sound.id, cropStart, cropEnd, cropping, cropPreview, onUpdate])
 
-  // ===== 格式转换 WAV↔MP3（Phase 0-3） =====
+  // ===== 格式转换 =====
   const [convFmt, setConvFmt] = useState<'wav' | 'mp3'>('mp3')
   const [convBitrate, setConvBitrate] = useState(192)
   const [converting, setConverting] = useState(false)
-  // 默认目标格式取当前格式的反面
   useEffect(() => {
     const cur = (sound.file_ext || '').replace(/^\./, '').toLowerCase()
     setConvFmt(cur === 'wav' ? 'mp3' : 'wav')
@@ -387,11 +367,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [sound.id, convFmt, convBitrate, converting, onUpdate])
 
-  // ===== 变速不变调（Phase 0-4） =====
+  // ===== 变速不变调 =====
   const SPEED_PRESETS = [0.5, 0.75, 1.25, 1.5, 2] as const
   const [speed, setSpeed] = useState<number>(1.5)
   const [stretching, setStretching] = useState(false)
-  // 切换音效时重置速度
   useEffect(() => { setSpeed(1.5) }, [sound.id])
 
   const handleStretch = useCallback(async () => {
@@ -466,7 +445,6 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [sound.id])
 
-  // Save description
   const handleSaveDescription = useCallback(async () => {
     try {
       await window.api.setSetting(`desc:${sound.id}`, descValue)
@@ -489,7 +467,6 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
     }
   }, [bestForValue, sound.id, onUpdate])
 
-  // Save notes (备注/笔记)
   const handleSaveNotes = useCallback(async () => {
     try {
       await window.api.setNotes(sound.id, notesValue)
@@ -520,7 +497,6 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
 
   const isCurrentAnalyzing = analyzingIds.includes(sound.id)
 
-  // Tag suggestions filtered
   const filteredSuggestions = allTags
     .filter((t) => {
       if (!newTagInput.trim()) return false
@@ -531,691 +507,504 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
 
   const progressRatio = duration > 0 ? currentTime / duration : 0
 
+  // ===== Tab 配置 =====
+  const tabs: { key: DetailTab; label: string; icon: JSX.Element }[] = [
+    { key: 'info', label: '信息', icon: <Edit3 size={13} /> },
+    { key: 'tools', label: '工具', icon: <Gauge size={13} /> },
+  ]
+
+  // ================================================================
+  // RENDER
+  // ================================================================
   return (
-    <div className="w-80 h-full border-l border-[#2a2a28] flex flex-col shrink-0 bg-[#1e1e1c] overflow-y-auto">
+    <div className="w-80 h-full border-l border-[#2a2a28] flex flex-col shrink-0 bg-[#1e1e1c]">
       {/* Hidden audio element */}
-      <audio
-        ref={audioRef}
-        src={`sv://${sound.id}`}
-        preload="auto"
-      />
+      <audio ref={audioRef} src={`sv://${sound.id}`} preload="auto" />
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a28]">
-        <span className="text-sm font-medium text-[#b8b8b4]">音效详情</span>
-        <button onClick={onClose} className="p-1 rounded-md text-[#6a6a64] hover:bg-[#252524] hover:text-[#b8b8b4] transition-colors">
-          <X size={16} />
-        </button>
-      </div>
-
-      <div className="p-4 flex flex-col gap-5">
-        {/* File name */}
-        <div>
-          <p className="text-base font-medium text-[#c8c8c4] truncate" title={sound.file_name}>
-            {sound.file_name}
-          </p>
-          <p className="text-xs text-[#6a6a64] truncate mt-1" title={sound.file_path}>
-            {sound.file_path}
-          </p>
-        </div>
-
-        {/* ===== AI ANALYZE (prominent, top) ===== */}
-        <button
-          onClick={isCurrentAnalyzing ? handleCancelAnalyze : handleAnalyze}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-            isCurrentAnalyzing
-              ? 'bg-[#534AB7]/20 text-[#9C92F6] border border-[#534AB7]/30'
-              : sound.ai_analyzed_at
-                ? 'bg-[#1a1a18] text-[#b8b8b4] hover:bg-[#252524] border border-[#2a2a28]'
-                : 'bg-accent text-white hover:bg-accent/80 border border-transparent'
-          }`}
-        >
-          {isCurrentAnalyzing ? (
-            <>
-              <Loader2 size={15} className="animate-spin" />
-              分析中…（点击取消）
-            </>
-          ) : (
-            <>
-              <Sparkles size={15} />
-              {sound.ai_analyzed_at ? '重新 AI 分析' : 'AI 分析'}
-            </>
-          )}
-        </button>
-
-        {/* ===== REAL AUDIO PLAYER ===== */}
-        <div className="bg-[#1a1a18] rounded-lg border border-[#2a2a28] p-3">
-          {audioError ? (
-            <div className="flex flex-col items-center gap-2 py-3">
-              <Volume2 size={20} className="text-[#5a5a54]" />
-              <span className="text-xs text-[#6a6a64]">无法播放此格式</span>
-            </div>
-          ) : (
-            <>
-              {/* Progress bar / waveform area */}
-              <div
-                className="h-16 bg-[#141412] rounded-lg cursor-pointer relative overflow-hidden mb-3"
-                onClick={handleSeek}
-              >
-                {/* Waveform bars (real peaks) */}
-                <svg className="absolute inset-0 w-full h-full" viewBox="0 0 300 64" preserveAspectRatio="none">
-                  {peaks.length > 0 ? (
-                    peaks.map((p, i) => {
-                      const h = Math.max(2, p * 56)
-                      const barRatio = (i + 0.5) / peaks.length
-                      const alreadyPlayed = barRatio <= progressRatio
-                      const x = (i * 300) / peaks.length
-                      const w = Math.max(0.8, 300 / peaks.length - 1)
-                      return (
-                        <rect
-                          key={i}
-                          x={x}
-                          y={32 - h / 2}
-                          width={w}
-                          height={h}
-                          rx={0.5}
-                          fill={alreadyPlayed ? '#534AB7' : '#3a3a38'}
-                        />
-                      )
-                    })
-                  ) : (
-                    <line x1="0" y1="32" x2="300" y2="32" stroke="#3a3a38" strokeWidth="1" />
-                  )}
-                </svg>
-                {/* Progress overlay */}
-                <div
-                  className="absolute bottom-0 left-0 h-0.5 bg-accent rounded transition-all duration-100"
-                  style={{ width: `${progressRatio * 100}%` }}
-                />
-              </div>
-
-              {/* Controls */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <button onClick={skipBack} className="p-1 hover:text-[#b8b8b4] text-[#6a6a64] transition-colors" title="后退5秒">
-                    <SkipBack size={14} />
-                  </button>
-                  <button
-                    onClick={togglePlay}
-                    className="w-9 h-9 rounded-full bg-accent hover:bg-accent/80 flex items-center justify-center text-white transition-colors"
-                  >
-                    {isPlaying ? <Pause size={16} fill="white" /> : <Play size={16} fill="white" className="ml-0.5" />}
-                  </button>
-                  <button onClick={skipForward} className="p-1 hover:text-[#b8b8b4] text-[#6a6a64] transition-colors" title="前进5秒">
-                    <SkipForward size={14} />
-                  </button>
-                </div>
-                <span className="text-xs text-[#8a8a82] font-mono tabular-nums">
-                  {formatTime(currentTime)} / {formatDuration(sound.duration_ms)}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* ===== 首尾无缝循环（紧邻播放器） ===== */}
-        <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
-              <Repeat size={13} className="text-accent" />
-              首尾无缝循环
-            </span>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
-                交叉
-                <input
-                  type="number" min={10} max={500} value={loopMs}
-                  onChange={(e) => setLoopMs(Math.max(10, Math.min(500, Number(e.target.value) || 30)))}
-                  className="w-12 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center"
-                />
-                ms
-              </label>
-              <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
-                循环
-                <input
-                  type="number" min={1} max={50} value={loopCount}
-                  onChange={(e) => setLoopCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                  className="w-10 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center"
-                />
-                次
-              </label>
-            </div>
-          </div>
-          <button
-            onClick={handleSeamlessLoop}
-            disabled={looping}
-            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
-          >
-            <Repeat size={13} />
-            {looping ? '生成中…' : '生成无缝循环文件'}
+      {/* ════════════════ FIXED TOP AREA (never scrolls) ════════════════ */}
+      <div className="shrink-0">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a28]">
+          <span className="text-sm font-medium text-[#b8b8b4]">音效详情</span>
+          <button onClick={onClose} className="p-1 rounded-md text-[#6a6a64] hover:bg-[#252524] hover:text-[#b8b8b4] transition-colors">
+            <X size={16} />
           </button>
-          <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
-            用 ffmpeg 将尾音交叉淡入开头，在原文件同目录生成 <code className="text-[#8a8a82]">原名_loop次数.wav</code>（不覆盖原文件）。
-          </p>
         </div>
 
-        {/* ===== 裁剪截取片段（Phase 0-2） ===== */}
-        <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
-              <Scissors size={13} className="text-accent" />
-              裁剪截取片段
-            </span>
+        <div className="px-4 pt-3 pb-2 flex flex-col gap-3">
+          {/* File name + star row */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-base font-medium text-[#c8c8c4] truncate" title={sound.file_name}>
+                {sound.file_name}
+              </p>
+              <p className="text-xs text-[#6a6a64] truncate mt-0.5" title={sound.file_path}>
+                {sound.file_path}
+              </p>
+            </div>
             <button
-              onClick={handleCropPreview}
-              disabled={!duration}
-              className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-[#b8b8b4] bg-[#252524] hover:bg-[#2f2f2c] border border-[#2a2a28] transition-colors disabled:opacity-40"
+              onClick={handleStar}
+              className={`p-1.5 rounded-md shrink-0 transition-colors ${
+                sound.is_starred
+                  ? 'text-amber-400 hover:bg-amber-400/10'
+                  : 'text-[#6a6a64] hover:bg-[#252524] hover:text-amber-400'
+              }`}
+              title={sound.is_starred ? '取消收藏' : '收藏'}
             >
-              {cropPreview ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
-              {cropPreview ? '停止试听' : '试听选区'}
+              <Star size={15} className={sound.is_starred ? 'fill-amber-400' : ''} />
             </button>
           </div>
 
-          {/* 选区波形 + 拖动把手 */}
-          <div
-            ref={cropWaveRef}
-            className="relative h-16 bg-[#141412] rounded-lg overflow-hidden mb-2 select-none touch-none"
-            onPointerMove={onCropWaveMove}
-            onPointerUp={onCropWaveUp}
-            onPointerLeave={onCropWaveUp}
+          {/* AI Analyze button */}
+          <button
+            onClick={isCurrentAnalyzing ? handleCancelAnalyze : handleAnalyze}
+            className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              isCurrentAnalyzing
+                ? 'bg-[#534AB7]/20 text-[#9C92F6] border border-[#534AB7]/30'
+                : sound.ai_analyzed_at
+                  ? 'bg-[#1a1a18] text-[#b8b8b4] hover:bg-[#252524] border border-[#2a2a28]'
+                  : 'bg-accent text-white hover:bg-accent/80 border border-transparent'
+            }`}
           >
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 64" preserveAspectRatio="none">
-              {peaks.length > 0 ? (
-                peaks.map((p, i) => {
-                  const h = Math.max(2, p * 58)
-                  const barTime = ((i + 0.5) / peaks.length) * (duration || 1)
-                  const inSel = barTime >= cropStart && barTime <= cropEnd
-                  const x = (i * 300) / peaks.length
-                  const w = Math.max(0.8, 300 / peaks.length - 1)
-                  return (
-                    <rect
-                      key={i}
-                      x={x}
-                      y={32 - h / 2}
-                      width={w}
-                      height={h}
-                      rx={0.5}
-                      fill={inSel ? '#534AB7' : '#2c2c2a'}
-                    />
-                  )
-                })
-              ) : (
-                <line x1="0" y1="32" x2="300" y2="32" stroke="#2c2c2a" strokeWidth="1" />
-              )}
-            </svg>
-            {/* 选区间覆盖层 */}
-            {duration > 0 && (
-              <div
-                className="absolute top-0 bottom-0 bg-accent/15 border-x border-accent/50 pointer-events-none"
-                style={{ left: `${(cropStart / duration) * 100}%`, width: `${((cropEnd - cropStart) / duration) * 100}%` }}
-              />
+            {isCurrentAnalyzing ? (
+              <><Loader2 size={15} className="animate-spin" /> 分析中…（点击取消）</>
+            ) : (
+              <><Sparkles size={15} /> {sound.ai_analyzed_at ? '重新 AI 分析' : 'AI 分析'}</>
             )}
-            {/* 拖动把手 */}
-            {duration > 0 && (
+          </button>
+
+          {/* Waveform Player — always visible */}
+          <div className="bg-[#1a1a18] rounded-lg border border-[#2a2a28] p-3">
+            {audioError ? (
+              <div className="flex flex-col items-center gap-2 py-3">
+                <Volume2 size={20} className="text-[#5a5a54]" />
+                <span className="text-xs text-[#6a6a64]">无法播放此格式</span>
+              </div>
+            ) : (
               <>
                 <div
-                  className="absolute top-0 bottom-0 w-1.5 -ml-0.5 bg-accent cursor-ew-resize z-10"
-                  style={{ left: `${(cropStart / duration) * 100}%` }}
-                  onPointerDown={onCropHandleDown('start')}
-                />
-                <div
-                  className="absolute top-0 bottom-0 w-1.5 -ml-0.5 bg-accent cursor-ew-resize z-10"
-                  style={{ left: `${(cropEnd / duration) * 100}%` }}
-                  onPointerDown={onCropHandleDown('end')}
-                />
+                  className="h-14 bg-[#141412] rounded-lg cursor-pointer relative overflow-hidden mb-2.5"
+                  onClick={handleSeek}
+                >
+                  <svg className="absolute inset-0 w-full h-full" viewBox="0 0 300 56" preserveAspectRatio="none">
+                    {peaks.length > 0 ? (
+                      peaks.map((p, i) => {
+                        const h = Math.max(2, p * 50)
+                        const barRatio = (i + 0.5) / peaks.length
+                        const alreadyPlayed = barRatio <= progressRatio
+                        const x = (i * 300) / peaks.length
+                        const w = Math.max(0.8, 300 / peaks.length - 1)
+                        return (
+                          <rect key={i} x={x} y={28 - h / 2} width={w} height={h} rx={0.5}
+                            fill={alreadyPlayed ? '#534AB7' : '#3a3a38'} />
+                        )
+                      })
+                    ) : (
+                      <line x1="0" y1="28" x2="300" y2="28" stroke="#3a3a38" strokeWidth="1" />
+                    )}
+                  </svg>
+                  <div
+                    className="absolute bottom-0 left-0 h-0.5 bg-accent rounded transition-all duration-100"
+                    style={{ width: `${progressRatio * 100}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <button onClick={skipBack} className="p-1 hover:text-[#b8b8b4] text-[#6a6a64] transition-colors" title="后退5秒">
+                      <SkipBack size={14} />
+                    </button>
+                    <button
+                      onClick={togglePlay}
+                      className="w-8 h-8 rounded-full bg-accent hover:bg-accent/80 flex items-center justify-center text-white transition-colors"
+                    >
+                      {isPlaying ? <Pause size={14} fill="white" /> : <Play size={14} fill="white" className="ml-0.5" />}
+                    </button>
+                    <button onClick={skipForward} className="p-1 hover:text-[#b8b8b4] text-[#6a6a64] transition-colors" title="前进5秒">
+                      <SkipForward size={14} />
+                    </button>
+                  </div>
+                  <span className="text-xs text-[#8a8a82] font-mono tabular-nums">
+                    {formatTime(currentTime)} / {formatDuration(sound.duration_ms)}
+                  </span>
+                </div>
               </>
             )}
           </div>
-
-          {/* 起止数值 */}
-          <div className="flex items-center gap-2 text-[10px] text-[#6a6a64] mb-2">
-            <label className="flex items-center gap-1">
-              起点
-              <input
-                type="number" min={0} max={duration || 0} step={0.1}
-                value={Number(cropStart.toFixed(2))}
-                onChange={(e) => setCropStart(Math.max(0, Math.min(Number(e.target.value) || 0, cropEnd - 0.02)))}
-                className="w-14 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[#b8b8b4] text-center"
-              />
-              s
-            </label>
-            <label className="flex items-center gap-1">
-              终点
-              <input
-                type="number" min={0} max={duration || 0} step={0.1}
-                value={Number(cropEnd.toFixed(2))}
-                onChange={(e) => setCropEnd(Math.max(Number(e.target.value) || 0, cropStart + 0.02))}
-                className="w-14 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[#b8b8b4] text-center"
-              />
-              s
-            </label>
-            <span className="ml-auto font-mono tabular-nums text-[#8a8a82]">
-              {(cropEnd - cropStart).toFixed(2)}s
-            </span>
-          </div>
-
-          <button
-            onClick={handleCrop}
-            disabled={cropping || !duration}
-            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
-          >
-            <Scissors size={13} />
-            {cropping ? '截取中…' : '生成片段'}
-          </button>
-          <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
-            拖动波形上的把手选取区间，或手动输入起止秒数；生成 <code className="text-[#8a8a82]">原名_clip_起-止.wav</code> 自动入库，继承原标签并加 crop 标签。
-          </p>
         </div>
 
-        {/* ===== 格式转换 WAV↔MP3（Phase 0-3） ===== */}
-        <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
-              <FileAudio size={13} className="text-accent" />
-              格式转换 WAV↔MP3
-            </span>
-          </div>
-          <div className="flex items-center gap-2 mb-2">
+        {/* ===== Tab Bar ===== */}
+        <div className="flex border-b border-[#2a2a28] px-4">
+          {tabs.map((tab) => (
             <button
-              onClick={() => setConvFmt('wav')}
-              className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${convFmt === 'wav' ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}
-            >WAV</button>
-            <button
-              onClick={() => setConvFmt('mp3')}
-              className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${convFmt === 'mp3' ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}
-            >MP3</button>
-          </div>
-          {convFmt === 'mp3' && (
-            <div className="flex items-center gap-2 text-[10px] text-[#6a6a64] mb-2">
-              <span>码率</span>
-              {[128, 192, 256, 320].map((b) => (
-                <button
-                  key={b}
-                  onClick={() => setConvBitrate(b)}
-                  className={`px-1.5 py-0.5 rounded border transition-colors ${convBitrate === b ? 'bg-[#534AB7]/20 text-[#9C92F6] border-[#534AB7]/40' : 'bg-[#252524] text-[#8a8a82] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}
-                >{b}</button>
-              ))}
-              <span>kbps</span>
-            </div>
-          )}
-          <button
-            onClick={handleConvert}
-            disabled={converting}
-            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
-          >
-            <FileAudio size={13} />
-            {converting ? '转换中…' : `转换为 ${convFmt.toUpperCase()}`}
-          </button>
-          <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
-            生成 <code className="text-[#8a8a82]">原名_conv.{convFmt}</code> 自动入库，继承原标签并加 {convFmt} 标签。
-          </p>
-        </div>
-
-        {/* ===== 变速不变调（Phase 0-4） ===== */}
-        <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
-              <Gauge size={13} className="text-accent" />
-              变速不变调
-            </span>
-            <span className="text-[10px] text-[#6a6a64]">改变速度 · 保持音高</span>
-          </div>
-          <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-            {SPEED_PRESETS.map((s) => (
-              <button
-                key={s}
-                onClick={() => setSpeed(s)}
-                className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${speed === s ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}
-              >{s}x</button>
-            ))}
-          </div>
-          <button
-            onClick={handleStretch}
-            disabled={stretching}
-            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
-          >
-            <Gauge size={13} />
-            {stretching ? '变速中…' : `变速为 ${speed}x（不变调）`}
-          </button>
-          <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
-            生成 <code className="text-[#8a8a82]">原名_{speed}x.{sound.file_ext?.replace(/^\./, '') || 'wav'}</code> 自动入库，继承原标签并加 变速 标签。
-          </p>
-        </div>
-
-        {/* ===== 一键导入 After Effects ===== */}
-        <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
-              <Import size={13} className="text-accent" />
-              导入到 After Effects
-            </span>
-          </div>
-          <button
-            onClick={handleImportToAE}
-            disabled={importing}
-            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50"
-          >
-            <Import size={13} />
-            {importing ? '导入中…' : '导入到正在运行的 AE 工程'}
-          </button>
-          <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
-            需先在 AE 中开启「编辑 &gt; 首选项 &gt; 脚本和表达式 &gt; 允许脚本写入文件和访问网络」。导入当前打开的工程（Project）。
-          </p>
-        </div>
-
-        {/* ===== AI DESCRIPTION (editable) ===== */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-[#6a6a64] uppercase tracking-wider">AI 描述</p>
-            <button
-              onClick={() => { if (!descEditing) { setDescValue(sound.description || ''); setDescEditing(true) } else { setDescEditing(false) } }}
-              className="p-0.5 hover:bg-[#252524] rounded text-[#6a6a64] hover:text-[#b8b8b4] transition-colors"
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+                activeTab === tab.key
+                  ? 'border-accent text-[#c8c8c4]'
+                  : 'border-transparent text-[#6a6a64] hover:text-[#8a8a82] hover:border-[#3a3a38]'
+              }`}
             >
-              {descEditing ? <X size={14} /> : <Edit3 size={13} />}
+              {tab.icon}
+              {tab.label}
             </button>
-          </div>
-          {descEditing ? (
-            <div className="flex flex-col gap-1.5">
-              <textarea
-                value={descValue}
-                onChange={(e) => setDescValue(e.target.value)}
-                className="w-full bg-[#141412] border border-[#2a2a28] rounded-md p-2.5 text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] resize-none focus:outline-none focus:border-accent/50 min-h-[60px] leading-relaxed"
-                placeholder="输入音效描述..."
-                rows={3}
-              />
-              <button
-                onClick={handleSaveDescription}
-                className="self-end flex items-center gap-1 px-3 py-1.5 rounded-md text-xs bg-accent text-white hover:bg-accent/80 transition-colors"
-              >
-                <Check size={13} /> 保存
-              </button>
-            </div>
-          ) : sound.description ? (
+          ))}
+        </div>
+      </div>
+
+      {/* ════════════════ SCROLLABLE TAB CONTENT ════════════════ */}
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+
+        {/* ──── INFO TAB ──── */}
+        {activeTab === 'info' && (
+          <>
+            {/* AI Description */}
             <div>
-              <p className="text-sm text-[#c8c8c4] leading-relaxed">{sound.description}</p>
-              {sound.ai_model && (
-                <p className="text-xs text-[#5a5a54] mt-1">分析模型: {sound.ai_model}</p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs text-[#6a6a64] uppercase tracking-wider">AI 描述</p>
+                <button
+                  onClick={() => { if (!descEditing) { setDescValue(sound.description || ''); setDescEditing(true) } else { setDescEditing(false) } }}
+                  className="p-0.5 hover:bg-[#252524] rounded text-[#6a6a64] hover:text-[#b8b8b4] transition-colors"
+                >
+                  {descEditing ? <X size={14} /> : <Edit3 size={13} />}
+                </button>
+              </div>
+              {descEditing ? (
+                <div className="flex flex-col gap-1.5">
+                  <textarea
+                    value={descValue}
+                    onChange={(e) => setDescValue(e.target.value)}
+                    className="w-full bg-[#141412] border border-[#2a2a28] rounded-md p-2 text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] resize-none focus:outline-none focus:border-accent/50 min-h-[56px] leading-relaxed"
+                    placeholder="输入音效描述..." rows={3}
+                  />
+                  <button onClick={handleSaveDescription} className="self-end flex items-center gap-1 px-3 py-1 rounded-md text-xs bg-accent text-white hover:bg-accent/80 transition-colors">
+                    <Check size={13} /> 保存
+                  </button>
+                </div>
+              ) : sound.description ? (
+                <div>
+                  <p className="text-sm text-[#c8c8c4] leading-relaxed">{sound.description}</p>
+                  {sound.ai_model && <p className="text-xs text-[#5a5a54] mt-1">分析模型: {sound.ai_model}</p>}
+                </div>
+              ) : (
+                <p className="text-sm text-[#5a5a54] italic">尚未分析，点击上方 AI 分析按钮</p>
               )}
             </div>
-          ) : (
-            <p className="text-sm text-[#5a5a54] italic">尚未分析，点击下方 AI 分析按钮</p>
-          )}
-        </div>
 
-        {/* ===== BEST FOR (editable) ===== */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-[#6a6a64] uppercase tracking-wider">详细分析</p>
-            <button
-              onClick={() => { if (!bestForEditing) { setBestForValue(sound.best_for || ''); setBestForEditing(true) } else { setBestForEditing(false) } }}
-              className="p-0.5 hover:bg-[#252524] rounded text-[#6a6a64] hover:text-[#b8b8b4] transition-colors"
-            >
-              {bestForEditing ? <X size={14} /> : <Edit3 size={13} />}
-            </button>
-          </div>
-          {bestForEditing ? (
-            <div className="flex flex-col gap-1.5">
-              <textarea
-                value={bestForValue}
-                onChange={(e) => setBestForValue(e.target.value)}
-                className="w-full bg-[#141412] border border-[#2a2a28] rounded-md p-2.5 text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] resize-none focus:outline-none focus:border-accent/50 min-h-[60px] leading-relaxed"
-                placeholder="输入详细分析..."
-                rows={3}
-              />
-              <button
-                onClick={handleSaveBestFor}
-                className="self-end flex items-center gap-1 px-3 py-1.5 rounded-md text-xs bg-accent text-white hover:bg-accent/80 transition-colors"
-              >
-                <Check size={13} /> 保存
-              </button>
-            </div>
-          ) : sound.best_for ? (
-            <p className="text-sm text-[#8a8a82] leading-relaxed">{sound.best_for}</p>
-          ) : null}
-        </div>
-
-        {/* ===== USE CASES ===== */}
-        {sound.use_cases && (
-          <div>
-            <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-2">适用场景</p>
-            <div className="flex flex-wrap gap-1.5">
-              {sound.use_cases.split(/[,;，；]/).filter(Boolean).map((uc, i) => (
-                <span
-                  key={i}
-                  className="text-xs px-2.5 py-1 rounded-full bg-[#534AB7]/10 text-[#9C92F6] border border-[#534AB7]/20"
+            {/* Best For */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs text-[#6a6a64] uppercase tracking-wider">详细分析</p>
+                <button
+                  onClick={() => { if (!bestForEditing) { setBestForValue(sound.best_for || ''); setBestForEditing(true) } else { setBestForEditing(false) } }}
+                  className="p-0.5 hover:bg-[#252524] rounded text-[#6a6a64] hover:text-[#b8b8b4] transition-colors"
                 >
-                  {uc.trim()}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ===== EMOTION ===== */}
-        {sound.emotion && (
-          <div>
-            <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">情绪</p>
-            <p className="text-sm text-[#c8c8c4]">{sound.emotion}</p>
-          </div>
-        )}
-
-        {/* ===== NOTES (EDITABLE) ===== */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-[#6a6a64] uppercase tracking-wider">备注 / 笔记</p>
-            <button
-              onClick={() => { if (!notesEditing) { setNotesValue(sound.notes || ''); setNotesEditing(true) } else { setNotesEditing(false) } }}
-              className="p-0.5 hover:bg-[#252524] rounded text-[#6a6a64] hover:text-[#b8b8b4] transition-colors"
-            >
-              {notesEditing ? <X size={14} /> : <Edit3 size={13} />}
-            </button>
-          </div>
-          {notesEditing ? (
-            <div className="flex flex-col gap-1.5">
-              <textarea
-                value={notesValue}
-                onChange={(e) => setNotesValue(e.target.value)}
-                className="w-full bg-[#141412] border border-[#2a2a28] rounded-md p-2.5 text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] resize-none focus:outline-none focus:border-accent/50 min-h-[60px] leading-relaxed"
-                placeholder="记录使用心得、来源、版权信息..."
-                rows={3}
-              />
-              <button
-                onClick={handleSaveNotes}
-                className="self-end flex items-center gap-1 px-3 py-1.5 rounded-md text-xs bg-accent text-white hover:bg-accent/80 transition-colors"
-              >
-                <Check size={13} /> 保存
-              </button>
-            </div>
-          ) : sound.notes ? (
-            <p className="text-sm text-[#c8c8c4] leading-relaxed whitespace-pre-wrap">{sound.notes}</p>
-          ) : (
-            <p className="text-sm text-[#5a5a54] italic">暂无备注，点击右上角编辑</p>
-          )}
-        </div>
-
-        {/* ===== TAGS (EDITABLE) ===== */}
-        <div>
-          <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-2">标签</p>
-
-          {/* Tag input */}
-          <div className="relative mb-2">
-            <div className="flex items-center gap-1 bg-[#141412] border border-[#2a2a28] rounded-md focus-within:border-accent/50 transition-colors">
-              <input
-                type="text"
-                value={newTagInput}
-                onChange={(e) => { setNewTagInput(e.target.value); setShowTagSuggestions(true) }}
-                onFocus={() => setShowTagSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowTagSuggestions(false), 150)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { handleAddTag(newTagInput) }
-                  if (e.key === 'Escape') { setNewTagInput(''); setShowTagSuggestions(false) }
-                }}
-                placeholder="添加标签..."
-                className="flex-1 bg-transparent text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] outline-none px-2.5 py-1.5 min-w-0"
-              />
-              <button
-                onClick={() => handleAddTag(newTagInput)}
-                disabled={!newTagInput.trim()}
-                className="px-2 py-1 mr-1 text-accent-light hover:text-white disabled:text-[#5a5a54] disabled:cursor-default transition-colors"
-              >
-                <Plus size={15} />
-              </button>
-            </div>
-
-            {/* Autocomplete suggestions */}
-            {showTagSuggestions && filteredSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[#1e1e1c] border border-[#2a2a28] rounded-md shadow-lg z-10 max-h-36 overflow-y-auto">
-                {filteredSuggestions.map((t) => (
-                  <button
-                    key={t.id}
-                    onMouseDown={() => handleAddTag(t.name)}
-                    className="w-full text-left px-3 py-2 text-sm text-[#b8b8b4] hover:bg-[#252524] transition-colors first:rounded-t-md last:rounded-b-md"
-                  >
-                    {t.name}
+                  {bestForEditing ? <X size={14} /> : <Edit3 size={13} />}
+                </button>
+              </div>
+              {bestForEditing && (
+                <div className="flex flex-col gap-1.5">
+                  <textarea
+                    value={bestForValue}
+                    onChange={(e) => setBestForValue(e.target.value)}
+                    className="w-full bg-[#141412] border border-[#2a2a28] rounded-md p-2 text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] resize-none focus:outline-none focus:border-accent/50 min-h-[56px] leading-relaxed"
+                    placeholder="输入详细分析..." rows={3}
+                  />
+                  <button onClick={handleSaveBestFor} className="self-end flex items-center gap-1 px-3 py-1 rounded-md text-xs bg-accent text-white hover:bg-accent/80 transition-colors">
+                    <Check size={13} /> 保存
                   </button>
-                ))}
+                </div>
+              )}
+              {!bestForEditing && sound.best_for && (
+                <p className="text-sm text-[#8a8a82] leading-relaxed">{sound.best_for}</p>
+              )}
+            </div>
+
+            {/* Use Cases */}
+            {sound.use_cases && (
+              <div>
+                <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">适用场景</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {sound.use_cases.split(/[,;，；]/).filter(Boolean).map((uc, i) => (
+                    <span key={i} className="text-xs px-2 py-1 rounded-full bg-[#534AB7]/10 text-[#9C92F6] border border-[#534AB7]/20">
+                      {uc.trim()}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
-          </div>
 
-          {/* Tag list */}
-          <div className="flex flex-wrap gap-1.5 min-h-[28px]">
-            {tags.length === 0 ? (
-              <span className="text-xs text-[#5a5a54] italic">暂无标签</span>
-            ) : (
-              tags.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="text-xs pl-2.5 pr-1 py-1 rounded-full bg-[#252524] text-[#8a8a82] border border-[#333] flex items-center gap-1 group"
-                >
-                  {tag.is_manual ? '✎ ' : ''}{tag.name}
-                  <button
-                    onClick={() => handleRemoveTag(tag.id)}
-                    className="p-0.5 rounded-full hover:bg-red-500/20 hover:text-red-400 transition-colors"
-                    title="移除标签"
-                  >
-                    <X size={10} />
-                  </button>
-                </span>
-              ))
+            {/* Emotion */}
+            {sound.emotion && (
+              <div>
+                <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1">情绪</p>
+                <p className="text-sm text-[#c8c8c4]">{sound.emotion}</p>
+              </div>
             )}
-          </div>
-        </div>
 
-        {/* ===== SIMILAR SOUNDS (以音搜音) ===== */}
-        <div>
-          <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-2">相似音效</p>
-          {similarLoading ? (
-            <p className="text-xs text-[#5a5a54] italic">计算中…</p>
-          ) : similar.length === 0 ? (
-            <p className="text-xs text-[#5a5a54] italic">暂无相似音效（先 AI 分析同库音效，更易匹配）</p>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              {similar.map((s) => (
+            {/* Notes */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs text-[#6a6a64] uppercase tracking-wider">备注 / 笔记</p>
                 <button
-                  key={s.id}
-                  onClick={() => window.api.revealSound(s.id)}
-                  className="w-full text-left rounded-md border border-[#2a2a28] bg-[#1a1a18] hover:bg-[#252524] hover:border-accent/40 px-2.5 py-2 transition-colors group"
-                  title="点击跳转到该音效"
+                  onClick={() => { if (!notesEditing) { setNotesValue(sound.notes || ''); setNotesEditing(true) } else { setNotesEditing(false) } }}
+                  className="p-0.5 hover:bg-[#252524] rounded text-[#6a6a64] hover:text-[#b8b8b4] transition-colors"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-[#c8c8c4] truncate group-hover:text-white">{s.file_name}</span>
-                    <span className="text-[10px] font-mono tabular-nums text-[#8a8a82] shrink-0">{Math.round(s.score * 100)}%</span>
-                  </div>
-                  {s.reasons.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {s.reasons.map((r, i) => (
-                        <span
-                          key={i}
-                          className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#534AB7]/10 text-[#9C92F6] border border-[#534AB7]/20"
-                        >
-                          {r}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {notesEditing ? <X size={14} /> : <Edit3 size={13} />}
                 </button>
-              ))}
+              </div>
+              {notesEditing ? (
+                <div className="flex flex-col gap-1.5">
+                  <textarea
+                    value={notesValue}
+                    onChange={(e) => setNotesValue(e.target.value)}
+                    className="w-full bg-[#141412] border border-[#2a2a28] rounded-md p-2 text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] resize-none focus:outline-none focus:border-accent/50 min-h-[56px] leading-relaxed"
+                    placeholder="记录使用心得、来源、版权信息..." rows={3}
+                  />
+                  <button onClick={handleSaveNotes} className="self-end flex items-center gap-1 px-3 py-1 rounded-md text-xs bg-accent text-white hover:bg-accent/80 transition-colors">
+                    <Check size={13} /> 保存
+                  </button>
+                </div>
+              ) : sound.notes ? (
+                <p className="text-sm text-[#c8c8c4] leading-relaxed whitespace-pre-wrap">{sound.notes}</p>
+              ) : (
+                <p className="text-sm text-[#5a5a54] italic">暂无备注，点击编辑</p>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* ===== QUALITY SCORE ===== */}
-        {sound.quality_score !== null && sound.quality_score !== undefined && (
-          <div>
-            <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">质量评分</p>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: 5 }, (_, i) => (
-                <div
-                  key={i}
-                  className={`w-5 h-5 rounded-sm ${
-                    i < sound.quality_score! ? 'bg-[#534AB7]' : 'bg-[#2a2a28]'
-                  }`}
-                />
-              ))}
-              <span className="text-xs text-[#6a6a64] ml-1.5">{sound.quality_score}/5</span>
+            {/* Tags */}
+            <div>
+              <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">标签</p>
+              <div className="relative mb-2">
+                <div className="flex items-center gap-1 bg-[#141412] border border-[#2a2a28] rounded-md focus-within:border-accent/50 transition-colors">
+                  <input
+                    type="text"
+                    value={newTagInput}
+                    onChange={(e) => { setNewTagInput(e.target.value); setShowTagSuggestions(true) }}
+                    onFocus={() => setShowTagSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowTagSuggestions(false), 150)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { handleAddTag(newTagInput) }
+                      if (e.key === 'Escape') { setNewTagInput(''); setShowTagSuggestions(false) }
+                    }}
+                    placeholder="添加标签..."
+                    className="flex-1 bg-transparent text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] outline-none px-2.5 py-1.5 min-w-0"
+                  />
+                  <button
+                    onClick={() => handleAddTag(newTagInput)}
+                    disabled={!newTagInput.trim()}
+                    className="px-2 py-1 mr-1 text-accent-light hover:text-white disabled:text-[#5a5a54] disabled:cursor-default transition-colors"
+                  >
+                    <Plus size={15} />
+                  </button>
+                </div>
+                {showTagSuggestions && filteredSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#1e1e1c] border border-[#2a2a28] rounded-md shadow-lg z-10 max-h-36 overflow-y-auto">
+                    {filteredSuggestions.map((t) => (
+                      <button
+                        key={t.id}
+                        onMouseDown={() => handleAddTag(t.name)}
+                        className="w-full text-left px-3 py-2 text-sm text-[#b8b8b4] hover:bg-[#252524] transition-colors first:rounded-t-md last:rounded-b-md"
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+                {tags.length === 0 ? (
+                  <span className="text-xs text-[#5a5a54] italic">暂无标签</span>
+                ) : (
+                  tags.map((tag) => (
+                    <span key={tag.id} className="text-xs pl-2.5 pr-1 py-1 rounded-full bg-[#252524] text-[#8a8a82] border border-[#333] flex items-center gap-1 group">
+                      {tag.is_manual ? '✎ ' : ''}{tag.name}
+                      <button onClick={() => handleRemoveTag(tag.id)} className="p-0.5 rounded-full hover:bg-red-500/20 hover:text-red-400 transition-colors" title="移除标签">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
+
+            {/* Quality Score */}
+            {sound.quality_score !== null && sound.quality_score !== undefined && (
+              <div>
+                <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">质量评分</p>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <div key={i} className={`w-5 h-5 rounded-sm ${i < sound.quality_score! ? 'bg-[#534AB7]' : 'bg-[#2a2a28]'}`} />
+                  ))}
+                  <span className="text-xs text-[#6a6a64] ml-1.5">{sound.quality_score}/5</span>
+                </div>
+              </div>
+            )}
+
+            {/* Technical Info */}
+            <div>
+              <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">技术信息</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                <InfoRow label="时长" value={formatDuration(sound.duration_ms)} />
+                <InfoRow label="格式" value={sound.file_ext.toUpperCase().replace('.', '')} />
+                <InfoRow label="采样率" value={sound.sample_rate ? `${sound.sample_rate / 1000}kHz` : '--'} />
+                <InfoRow label="位深" value={sound.bit_depth ? `${sound.bit_depth}bit` : '--'} />
+                <InfoRow label="声道" value={sound.channels ? (sound.channels === 2 ? '立体声' : sound.channels === 1 ? '单声道' : `${sound.channels}ch`) : '--'} />
+                <InfoRow label="大小" value={formatSize(sound.file_size)} />
+                {sound.loudness_lufs && <InfoRow label="响度" value={`${sound.loudness_lufs} LUFS`} />}
+                <InfoRow label="比特率" value={sound.bitrate_kbps ? `${sound.bitrate_kbps}kbps` : '--'} />
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div>
+              <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">使用统计</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                <InfoRow label="播放" value={`${sound.play_count} 次`} />
+                <InfoRow label="导出" value={`${sound.export_count} 次`} />
+                <InfoRow label="导入时间" value={sound.imported_at ? new Date(sound.imported_at).toLocaleDateString('zh-CN') : '--'} />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-1.5 pb-1">
+              <button onClick={handleCopyPath} className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm bg-[#1a1a18] text-[#8a8a82] hover:bg-[#252524] hover:text-[#b8b8b4] border border-[#2a2a28] transition-colors">
+                <Copy size={15} /> 复制路径
+              </button>
+              <button onClick={handleOpenFolder} className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm bg-[#1a1a18] text-[#8a8a82] hover:bg-[#252524] hover:text-[#b8b8b4] border border-[#2a2a28] transition-colors">
+                <FolderOpen size={15} /> 打开文件位置
+              </button>
+            </div>
+          </>
         )}
 
-        {/* ===== TECHNICAL INFO ===== */}
-        <div>
-          <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-2">技术信息</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-            <InfoRow label="时长" value={formatDuration(sound.duration_ms)} />
-            <InfoRow label="格式" value={sound.file_ext.toUpperCase().replace('.', '')} />
-            <InfoRow label="采样率" value={sound.sample_rate ? `${sound.sample_rate / 1000}kHz` : '--'} />
-            <InfoRow label="位深" value={sound.bit_depth ? `${sound.bit_depth}bit` : '--'} />
-            <InfoRow label="声道" value={sound.channels ? (sound.channels === 2 ? '立体声' : sound.channels === 1 ? '单声道' : `${sound.channels}ch`) : '--'} />
-            <InfoRow label="大小" value={formatSize(sound.file_size)} />
-            {sound.loudness_lufs && <InfoRow label="响度" value={`${sound.loudness_lufs} LUFS`} />}
-            <InfoRow label="比特率" value={sound.bitrate_kbps ? `${sound.bitrate_kbps}kbps` : '--'} />
-          </div>
-        </div>
+        {/* ──── TOOLS TAB ──── */}
+        {activeTab === 'tools' && (
+          <>
+            {/* 首尾无缝循环 */}
+            <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+                  <Repeat size={13} className="text-accent" /> 首尾无缝循环
+                </span>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
+                    交叉<input type="number" min={10} max={500} value={loopMs} onChange={(e) => setLoopMs(Math.max(10, Math.min(500, Number(e.target.value) || 30)))} className="w-12 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center" />ms
+                  </label>
+                  <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
+                    循环<input type="number" min={1} max={50} value={loopCount} onChange={(e) => setLoopCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} className="w-10 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center" />次
+                  </label>
+                </div>
+              </div>
+              <button onClick={handleSeamlessLoop} disabled={looping} className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50">
+                <Repeat size={13} />{looping ? '生成中…' : '生成无缝循环文件'}
+              </button>
+              <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">用 ffmpeg 将尾音交叉淡入开头，生成 <code className="text-[#8a8a82]">原名_loop次数.wav</code>（不覆盖原文件）。</p>
+            </div>
 
-        {/* ===== STATS ===== */}
-        <div>
-          <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-2">使用统计</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-            <InfoRow label="播放" value={`${sound.play_count} 次`} />
-            <InfoRow label="导出" value={`${sound.export_count} 次`} />
-            <InfoRow
-              label="导入时间"
-              value={sound.imported_at ? new Date(sound.imported_at).toLocaleDateString('zh-CN') : '--'}
-            />
-          </div>
-        </div>
+            {/* 裁剪截取片段 */}
+            <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+                  <Scissors size={13} className="text-accent" /> 裁剪截取片段
+                </span>
+                <button onClick={handleCropPreview} disabled={!duration} className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-[#b8b8b4] bg-[#252524] hover:bg-[#2f2f2c] border border-[#2a2a28] transition-colors disabled:opacity-40">
+                  {cropPreview ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}{cropPreview ? '停止试听' : '试听选区'}
+                </button>
+              </div>
 
-        {/* ===== ACTION BUTTONS ===== */}
-        <div className="flex flex-col gap-2 pb-2">
-          <button
-            onClick={handleStar}
-            className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-              sound.is_starred
-                ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20'
-                : 'bg-[#1a1a18] text-[#8a8a82] hover:bg-[#252524] hover:text-[#b8b8b4] border border-[#2a2a28]'
-            }`}
-          >
-            <Star size={15} className={sound.is_starred ? 'fill-amber-400' : ''} />
-            {sound.is_starred ? '已收藏' : '收藏'}
-          </button>
+              <div ref={cropWaveRef} className="relative h-14 bg-[#141412] rounded-lg overflow-hidden mb-2 select-none touch-none" onPointerMove={onCropWaveMove} onPointerUp={onCropWaveUp} onPointerLeave={onCropWaveUp}>
+                <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 56" preserveAspectRatio="none">
+                  {peaks.length > 0 ? peaks.map((p, i) => {
+                    const h = Math.max(2, p * 50)
+                    const barTime = ((i + 0.5) / peaks.length) * (duration || 1)
+                    const inSel = barTime >= cropStart && barTime <= cropEnd
+                    const x = (i * 300) / peaks.length
+                    const w = Math.max(0.8, 300 / peaks.length - 1)
+                    return <rect key={i} x={x} y={28 - h / 2} width={w} height={h} rx={0.5} fill={inSel ? '#534AB7' : '#2c2c2a'} />
+                  }) : <line x1="0" y1="28" x2="300" y2="28" stroke="#2c2c2a" strokeWidth="1" />}
+                </svg>
+                {duration > 0 && (
+                  <div className="absolute top-0 bottom-0 bg-accent/15 border-x border-accent/50 pointer-events-none" style={{ left: `${(cropStart / duration) * 100}%`, width: `${((cropEnd - cropStart) / duration) * 100}%` }} />
+                )}
+                {duration > 0 && (
+                  <>
+                    <div className="absolute top-0 bottom-0 w-1.5 -ml-0.5 bg-accent cursor-ew-resize z-10" style={{ left: `${(cropStart / duration) * 100}%` }} onPointerDown={onCropHandleDown('start')} />
+                    <div className="absolute top-0 bottom-0 w-1.5 -ml-0.5 bg-accent cursor-ew-resize z-10" style={{ left: `${(cropEnd / duration) * 100}%` }} onPointerDown={onCropHandleDown('end')} />
+                  </>
+                )}
+              </div>
 
-          <button
-            onClick={handleCopyPath}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm bg-[#1a1a18] text-[#8a8a82] hover:bg-[#252524] hover:text-[#b8b8b4] border border-[#2a2a28] transition-colors"
-          >
-            <Copy size={15} />
-            复制路径
-          </button>
+              <div className="flex items-center gap-2 text-[10px] text-[#6a6a64] mb-2">
+                <label className="flex items-center gap-1">起点<input type="number" min={0} max={duration || 0} step={0.1} value={Number(cropStart.toFixed(2))} onChange={(e) => setCropStart(Math.max(0, Math.min(Number(e.target.value) || 0, cropEnd - 0.02)))} className="w-14 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[#b8b8b4] text-center" />s</label>
+                <label className="flex items-center gap-1">终点<input type="number" min={0} max={duration || 0} step={0.1} value={Number(cropEnd.toFixed(2))} onChange={(e) => setCropEnd(Math.max(Number(e.target.value) || 0, cropStart + 0.02))} className="w-14 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[#b8b8b4] text-center" />s</label>
+                <span className="ml-auto font-mono tabular-nums text-[#8a8a82]">{(cropEnd - cropStart).toFixed(2)}s</span>
+              </div>
 
-          <button
-            onClick={handleOpenFolder}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm bg-[#1a1a18] text-[#8a8a82] hover:bg-[#252524] hover:text-[#b8b8b4] border border-[#2a2a28] transition-colors"
-          >
-            <FolderOpen size={15} />
-            打开文件位置
-          </button>
-        </div>
+              <button onClick={handleCrop} disabled={cropping || !duration} className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50">
+                <Scissors size={13} />{cropping ? '截取中…' : '生成片段'}
+              </button>
+              <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">拖动把手选取区间；生成 <code className="text-[#8a8a82]">原名_clip_起-止.wav</code> 自动入库。</p>
+            </div>
+
+            {/* 格式转换 WAV↔MP3 */}
+            <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+                  <FileAudio size={13} className="text-accent" /> 格式转换 WAV↔MP3
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <button onClick={() => setConvFmt('wav')} className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${convFmt === 'wav' ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}>WAV</button>
+                <button onClick={() => setConvFmt('mp3')} className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${convFmt === 'mp3' ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}>MP3</button>
+              </div>
+              {convFmt === 'mp3' && (
+                <div className="flex items-center gap-2 text-[10px] text-[#6a6a64] mb-2">
+                  <span>码率</span>
+                  {[128, 192, 256, 320].map((b) => (
+                    <button key={b} onClick={() => setConvBitrate(b)} className={`px-1.5 py-0.5 rounded border transition-colors ${convBitrate === b ? 'bg-[#534AB7]/20 text-[#9C92F6] border-[#534AB7]/40' : 'bg-[#252524] text-[#8a8a82] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}>{b}</button>
+                  ))}<span>kbps</span>
+                </div>
+              )}
+              <button onClick={handleConvert} disabled={converting} className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50">
+                <FileAudio size={13} />{converting ? '转换中…' : `转换为 ${convFmt.toUpperCase()}`}
+              </button>
+              <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">生成 <code className="text-[#8a8a82]">原名_conv.{convFmt}</code> 自动入库。</p>
+            </div>
+
+            {/* 变速不变调 */}
+            <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+                  <Gauge size={13} className="text-accent" /> 变速不变调
+                </span>
+                <span className="text-[10px] text-[#6a6a64]">改变速度 · 保持音高</span>
+              </div>
+              <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                {SPEED_PRESETS.map((s) => (
+                  <button key={s} onClick={() => setSpeed(s)} className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${speed === s ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}>{s}x</button>
+                ))}
+              </div>
+              <button onClick={handleStretch} disabled={stretching} className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50">
+                <Gauge size={13} />{stretching ? '变速中…' : `变速为 ${speed}x（不变调）`}
+              </button>
+              <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">生成 <code className="text-[#8a8a82]">原名_{speed}x.{sound.file_ext?.replace(/^\./, '') || 'wav'}</code> 自动入库。</p>
+            </div>
+
+            {/* After Effects */}
+            <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+                  <Import size={13} className="text-accent" /> 导入到 After Effects
+                </span>
+              </div>
+              <button onClick={handleImportToAE} disabled={importing} className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50">
+                <Import size={13} />{importing ? '导入中…' : '导入到正在运行的 AE 工程'}
+              </button>
+              <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">需先在 AE 中开启「允许脚本写入文件和访问网络」。</p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
