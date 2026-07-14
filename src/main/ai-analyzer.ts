@@ -22,6 +22,15 @@ export interface AudioMetadata {
   truePeakDB: number
 }
 
+/** 单个拟声词的多语种 + 拼音表达 */
+export interface OnomatopoeiaItem {
+  zh: string                    // 中文拟声词，如 哗啦啦
+  ja?: string                   // 日文拟声词，如 ザバザバ
+  en?: string                   // 英文拟声词，如 splash
+  pinyin?: string               // 中文拟声词拼音，如 huā lā lā
+  confidence?: number           // 0-1
+}
+
 export interface AIAnalysisResult {
   description: string           // 一句话特征描述
   detailedDescription: string   // 详细描述
@@ -31,6 +40,7 @@ export interface AIAnalysisResult {
     category: string            // 人声/动物/环境氛围/动作音效/UI转场/乐器音乐/机械科技
     confidence: number          // 0-1
   }>
+  onomatopoeia: OnomatopoeiaItem[]   // 多语种拟声词 + 拼音
   emotion: string               // 情绪标签
   qualityScore: number          // 1-5 音质评分
   moodEnergy: number            // 1-10 能量等级
@@ -223,7 +233,7 @@ function buildAnalyzePrompt(metadata: AudioMetadata, fileName: string): string {
 1. **形象描述**：用日常语言描述这个声音听起来像什么。比如"清脆的金属叮当声""连绵不断的流水声""密集的哒哒哒枪声"
 2. **使用场景**：具体在什么情况下会用这个声音。比如"玩家射击时""下雨天背景""UI按钮按下反馈""角色跳跃落地"
 3. **关联关键词**：搜索时可能用到的词，包括同义词、近义词、相关词
-4. **拟声词**：这个声音的文字化模拟（如 哗啦啦、叮当、轰隆、嗖、咔嚓）
+4. **拟声词（多语种）**：这个声音的文字化模拟。请挑选 1-3 个最贴切的拟声词，每个都给出：①中文（如 哗啦啦）②日文（如 ザバザバ）③英文（如 splash）④中文拼音（如 huā lā lā）。即使只有中文也能听出来的词也要尽量配上拼音帮助朗读。
 
 ### 绝对禁止：
 - ❌ 不要分析"音色质感""动态范围""频率响应""压缩感""空间宽度"等音频工程术语
@@ -240,6 +250,9 @@ function buildAnalyzePrompt(metadata: AudioMetadata, fileName: string): string {
   "tags": [
     {"name": "标签名", "category": "类别", "confidence": 0.95}
   ],
+  "onomatopoeia": [
+    {"zh": "哗啦啦", "ja": "ザバザバ", "en": "splash", "pinyin": "huā lā lā", "confidence": 0.95}
+  ],
   "emotion": "情绪感受（如：紧张/欢快/悬疑/震撼/平静/激昂/恐怖/温暖/中性）",
   "qualityScore": 5,
   "moodEnergy": 7,
@@ -255,17 +268,16 @@ function buildAnalyzePrompt(metadata: AudioMetadata, fileName: string): string {
 - 好标签示例（流水音效）：["水流","河流","环境氛围","水花","哗啦啦","自然音效"]
 - 坏标签示例：["短音效","音频","低码率","音效","MP3","未分类"]
 
-## 拟声词示例参考
-- 金属碰撞：叮当、铛铛、哐当、锵
-- 水流：哗啦啦、潺潺、滴答、咕噜
-- 爆炸：轰隆、砰、嘭、轰
-- 枪械/射击：哒哒哒、砰、噼里啪啦、突突
-- 风：呼呼、嗖、呜呜
-- 脚步：哒哒、咚咚、沙沙
-- 开关/机械：咔哒、咔嚓、吱嘎
-- 火：噼啪、呼呼
-- 动物：汪汪、喵喵、嘶吼、嗡嗡
-
+## 拟声词示例参考（zh 为主，ja/en 请给出对应语言中最贴近的拟声词）
+- 金属碰撞：叮当(dīng dāng) / 日 ガチャン / 英 clink
+- 水流：哗啦啦(huā lā lā) / 日 ザバザバ / 英 splash
+- 爆炸：轰隆(hōng lóng) / 日 ドカン / 英 boom
+- 枪械/射击：哒哒哒(dā dā dā) / 日 ダダダ / 英 rat-a-tat
+- 风：呼呼(hū hū) / 日 ヒューヒュー / 英 whoosh
+- 脚步：哒哒(dā dā) / 日 トントン / 英 tap-tap
+- 开关/机械：咔嚓(kā chā) / 日 カチッ / 英 click
+- 火：噼啪(pī pā) / 日 パチパチ / 英 crackle
+- 动物：汪汪(wāng wāng) / 日 ワンワン / 英 woof
 ## 文件名理解指南
 文件名通常直接说明了内容。"扫射1"= 扫射/机枪射击，"金币"= 金币获得音效，"脚步声_草地"= 草地上的脚步声。以文件名为第一判断依据。
 
@@ -603,6 +615,49 @@ export function getModelConfig(): ModelConfig {
   return cachedConfig || getDefaultConfig()
 }
 
+// ---- 拟声词（多语种 + 拼音）辅助逻辑 ----
+
+// 拟声词正则映射：用于无 AI 时的智能回退（从文件名/描述猜拟声词）
+const ONO_MAP: Array<[RegExp, string]> = [
+  [/金币|coin|拾取|获得/, '叮当'],
+  [/金属|击中|clash|clang|cling/, '铛'],
+  [/扫射|机枪|machine|sweep|射击|枪|gun|shoot|突突|哒哒/, '哒哒哒'],
+  [/爆炸|boom|blast|bang/, '轰隆'],
+  [/水|水流|water|rain|雨/, '哗啦啦'],
+  [/风|wind|whoosh/, '呼呼'],
+  [/脚步|foot|step/, '哒哒'],
+  [/跳跃|jump|hop/, '咚'],
+  [/开关门|door/, '咔嚓'],
+  [/火|fire|燃烧/, '噼啪'],
+  [/玻璃|glass|break/, '哐啦'],
+]
+
+function generateSmartOnomatopoeia(name: string, description: string): OnomatopoeiaItem[] {
+  const lower = (name + ' ' + (description || '')).toLowerCase()
+  const found = new Set<string>()
+  for (const [re, ono] of ONO_MAP) {
+    if (re.test(lower)) found.add(ono)
+  }
+  return Array.from(found).slice(0, 3).map(zh => ({ zh }))
+}
+
+// 规整 AI 返回的拟声词；缺失或为空时用文件名/描述智能回退
+function normalizeOnomatopoeia(list: any, name: string, description: string): OnomatopoeiaItem[] {
+  if (Array.isArray(list) && list.length > 0) {
+    const cleaned = list
+      .filter((o: any) => o && typeof o.zh === 'string' && o.zh.trim())
+      .map((o: any) => ({
+        zh: o.zh.trim(),
+        ja: typeof o.ja === 'string' && o.ja.trim() ? o.ja.trim() : undefined,
+        en: typeof o.en === 'string' && o.en.trim() ? o.en.trim() : undefined,
+        pinyin: typeof o.pinyin === 'string' && o.pinyin.trim() ? o.pinyin.trim() : undefined,
+        confidence: typeof o.confidence === 'number' ? o.confidence : 0.8
+      }))
+    if (cleaned.length > 0) return cleaned.slice(0, 3)
+  }
+  return generateSmartOnomatopoeia(name, description)
+}
+
 // ---- Main analyze function ----
 
 export async function analyzeAudio(
@@ -664,6 +719,9 @@ export async function analyzeAudio(
     result.detailedDescription = result.detailedDescription || expandDescription(result.description, metadata, fileName)
     result.scenario = result.scenario || inferScenario(metadata, result.description, fileName)
     result.variantOf = result.variantOf || null
+
+    // 拟声词：多语种 + 拼音，缺失时用文件名/描述智能回退
+    result.onomatopoeia = normalizeOnomatopoeia(result.onomatopoeia, fileName, result.description)
 
     // Strip any encoding-quality reminders the model may have added
     // (e.g. "编码质量较低，建议替换为无损版本"). These are not
@@ -747,7 +805,8 @@ function generateSmartFallback(metadata: AudioMetadata, fileName: string): AIAna
     qualityScore: inferQuality(metadata),
     moodEnergy: inferEnergy(metadata),
     isLoopable: metadata.duration > 3 && metadata.duration < 30,
-    variantOf: null
+    variantOf: null,
+    onomatopoeia: generateSmartOnomatopoeia(fileName, desc)
   }
 }
 

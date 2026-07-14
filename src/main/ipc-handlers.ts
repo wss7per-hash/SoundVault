@@ -545,6 +545,7 @@ export function registerIpcHandlers(): void {
     const avgQuality = (db.prepare('SELECT AVG(quality_score) as a FROM sounds WHERE quality_score IS NOT NULL').get() as { a: number | null }).a
     const tagCount = (db.prepare('SELECT COUNT(*) as c FROM tags').get() as { c: number }).c
     const taggedSounds = (db.prepare('SELECT COUNT(DISTINCT sound_id) as c FROM sound_tags').get() as { c: number }).c
+    const withOno = (db.prepare("SELECT COUNT(*) as c FROM sounds WHERE onomatopoeia IS NOT NULL AND onomatopoeia != '' AND onomatopoeia != '[]'").get() as { c: number }).c
 
     // 按 file_ext 分组后归桶：wav / mp3 / flac / other
     const extRows = db.prepare('SELECT file_ext as ext, COUNT(*) as c FROM sounds GROUP BY file_ext').all() as Array<{ ext: string; c: number }>
@@ -569,7 +570,8 @@ export function registerIpcHandlers(): void {
       byExt,
       avgQuality: avgQuality === null ? null : Math.round(avgQuality * 10) / 10,
       tagCount,
-      taggedSounds
+      taggedSounds,
+      withOnomatopoeia: withOno
     }
   })
 
@@ -668,7 +670,7 @@ function ensureParentCategory(category: string, now: string): string | null {
           duration_ms = ?, sample_rate = ?, bitrate_kbps = ?, channels = ?,
           loudness_lufs = ?, description = ?, use_cases = ?, emotion = ?,
           quality_score = ?, similar_to = ?, best_for = ?,
-          ai_model = ?, ai_analyzed_at = ?, updated_at = ?
+          ai_model = ?, onomatopoeia = ?, ai_analyzed_at = ?, updated_at = ?
         WHERE id = ?
       `).run(
         Math.round(metadata.duration * 1000),
@@ -683,6 +685,7 @@ function ensureParentCategory(category: string, now: string): string | null {
         result.variantOf,
         result.detailedDescription,
         getModelConfig().model,
+        JSON.stringify(result.onomatopoeia || []),
         new Date().toISOString(),
         new Date().toISOString(),
         soundId
@@ -704,13 +707,15 @@ function ensureParentCategory(category: string, now: string): string | null {
       }
 
       // Update FTS index
+      const onoWords = (result.onomatopoeia || []).map((o) => o.zh).filter(Boolean)
       const ftsText = [
         sound.file_name,
         result.description,
         result.detailedDescription,
         result.scenario,
         result.emotion,
-        ...result.tags.map((t) => t.name)
+        ...result.tags.map((t) => t.name),
+        ...onoWords
       ].filter(Boolean).join(' ')
 
       db.prepare(`
@@ -902,12 +907,12 @@ function ensureParentCategory(category: string, now: string): string | null {
           UPDATE sounds SET
             description = ?, use_cases = ?, emotion = ?,
             quality_score = ?, similar_to = ?, best_for = ?,
-            ai_model = ?, ai_analyzed_at = ?, updated_at = ?
+            ai_model = ?, onomatopoeia = ?, ai_analyzed_at = ?, updated_at = ?
           WHERE id = ?
         `).run(
           result.description, result.scenario, result.emotion,
           result.qualityScore, result.variantOf, result.detailedDescription,
-          modelName, now, now, id
+          modelName, JSON.stringify(result.onomatopoeia || []), now, now, id
         )
 
         db.prepare('DELETE FROM sound_tags WHERE sound_id = ? AND is_manual = 0').run(id)
@@ -1771,6 +1776,37 @@ function ensureParentCategory(category: string, now: string): string | null {
     `).all()
   })
 
+  // 拟声词云：聚合所有音效的 onomatopoeia 字段（按中文 zh 归并）
+  ipcMain.handle('tag:getOnomatopoeiaCloud', () => {
+    const rows = db.prepare(
+      "SELECT onomatopoeia FROM sounds WHERE onomatopoeia IS NOT NULL AND onomatopoeia != '' AND onomatopoeia != '[]'"
+    ).all() as Array<{ onomatopoeia: string }>
+    const counter = new Map<string, { count: number; ja?: string; en?: string; pinyin?: string }>()
+    for (const r of rows) {
+      try {
+        const list = JSON.parse(r.onomatopoeia) as Array<{ zh: string; ja?: string; en?: string; pinyin?: string }>
+        for (const o of list) {
+          if (!o || !o.zh) continue
+          const cur = counter.get(o.zh) || { count: 0 }
+          cur.count += 1
+          if (o.ja && !cur.ja) cur.ja = o.ja
+          if (o.en && !cur.en) cur.en = o.en
+          if (o.pinyin && !cur.pinyin) cur.pinyin = o.pinyin
+          counter.set(o.zh, cur)
+        }
+      } catch { /* skip invalid json */ }
+    }
+    const arr = Array.from(counter.entries()).map(([name, v]) => ({
+      id: name,
+      name,
+      color: '#FBBF24',
+      count: v.count,
+      category: '拟声词'
+    }))
+    arr.sort((a, b) => b.count - a.count)
+    return arr
+  })
+
   // ---- Collection Management ----
 
   ipcMain.handle('collection:delete', (_event, id: string) => {
@@ -2547,6 +2583,18 @@ function ensureParentCategory(category: string, now: string): string | null {
       const row = db.prepare('SELECT id FROM sounds WHERE id = ?').get(soundId)
       if (!row) return { success: false, message: '找不到文件记录' }
       db.prepare('UPDATE sounds SET notes = ?, updated_at = ? WHERE id = ?').run(notes, new Date().toISOString(), soundId)
+      return { success: true }
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
+    }
+  })
+
+  // 拟声词（多语种 + 拼音）：更新 sounds.onomatopoeia 字段（Phase 5+）
+  ipcMain.handle('sound:setOnomatopoeia', async (_event, soundId: string, json: string) => {
+    try {
+      const row = db.prepare('SELECT id FROM sounds WHERE id = ?').get(soundId)
+      if (!row) return { success: false, message: '找不到文件记录' }
+      db.prepare('UPDATE sounds SET onomatopoeia = ?, updated_at = ? WHERE id = ?').run(json, new Date().toISOString(), soundId)
       return { success: true }
     } catch (err) {
       return { success: false, message: (err as Error).message }

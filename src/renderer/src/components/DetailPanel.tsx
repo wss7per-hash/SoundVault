@@ -1,5 +1,5 @@
-import { useCallback, useState, useRef, useEffect } from 'react'
-import type { SoundData, TagWithMeta, TagData } from '../../preload/index.d'
+import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
+import type { SoundData, TagWithMeta, TagData, OnomatopoeiaItem } from '../../preload/index.d'
 import {
   X,
   Play,
@@ -40,6 +40,11 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
   const [allTags, setAllTags] = useState<TagData[]>([])
   const [newTagInput, setNewTagInput] = useState('')
   const [showTagSuggestions, setShowTagSuggestions] = useState(false)
+
+  const onoList: OnomatopoeiaItem[] = useMemo(() => {
+    if (!sound.onomatopoeia) return []
+    try { return JSON.parse(sound.onomatopoeia) as OnomatopoeiaItem[] } catch { return [] }
+  }, [sound.onomatopoeia])
   const [descEditing, setDescEditing] = useState(false)
   const [descValue, setDescValue] = useState(sound.description || '')
   const [bestForEditing, setBestForEditing] = useState(false)
@@ -769,6 +774,29 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                 <p className="text-sm text-[#c8c8c4] leading-relaxed whitespace-pre-wrap">{sound.notes}</p>
               ) : (
                 <p className="text-sm text-[#5a5a54] italic">暂无备注，点击编辑</p>
+              )}
+            </div>
+
+            {/* Onomatopoeia (多语种 + 拼音) */}
+            <div>
+              <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Volume2 size={13} className="text-accent-light" /> 拟声词
+              </p>
+              {onoList.length === 0 ? (
+                <span className="text-xs text-[#5a5a54] italic">暂无拟声词（AI 分析后自动生成多语种 + 拼音）</span>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {onoList.map((o, i) => (
+                    <div key={i} className="px-3 py-2 rounded-lg bg-[#1e1e1c] border border-[#2a2a28] flex flex-col gap-0.5 min-w-[120px]">
+                      <div className="text-base text-[#e8e8e4] font-medium leading-none">{o.zh}</div>
+                      {o.pinyin && <div className="text-xs text-[#8a8a82]">{o.pinyin}</div>}
+                      <div className="flex gap-3 text-xs text-[#6a6a64] mt-0.5">
+                        {o.ja && <span>日 {o.ja}</span>}
+                        {o.en && <span>英 {o.en}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 

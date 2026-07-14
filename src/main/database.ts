@@ -18,6 +18,7 @@ export function initDatabase(): void {
 
   createTables()
   migrateSoundsNotesColumn()
+  migrateOnomatopoeiaColumn()
   seedDefaultCategories()
   cleanupLegacyQualityNotes()
 
@@ -219,8 +220,25 @@ function migrateSoundsNotesColumn(): void {
       db.exec('ALTER TABLE sounds ADD COLUMN notes TEXT')
       console.log('[Database] Migrated: added notes column to sounds')
     }
-  } catch (err) {
+    } catch (err) {
     console.warn('[Database] notes-column migration skipped:', (err as Error).message)
+  }
+}
+
+/**
+ * 增量迁移：为已有的 sounds 表补充 onomatopoeia（多语种拟声词 + 拼音）字段。
+ * 复用 migrateSoundsNotesColumn 模式：先 PRAGMA 检查列是否存在再 ALTER，幂等。
+ */
+function migrateOnomatopoeiaColumn(): void {
+  if (!db) return
+  try {
+    const cols = db.prepare('PRAGMA table_info(sounds)').all() as { name: string }[]
+    if (!cols.some((c) => c.name === 'onomatopoeia')) {
+      db.exec('ALTER TABLE sounds ADD COLUMN onomatopoeia TEXT')
+      console.log('[Database] Migrated: added onomatopoeia column to sounds')
+    }
+  } catch (err) {
+    console.warn('[Database] onomatopoeia-column migration skipped:', (err as Error).message)
   }
 }
 

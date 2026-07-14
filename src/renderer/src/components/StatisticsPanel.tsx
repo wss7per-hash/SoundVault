@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { Database, Clock, HardDrive, Sparkles, Tags, ArrowLeft, Layers } from 'lucide-react'
+import { Database, Clock, HardDrive, Sparkles, Tags, ArrowLeft, Layers, Volume2 } from 'lucide-react'
 import type { TagStatData } from '../../preload/index.d'
 
 const formatDuration = (ms: number): string => {
@@ -23,21 +23,27 @@ const formatSize = (bytes: number): string => {
 export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Element {
   const stats = useAppStore((s) => s.stats)
   const tagStats = useAppStore((s) => s.tagStats)
+  const onoStats = useAppStore((s) => s.onoStats)
   const refreshStats = useAppStore((s) => s.refreshStats)
   const refreshTagStats = useAppStore((s) => s.refreshTagStats)
+  const refreshOnoStats = useAppStore((s) => s.refreshOnoStats)
 
   useEffect(() => {
     refreshStats()
     refreshTagStats()
-  }, [refreshStats, refreshTagStats])
+    refreshOnoStats()
+  }, [refreshStats, refreshTagStats, refreshOnoStats])
 
   const total = stats.total || 0
   const analyzedPct = total > 0 ? Math.round((stats.analyzed / total) * 100) : 0
   const taggedPct = total > 0 ? Math.round((stats.taggedSounds / total) * 100) : 0
   const maxCount = tagStats.reduce((m, t) => Math.max(m, t.count), 1)
+  const maxOno = onoStats.reduce((m, t) => Math.max(m, t.count), 1)
 
   const sizeFor = (c: number): number => 13 + Math.round((c / maxCount) * 21) // 13~34px
   const opacityFor = (c: number): number => 0.5 + (c / maxCount) * 0.5 // 0.5~1
+  const sizeForOno = (c: number): number => 13 + Math.round((c / maxOno) * 21)
+  const opacityForOno = (c: number): number => 0.5 + (c / maxOno) * 0.5
 
   const handleTagClick = (tag: TagStatData): void => {
     const store = useAppStore.getState()
@@ -45,6 +51,14 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
     store.setSidebarTab('tags')
     store.setActiveView('library')
   }
+
+  const handleOnoClick = (t: TagStatData): void => {
+    const store = useAppStore.getState()
+    store.setSearchQuery(t.name)
+    store.setActiveView('library')
+  }
+
+  const onoPct = total > 0 ? Math.round((stats.withOnomatopoeia / total) * 100) : 0
 
   const extRows = [
     { key: 'wav', label: 'WAV', value: stats.byExt.wav },
@@ -134,11 +148,37 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
           )}
         </Section>
 
+        {/* Onomatopoeia cloud */}
+        <Section title="拟声词云" icon={<Volume2 size={14} className="text-muted" />} hint="点击按拟声词搜索 · 字号越大代表库中越多">
+          {onoStats.length > 0 ? (
+            <div className="flex flex-wrap gap-x-4 gap-y-2.5 pt-1">
+              {onoStats.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => handleOnoClick(t)}
+                  className="leading-none hover:underline underline-offset-4 transition-all"
+                  style={{
+                    fontSize: `${sizeForOno(t.count)}px`,
+                    color: t.color || '#FBBF24',
+                    opacity: opacityForOno(t.count)
+                  }}
+                  title={`${t.name} · ${t.count} 个音效`}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted">还没有拟声词。先对音效做 AI 分析，即可自动生成多语种拟声词。</p>
+          )}
+        </Section>
+
         {/* Extra insights */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mt-8">
           <MiniStat label="平均质量分" value={stats.avgQuality !== null ? `${stats.avgQuality} / 100` : '—'} />
           <MiniStat label="已打标签" value={`${taggedPct}%`} sub={`${stats.taggedSounds} 个音效`} />
           <MiniStat label="标签总数" value={String(stats.tagCount)} />
+          <MiniStat label="含拟声词" value={String(stats.withOnomatopoeia)} sub={`占 ${onoPct}%`} />
           <MiniStat
             label="待分析"
             value={String(stats.unanalyzed)}

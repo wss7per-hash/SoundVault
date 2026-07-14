@@ -187,6 +187,14 @@ export interface ImportFile {
   size: number
 }
 
+export interface OnomatopoeiaItem {
+  zh: string
+  ja?: string
+  en?: string
+  pinyin?: string
+  confidence?: number
+}
+
 export interface SoundData {
   id: string
   file_path: string
@@ -210,6 +218,7 @@ export interface SoundData {
   ai_model: string | null
   ai_analyzed_at: string | null
   notes: string | null
+  onomatopoeia: string | null
   is_starred: number
   is_missing: number
   is_trashed?: number
@@ -242,6 +251,7 @@ export interface TagStatData {
   name: string
   color: string | null
   count: number
+  category?: string | null
 }
 
 export interface SimilarSound {
@@ -288,6 +298,7 @@ export interface StatsData {
   avgQuality: number | null
   tagCount: number
   taggedSounds: number
+  withOnomatopoeia: number
 }
 
 export interface AIConfig {
@@ -336,6 +347,7 @@ export interface AIAnalysisResult {
   detailedDescription: string
   scenario: string
   tags: Array<{ name: string; category: string; confidence: number }>
+  onomatopoeia: OnomatopoeiaItem[]
   emotion: string
   qualityScore: number
   moodEnergy: number

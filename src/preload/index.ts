@@ -102,6 +102,9 @@ const api = {
   updateTag: (tagId: string, updates: { name?: string; color?: string; parent_id?: string | null }) =>
     ipcRenderer.invoke('tag:update', tagId, updates),
   getTagStats: () => ipcRenderer.invoke('tag:getStats'),
+  getOnomatopoeiaCloud: () => ipcRenderer.invoke('tag:getOnomatopoeiaCloud') as Promise<TagStatData[]>,
+  setOnomatopoeia: (soundId: string, json: string) =>
+    ipcRenderer.invoke('sound:setOnomatopoeia', soundId, json) as Promise<{ success: boolean; message?: string }>,
 
   // Collections
   getCollections: () => ipcRenderer.invoke('collection:getAll'),

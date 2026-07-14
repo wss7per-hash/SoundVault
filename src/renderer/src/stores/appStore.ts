@@ -12,6 +12,7 @@ interface AppState {
   sounds: SoundData[]
   tags: TagData[]
   tagStats: TagStatData[]
+  onoStats: TagStatData[]
   collections: CollectionData[]
   smartFolders: SmartFolderData[]
   selectedSoundId: string | null
@@ -23,7 +24,7 @@ interface AppState {
   viewMode: 'grid' | 'list'
   activeView: 'library' | 'stats'
   sidebarTab: 'tags' | 'folders' | 'collections' | 'smart' | 'trash'
-  stats: { total: number; starred: number; missing: number; totalSize: number; totalDurationMs: number; analyzed: number; unanalyzed: number; byExt: { wav: number; mp3: number; flac: number; other: number }; avgQuality: number | null; tagCount: number; taggedSounds: number }
+  stats: { total: number; starred: number; missing: number; totalSize: number; totalDurationMs: number; analyzed: number; unanalyzed: number; byExt: { wav: number; mp3: number; flac: number; other: number }; avgQuality: number | null; tagCount: number; taggedSounds: number; withOnomatopoeia: number }
   fontSize: number
   sortBy: 'name' | 'duration' | 'size' | 'date'
   sortOrder: 'asc' | 'desc'
@@ -42,6 +43,7 @@ interface AppState {
   setSounds: (sounds: SoundData[]) => void
   setTags: (tags: TagData[]) => void
   setTagStats: (stats: TagStatData[]) => void
+  setOnoStats: (stats: TagStatData[]) => void
   selectSound: (id: string | null) => void
   toggleSoundSelection: (id: string) => void
   clearSelection: () => void
@@ -56,7 +58,7 @@ interface AppState {
   setActiveView: (view: 'library' | 'stats') => void
   setFontSize: (size: number) => void
   setSidebarTab: (tab: 'tags' | 'folders' | 'collections' | 'smart' | 'trash') => void
-  setStats: (stats: { total: number; starred: number; missing: number; totalSize: number; totalDurationMs: number; analyzed: number; unanalyzed: number; byExt: { wav: number; mp3: number; flac: number; other: number }; avgQuality: number | null; tagCount: number; taggedSounds: number }) => void
+  setStats: (stats: { total: number; starred: number; missing: number; totalSize: number; totalDurationMs: number; analyzed: number; unanalyzed: number; byExt: { wav: number; mp3: number; flac: number; other: number }; avgQuality: number | null; tagCount: number; taggedSounds: number; withOnomatopoeia: number }) => void
   setSortBy: (by: 'name' | 'duration' | 'size' | 'date') => void
   setSortOrder: (order: 'asc' | 'desc') => void
   setFormatFilter: (format: string | null) => void
@@ -84,6 +86,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sounds: [],
   tags: [],
   tagStats: [],
+  onoStats: [],
   collections: [],
   smartFolders: [],
   selectedSoundId: null,
@@ -95,7 +98,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   viewMode: 'grid',
   activeView: 'library',
   sidebarTab: 'tags',
-  stats: { total: 0, starred: 0, missing: 0, totalSize: 0 },
+  stats: { total: 0, starred: 0, missing: 0, totalSize: 0, withOnomatopoeia: 0 },
   fontSize: 14,
   sortBy: 'date',
   sortOrder: 'desc',
@@ -197,6 +200,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ tagStats: stats })
     } catch {
       // tagStats may not be available
+    }
+  },
+
+  refreshOnoStats: async () => {
+    try {
+      const stats = await window.api.getOnomatopoeiaCloud()
+      set({ onoStats: stats })
+    } catch {
+      // onoStats may not be available
     }
   },
 
