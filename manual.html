@@ -960,6 +960,12 @@ win.innerHTML =
     <li style="padding-left:24px;position:relative;color:#cfccda">✅ <b style="color:var(--text)">首尾无缝循环 · 已完成</b>——纯 ffmpeg 交叉淡化，生成 <code class="chip">*_loop.wav</code>，不覆盖原文件。</li>
     <li style="padding-left:24px;position:relative;color:#cfccda">🧬 <b style="color:var(--text)">生成类似音频</b>——用本库 AI 分析结果（场景 / 拟声词）作 prompt 近似，需 audio-to-audio（可后续接 Stable Audio 2.5 云端）。</li>
     <li style="padding-left:24px;position:relative;color:#cfccda">⏱️ <b style="color:var(--text)">延长当前音频</b>——DSP 时间拉伸或 Stable Audio inpainting。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">📊 <b style="color:var(--text)">元数据结构增强</b>——情绪/氛围标签（紧张·轻松·恐怖·欢乐）、节奏·力度曲线、来源类型（真实录制/模拟合成），作为新筛选维度。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">🔍 <b style="color:var(--text)">检索与发现</b>——自然语言搜索（"雨夜悬疑感环境音"语义匹配）、反向/对比搜索、按情绪智能聚合自动生成合集。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">🔗 <b style="color:var(--text)">生成联动（接 Phase 4）</b>——AI 分析结果→生成 prompt，一键"再生类似音效"（audio-to-audio，接 Stable Audio 2.5 云端）、变体/延展建议。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">⚙️ <b style="color:var(--text)">工作流自动化</b>——语义智能重命名、近重复检测（音频指纹）、削波/失真自检（导入时标记 clipping）。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">🎨 <b style="color:var(--text)">多模态创意</b>——自动封面图（描述→图像生成）、描述语音朗读（TTS）、拟声词词典索引。</li>
+    <li style="padding-left:24px;position:relative;color:#cfccda">💬 <b style="color:var(--text)">拟声词专项（做厚而非新增）</b>——多语种拟声词（中/日/英）、配音拼音标注、拟声词云（库洞察可视化）。现有 AI 分析已含拟声词。</li>
   </ul>
   <div class="callout" style="margin-top:22px">生成类功能需接入外部音频生成 API 或本地部署模型（Stable Audio / AudioCraft），可能按次计费或需 GPU。Suno / Udio 偏音乐、API 受限，暂不纳入。</div>
 </section>
