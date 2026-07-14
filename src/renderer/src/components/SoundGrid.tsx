@@ -126,13 +126,17 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
   }, [dragStart, getContainerPos, stopPreview])
 
   const handleContainerMouseUp = useCallback(() => {
-    if (isDragging && dragStart && dragCurrent && containerRef.current) {
-      collectSelectedCards()
+    if (dragStart) {
+      if (isDragging) {
+        collectSelectedCards()        // box select: replace selection
+      } else {
+        clearSelection()              // plain click on empty area: clear selection
+      }
     }
     setDragStart(null)
     setDragCurrent(null)
     setIsDragging(false)
-  }, [isDragging, dragStart, dragCurrent])
+  }, [isDragging, dragStart, dragCurrent, clearSelection])
 
   const collectSelectedCards = useCallback(() => {
     if (!dragStart || !dragCurrent) return
@@ -721,9 +725,17 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
   }
 
   const handleTrash = async () => {
-    const res = await window.api.trashFile(sound.id)
-    if (res.success) { toast.success('已移到回收站'); refreshSounds() }
-    else toast.error(res.message || '删除失败')
+    // If multiple items are selected, batch delete; otherwise delete single
+    const selectedIds = useAppStore.getState().selectedSoundIds
+    if (selectedIds.length > 1) {
+      const res = await window.api.batchDelete(selectedIds)
+      if (res.success) { toast.success(`已移到回收站 (${selectedIds.length} 个)`); clearSelection(); refreshSounds() }
+      else toast.error(res.message || '批量删除失败')
+    } else {
+      const res = await window.api.trashFile(sound.id)
+      if (res.success) { toast.success('已移到回收站'); refreshSounds() }
+      else toast.error(res.message || '删除失败')
+    }
     onClose()
   }
 

@@ -903,6 +903,30 @@ win.innerHTML =
     </div>
   </div>
 
+  <!-- Step 11 (DSP 工具页) -->
+  <div class="step">
+    <div class="num">11</div>
+    <div>
+      <h3>音频工具（本地 DSP 处理）</h3>
+      <span class="path">右侧详情面板 &nbsp;·&nbsp; 切换到「<b>工具</b>」Tab &nbsp; 或 &nbsp; 选中音效后查看顶部 Tab 栏「信息 / 工具」</span>
+      <p>工具页提供<strong style="color:var(--text)">纯本地处理</strong>能力（基于 ffmpeg，无需联网），覆盖日常编辑最常用的五个操作。所有处理均生成新文件，不破坏原始素材。</p>
+      <div class="detail">
+        <div class="row"><span class="k">🔊 波形可视化</span><span class="v">选中音效后自动显示完整波形图；<b>点击波形任意位置可精确定位播放头</b>，配合播放器做逐段审听；波形颜色随播放进度变化（已播/未播）</span></div>
+        <div class="row"><span class="k">✂️ 裁剪取片段</span><span class="v">拖动波形上的起点/终点滑块选取片段范围（精确到毫秒）；确认后点「<b>生成片段</b>」，在原文件同目录输出 <code class="chip">*_clip_起-止.wav</code>（不覆盖原文件）。适合从长录音里截取有用段落。</span></div>
+        <div class="row"><span class="k">🔄 格式转换 WAV ↔ MP3</span><span class="v">选择目标格式（WAV 或 MP3），点「<b>转换为 WAV</b>」或「<b>转换为 MP3</b>」。MP3 压缩可显著减小文件体积便于分享；WAV 转换保留无损质量。产物命名：<code class="chip">*_conv.wav</code> / <code class="chip">*_conv.mp3</code></span></div>
+        <div class="row"><span class="k">⏩ 变速不变调</span><span class="v">滑块调节 <b>0.25x – 4.0x</b> 播放速度（atempo 滤镜），<strong style="color:var(--text)">保持原始音高不变</strong>。加速用于快节奏预览/素材适配，减速用于慢放审听细节。产物：<code class="chip">*_tempo_速率.wav</code></span></div>
+        <div class="row"><span class="k">🔁 首尾无缝循环</span><span class="v">设置交叉淡入淡出时长（默认 30ms，可调 10–500ms）；点「<b>生成遮罩循环文件</b>」输出 <code class="chip">*_loop.wav</code>——尾音平滑交叉淡化到开头，在任意播放器/游戏引擎中循环均无咔哒声。<b>不覆盖原文件</b>。</span></div>
+      </div>
+      <ul>
+        <li>所有工具均基于本地 <strong style="color:var(--text)">ffmpeg</strong>，处理过程不需要联网，你的音频文件不会离开电脑。</li>
+        <li>每个操作都会在原文件<b>同目录生成新文件</b>（带 <code class="chip">_loop</code> / <code class="chip">_clip</code> / <code class="chip">_conv</code> / <code class="chip">_tempo</code> 后缀），原始素材始终保留。</li>
+        <li>新生成的文件会<strong style="color:var(--text)">自动出现在音效库中</strong>，可直接进一步 AI 分析或打标签。</li>
+        <li>如果 ffmpeg 未安装或不在系统 PATH 中，工具按钮会显示提示并引导配置路径。</li>
+      </ul>
+      <div class="callout tip" style="margin-top:12px"><b>典型工作流</b>：导入长录音 → 波形定位裁剪出有用片段 → 变速调整到目标节奏 → 转格式压缩分享 → 首尾无缝循环做成游戏循环音。全程不离开 SoundVault。</div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ═══════════ FAQ ═══════════ -->
