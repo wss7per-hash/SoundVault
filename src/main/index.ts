@@ -152,6 +152,17 @@ function createWindow(): void {
       return { action: 'deny' }
     })
 
+    // 拖放导入：主进程原生 drop 事件捕获文件路径（渲染层 File.path 在新版 Chromium 不可靠）
+    mainWindow.on('drop', (_event, files) => {
+      const paths: string[] = []
+      for (const f of files) {
+        if (f && f.path) paths.push(f.path)
+      }
+      if (paths.length > 0) {
+        mainWindow?.webContents.send('app:drop-paths', paths)
+      }
+    })
+
     if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
       console.log('[createWindow] loadURL', process.env['ELECTRON_RENDERER_URL'])
       mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])

@@ -173,6 +173,12 @@ const api = {
     const listener = (_e: unknown, soundId: string): void => cb(soundId)
     ipcRenderer.on('main:selectSound', listener)
     return () => ipcRenderer.removeListener('main:selectSound', listener)
+  },
+  // 主进程原生 drop 事件：系统拖入文件/文件夹时推送路径（渲染层 File.path 在新版 Chromium 不可靠）
+  onDropPaths: (cb: (paths: string[]) => void) => {
+    const listener = (_e: unknown, paths: string[]): void => cb(paths)
+    ipcRenderer.on('app:drop-paths', listener)
+    return () => ipcRenderer.removeListener('app:drop-paths', listener)
   }
 }
 

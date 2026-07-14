@@ -120,7 +120,50 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontSize}px`
-  }, [fontSize])
+  }, [fontSize]  )
+
+  // ── 拖放导入：接收从系统拖入窗口的音频文件 / 文件夹 ──
+  const hasFilesInDrag = (e: React.DragEvent): boolean =>
+    Array.from(e.dataTransfer.types || []).includes('Files')
+
+  const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!hasFilesInDrag(e)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setDragActive(true)
+  }, [])
+
+  const onDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setDragActive(false)
+  }, [])
+
+  // 主进程原生 drop 事件会通过 app:drop-paths 推送真实文件路径（渲染层 File.path 在新版 Chromium 不可靠）
+  const handleDropPaths = useCallback(async (paths: string[]) => {
+    setDragActive(false)
+
+    try {
+      const res = await window.api.importPaths(paths)
+      await Promise.all([refreshSounds(), refreshStats()])
+      if (res.imported > 0) {
+        toast.success(
+          `已导入 ${res.imported} 个音效` +
+            (res.total > res.imported ? `（跳过 ${res.total - res.imported} 个重复）` : '')
+        )
+      } else {
+        toast('没有可导入的新音效（可能都已存在）')
+      }
+    } catch (err) {
+      toast.error(`导入失败：${(err as Error).message}`)
+    }
+  }, [refreshSounds, refreshStats])
+
+  // 渲染层 onDrop 只负责 preventDefault + 视觉重置；实际路径由主进程 drop → app:drop-paths 推送
+  const onDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!hasFilesInDrag(e)) return
+    e.preventDefault()
+    setDragActive(false)
+  }, [])
 
   // 全局快捷搜索定位：spotlight 选中某音效后，清掉过滤条件、回到主视图、
   // 刷新并选中目标，保证它在网格里可见并打开详情面板。
@@ -138,6 +181,12 @@ export default function App(): JSX.Element {
     })
     return unsub
   }, [])
+
+  // 拖放导入：监听主进程原生 drop 推送的文件路径
+  useEffect(() => {
+    const unsub = window.api.onDropPaths(handleDropPaths)
+    return unsub
+  }, [handleDropPaths])
 
   // Ctrl+A / Ctrl+D select all
   useEffect(() => {
@@ -167,57 +216,6 @@ export default function App(): JSX.Element {
     (id: string) => { selectSound(selectedSoundId === id ? null : id) },
     [selectedSoundId, selectSound]
   )
-
-  // ── 拖放导入：接收从系统拖入窗口的音频文件 / 文件夹 ──
-  const hasFilesInDrag = (e: React.DragEvent): boolean =>
-    Array.from(e.dataTransfer.types || []).includes('Files')
-
-  const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (!hasFilesInDrag(e)) return
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'copy'
-    setDragActive(true)
-  }, [])
-
-  const onDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    // 仅在指针真正离开根容器（relatedTarget 不在容器内）时隐藏遮罩，
-    // 避免子元素间移动时因 dragleave 冒泡导致的闪烁。
-    if (e.currentTarget.contains(e.relatedTarget as Node)) return
-    setDragActive(false)
-  }, [])
-
-  const onDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
-    if (!hasFilesInDrag(e)) return
-    e.preventDefault()
-    setDragActive(false)
-
-    const paths: string[] = []
-    const files = e.dataTransfer.files
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i] as unknown as { path?: string }
-      if (f && f.path) paths.push(f.path)
-    }
-
-    if (paths.length === 0) {
-      toast('没有检测到可导入的文件')
-      return
-    }
-
-    try {
-      const res = await window.api.importPaths(paths)
-      await Promise.all([refreshSounds(), refreshStats()])
-      if (res.imported > 0) {
-        toast.success(
-          `已导入 ${res.imported} 个音效` +
-            (res.total > res.imported ? `（跳过 ${res.total - res.imported} 个重复）` : '')
-        )
-      } else {
-        toast('没有可导入的新音效（可能都已存在）')
-      }
-    } catch (err) {
-      toast.error(`导入失败：${(err as Error).message}`)
-    }
-  }, [refreshSounds, refreshStats])
 
   return (
     <div className="flex h-full" onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>

@@ -128,6 +128,8 @@ export interface SoundVaultAPI {
   moveSpotlight: (dx: number, dy: number) => void
   onSpotlightOpened: (cb: () => void) => () => void
   onSelectSound: (cb: (soundId: string) => void) => () => void
+  // 主进程原生 drop 事件：系统拖入文件/文件夹时推送路径
+  onDropPaths: (cb: (paths: string[]) => void) => () => void
 
   // Window Controls (frameless mode)
   minimizeWindow: () => Promise<void>
