@@ -18,6 +18,7 @@ export interface SoundVaultAPI {
   // Scan & Import
   scanFolder: (options: ScanOptions) => Promise<ScanResult>
   importSounds: (files: ImportFile[]) => Promise<{ imported: number }>
+  importPaths: (paths: string[]) => Promise<{ imported: number; total: number }>
 
   // Sound CRUD
   getSounds: () => Promise<SoundData[]>

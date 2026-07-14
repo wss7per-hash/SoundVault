@@ -28,6 +28,9 @@ const api = {
   importSounds: (files: Array<{ path: string; name: string; ext: string; size: number }>) =>
     ipcRenderer.invoke('sound:import', files),
 
+  // 拖放导入：渲染层收集 file.path 后统一交给主进程递归入库
+  importPaths: (paths: string[]) => ipcRenderer.invoke('library:importPaths', paths),
+
   // Sound CRUD
   getSounds: () => ipcRenderer.invoke('sound:getAll'),
   getSoundById: (id: string) => ipcRenderer.invoke('sound:getById', id),

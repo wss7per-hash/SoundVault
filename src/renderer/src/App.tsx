@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useMemo, useState, useRef } from 'react'
+import type * as React from 'react'
 import { useAppStore } from './stores/appStore'
 import { Sidebar } from './components/Sidebar'
 import { Toolbar } from './components/Toolbar'
@@ -12,12 +13,13 @@ import { RecycleBin } from './components/RecycleBin'
 import ScanDialog from './components/ScanDialog'
 import ModelConfig from './components/ModelConfig'
 import GeneratePanel from './components/GeneratePanel'
-import { Toaster } from 'react-hot-toast'
-import { Star } from 'lucide-react'
+import { Toaster, toast } from 'react-hot-toast'
+import { Star, Upload } from 'lucide-react'
 import { SplashScreen } from './components/SplashScreen'
 
 export default function App(): JSX.Element {
   const [showSplash, setShowSplash] = useState(true)
+  const [dragActive, setDragActive] = useState(false)
   const [dataReady, setDataReady] = useState(false)
   const {
     sounds,
@@ -166,8 +168,70 @@ export default function App(): JSX.Element {
     [selectedSoundId, selectSound]
   )
 
+  // ── 拖放导入：接收从系统拖入窗口的音频文件 / 文件夹 ──
+  const hasFilesInDrag = (e: React.DragEvent): boolean =>
+    Array.from(e.dataTransfer.types || []).includes('Files')
+
+  const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!hasFilesInDrag(e)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setDragActive(true)
+  }, [])
+
+  const onDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    // 仅在指针真正离开根容器（relatedTarget 不在容器内）时隐藏遮罩，
+    // 避免子元素间移动时因 dragleave 冒泡导致的闪烁。
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setDragActive(false)
+  }, [])
+
+  const onDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
+    if (!hasFilesInDrag(e)) return
+    e.preventDefault()
+    setDragActive(false)
+
+    const paths: string[] = []
+    const files = e.dataTransfer.files
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i] as unknown as { path?: string }
+      if (f && f.path) paths.push(f.path)
+    }
+
+    if (paths.length === 0) {
+      toast('没有检测到可导入的文件')
+      return
+    }
+
+    try {
+      const res = await window.api.importPaths(paths)
+      await Promise.all([refreshSounds(), refreshStats()])
+      if (res.imported > 0) {
+        toast.success(
+          `已导入 ${res.imported} 个音效` +
+            (res.total > res.imported ? `（跳过 ${res.total - res.imported} 个重复）` : '')
+        )
+      } else {
+        toast('没有可导入的新音效（可能都已存在）')
+      }
+    } catch (err) {
+      toast.error(`导入失败：${(err as Error).message}`)
+    }
+  }, [refreshSounds, refreshStats])
+
   return (
-    <div className="flex h-full">
+    <div className="flex h-full" onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+      {/* 拖放导入遮罩 */}
+      {dragActive && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-none">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-[#7C5CFF]/70 bg-[#1d1d1b] px-10 py-8">
+            <Upload size={40} className="text-[#9d86ff]" />
+            <p className="text-base font-medium text-[#e8e6df]">松开即可导入音效</p>
+            <p className="text-xs text-[#9a978d]">支持音频文件与文件夹（自动递归）</p>
+          </div>
+        </div>
+      )}
+
       {/* Startup splash animation */}
       {showSplash && <SplashScreen onDone={() => setShowSplash(false)} ready={dataReady} />}
 

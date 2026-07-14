@@ -4,7 +4,7 @@ import { execFile } from 'child_process'
 import { tmpdir } from 'os'
 // @ts-ignore - ffmpeg-static 无类型声明，但运行期返回二进制路径字符串
 import ffmpegPath from 'ffmpeg-static'
-import { existsSync, readdirSync, writeFileSync, unlinkSync } from 'fs'
+import { existsSync, readdirSync, writeFileSync, unlinkSync, statSync } from 'fs'
 import { createHash } from 'crypto'
 import { join, extname, basename, dirname, parse, format } from 'path'
 import { getDatabase } from './database'
@@ -309,6 +309,48 @@ export function registerIpcHandlers(): void {
     }
 
     return { imported }
+  })
+
+  // ── 拖放导入（文件 / 文件夹）：递归收集音频并入库 ──
+  ipcMain.handle('library:importPaths', async (_event, paths: string[]) => {
+    const collected: Array<{ path: string; name: string; ext: string; size: number }> = []
+
+    function walk(p: string): void {
+      let st: ReturnType<typeof statSync>
+      try { st = statSync(p) } catch { return }
+      if (st.isDirectory()) {
+        let entries: Dirent[]
+        try { entries = readdirSync(p, { withFileTypes: true }) } catch { return }
+        for (const e of entries) {
+          if (e.name.startsWith('.')) continue
+          walk(join(p, e.name))
+        }
+      } else if (st.isFile()) {
+        const ext = extname(p).toLowerCase()
+        if (!AUDIO_EXTENSIONS.has(ext)) return
+        collected.push({ path: p, name: basename(p), ext, size: st.size })
+      }
+    }
+
+    for (const p of paths) walk(p)
+
+    const seen = new Set<string>()
+    const uniq = collected.filter((f) => (seen.has(f.path) ? false : (seen.add(f.path), true)))
+
+    const now = new Date().toISOString()
+    const insertStmt = db.prepare(`
+      INSERT OR IGNORE INTO sounds (id, file_path, file_hash, file_name, file_ext, file_size, imported_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    let imported = 0
+    for (const f of uniq) {
+      const buffer = await readFile(f.path, { length: 64 * 1024 })
+      const hash = createHash('sha256').update(buffer).digest('hex')
+      const id = uuidv4()
+      const result = insertStmt.run(id, f.path, hash, f.name, f.ext, f.size, now, now)
+      if (result.changes > 0) imported++
+    }
+    return { imported, total: uniq.length }
   })
 
   ipcMain.handle('sound:getAll', () => {
