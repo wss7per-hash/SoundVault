@@ -1028,6 +1028,23 @@ win.innerHTML =
     </div>
   </div>
 
+  <!-- Step 13 (重复文件查找) -->
+  <div class="step">
+    <div class="num">13</div>
+    <div>
+      <h3>查找并清除重复文件</h3>
+      <span class="path">顶部「库洞察」&nbsp;·&nbsp; 滚动到底部「重复文件」区块</span>
+      <p>导入时系统已按<strong style="color:var(--text)">文件内容（sha256 指纹）</strong>自动去重，因此正常导入不会产生重复。但早期版本导入、或手工放进库目录的音频，仍可能在库里形成重复组。本功能让你<strong style="color:var(--text)">主动扫描整个音效库、找出所有内容完全相同的文件，并安全地清理多余副本</strong>。</p>
+      <ul>
+        <li><b>精确查重</b>：按文件二进制 hash 比对，只有内容 100% 相同才判定为重复——绝不会误删只是"听起来像"的不同音效。</li>
+        <li><b>分组展示</b>：每组列出所有相同文件（文件名、大小、导入时间），并<strong style="color:var(--text)">默认保留最早导入的那一个</strong>作为原件。</li>
+        <li><b>灵活保留</b>：点选组内任意文件可切换"保留"项，其余标记为待删；支持"删除本组其余 N 个"，也支持"一键清理全部重复"。</li>
+        <li><b>安全清除</b>：被清理的副本会<strong style="color:var(--text)">移入系统回收站</strong>（与右键删除一致），可随时从回收站恢复，不会永久丢失。</li>
+      </ul>
+      <div class="callout tip" style="margin-top:12px"><b>典型场景</b>：从多个来源批量导入素材后，点一次「查找重复文件」，把几十个重复副本一键清掉，库瞬间清爽、还能腾出磁盘空间。</div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ═══════════ FAQ ═══════════ -->
@@ -1081,6 +1098,7 @@ win.innerHTML =
   <h2>路线图</h2>
   <p class="lead">以下为已完成与规划中的方向：</p>
   <ul style="list-style:none;display:flex;flex-direction:column;gap:10px;margin-top:22px">
+    <li style="padding-left:24px;position:relative;color:#cfccda">✅ <b style="color:var(--text)">重复文件查找与清理 · 已完成</b>——「库洞察」面板按文件内容（hash）主动扫描重复组，可保留原件、把多余副本移入回收站；精确比对不误删。</li>
     <li style="padding-left:24px;position:relative;color:#cfccda">✅ <b style="color:var(--text)">提示词生成音效（text-to-SFX）· 已完成</b>——Fal.ai（Stable Audio 2.5）/ ElevenLabs（SFX V2）双服务商，文本→音效并自动入库；新用户免费试用金 + 按次计费，生成前确认花费。</li>
     <li style="padding-left:24px;position:relative;color:#cfccda">✅ <b style="color:var(--text)">首尾无缝循环 · 已完成</b>——纯 ffmpeg 交叉淡化，生成 <code class="chip">*_loop.wav</code>，不覆盖原文件。</li>
     <li style="padding-left:24px;position:relative;color:#cfccda">🧬 <b style="color:var(--text)">生成类似音频</b>——用本库 AI 分析结果（场景 / 拟声词）作 prompt 近似，需 audio-to-audio（可后续接 Stable Audio 2.5 云端）。</li>

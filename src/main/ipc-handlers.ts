@@ -1976,6 +1976,27 @@ function ensureParentCategory(category: string, now: string): string | null {
     }
   })
 
+  // ---- 查找重复文件：按 file_hash 分组（排除空 hash 与已移入回收站）----
+  ipcMain.handle('library:findDuplicates', () => {
+    const groups = db.prepare(`
+      SELECT file_hash, COUNT(*) as cnt
+      FROM sounds
+      WHERE is_trashed = 0 AND file_hash IS NOT NULL AND file_hash != ''
+      GROUP BY file_hash
+      HAVING cnt > 1
+    `).all() as Array<{ file_hash: string; cnt: number }>
+
+    return groups.map((g) => {
+      const items = db.prepare(`
+        SELECT id, file_name, file_path, file_size, imported_at
+        FROM sounds
+        WHERE file_hash = ? AND is_trashed = 0
+        ORDER BY imported_at ASC
+      `).all(g.file_hash) as Array<{ id: string; file_name: string; file_path: string; file_size: number; imported_at: string }>
+      return { hash: g.file_hash, count: g.cnt, items }
+    })
+  })
+
   // ---- 跨盘安全移动：先尝试 rename（同盘快），失败则 copyFile + unlink（跨盘兜底） ----
   async function safeMove(src: string, dest: string): Promise<void> {
     try {

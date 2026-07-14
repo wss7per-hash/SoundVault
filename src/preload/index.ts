@@ -58,6 +58,7 @@ const api = {
   copyFileTo: (soundId: string, targetDir: string) => ipcRenderer.invoke('file:copyTo', soundId, targetDir),
   moveFileTo: (soundId: string, targetDir: string) => ipcRenderer.invoke('file:moveTo', soundId, targetDir),
   trashFile: (soundId: string) => ipcRenderer.invoke('file:trash', soundId),
+  findDuplicates: () => ipcRenderer.invoke('library:findDuplicates'),
 
   // Seamless Loop (ffmpeg crossfade)
   seamlessLoop: (soundId: string, crossfadeMs?: number, loopCount?: number) =>

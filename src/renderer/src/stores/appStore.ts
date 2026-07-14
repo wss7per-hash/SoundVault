@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import toast from 'react-hot-toast'
-import type { SoundData, TagData, TagStatData, CollectionData, SmartFolderData } from '../../preload/index.d'
+import type { SoundData, TagData, TagStatData, CollectionData, SmartFolderData, DuplicateGroup } from '../../preload/index.d'
 
 /** 判断是否为「未配置 API 密钥」类错误 */
 function isApiKeyError(msg: string, code?: string): boolean {
@@ -13,6 +13,7 @@ interface AppState {
   tags: TagData[]
   tagStats: TagStatData[]
   onoStats: TagStatData[]
+  duplicates: DuplicateGroup[]
   collections: CollectionData[]
   smartFolders: SmartFolderData[]
   selectedSoundId: string | null
@@ -87,6 +88,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   tags: [],
   tagStats: [],
   onoStats: [],
+  duplicates: [],
   collections: [],
   smartFolders: [],
   selectedSoundId: null,
@@ -209,6 +211,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ onoStats: stats })
     } catch {
       // onoStats may not be available
+    }
+  },
+
+  refreshDuplicates: async () => {
+    try {
+      const groups = await window.api.findDuplicates()
+      set({ duplicates: groups })
+    } catch {
+      // duplicates may not be available
     }
   },
 

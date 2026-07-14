@@ -1,7 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { Database, Clock, HardDrive, Sparkles, Tags, ArrowLeft, Layers, Volume2 } from 'lucide-react'
-import type { TagStatData } from '../../preload/index.d'
+import { Database, Clock, HardDrive, Sparkles, Tags, ArrowLeft, Layers, Volume2, Copy, Trash2 } from 'lucide-react'
+import type { TagStatData, DuplicateGroup, DuplicateItem } from '../../preload/index.d'
 
 const formatDuration = (ms: number): string => {
   const totalSec = Math.floor(ms / 1000)
@@ -27,6 +27,10 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
   const refreshStats = useAppStore((s) => s.refreshStats)
   const refreshTagStats = useAppStore((s) => s.refreshTagStats)
   const refreshOnoStats = useAppStore((s) => s.refreshOnoStats)
+  const duplicates = useAppStore((s) => s.duplicates)
+  const refreshDuplicates = useAppStore((s) => s.refreshDuplicates)
+  const [keepMap, setKeepMap] = useState<Record<string, string>>({})
+  const [scanning, setScanning] = useState(false)
 
   useEffect(() => {
     refreshStats()
@@ -56,6 +60,40 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
     const store = useAppStore.getState()
     store.setSearchQuery(t.name)
     store.setActiveView('library')
+  }
+
+  const handleScan = async (): Promise<void> => {
+    setScanning(true)
+    try {
+      await refreshDuplicates()
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  const removeItems = async (items: DuplicateItem[]): Promise<void> => {
+    for (const item of items) {
+      await window.api.trashFile(item.id)
+    }
+    await refreshDuplicates()
+    const store = useAppStore.getState()
+    store.refreshStats()
+    store.refreshSounds()
+  }
+
+  const handleRemoveGroup = async (group: DuplicateGroup): Promise<void> => {
+    const keepId = keepMap[group.hash] || group.items[0]?.id
+    const toRemove = group.items.filter((i) => i.id !== keepId)
+    if (toRemove.length === 0) return
+    await removeItems(toRemove)
+  }
+
+  const handleRemoveAll = async (): Promise<void> => {
+    for (const group of duplicates) {
+      const keepId = keepMap[group.hash] || group.items[0]?.id
+      const toRemove = group.items.filter((i) => i.id !== keepId)
+      await removeItems(toRemove)
+    }
   }
 
   const onoPct = total > 0 ? Math.round((stats.withOnomatopoeia / total) * 100) : 0
@@ -171,6 +209,74 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
           ) : (
             <p className="text-xs text-muted">还没有拟声词。先对音效做 AI 分析，即可自动生成多语种拟声词。</p>
           )}
+        </Section>
+
+        {/* Duplicates */}
+        <Section title="重复文件" icon={<Copy size={14} className="text-muted" />} hint="按文件内容(hash)查重 · 清除时移入回收站">
+          <div className="pt-1">
+            <button
+              onClick={handleScan}
+              disabled={scanning}
+              className="px-3 py-1.5 rounded-md text-xs bg-[#2a2a26] hover:bg-[#34342f] border border-surface-border disabled:opacity-50"
+            >
+              {scanning ? '扫描中…' : '查找重复文件'}
+            </button>
+            {duplicates.length === 0 ? (
+              <p className="text-xs text-muted mt-2">未发现重复文件。点击上方按钮可扫描整个音效库（按文件内容精确比对）。</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <p className="text-xs text-[#5a5a54]">
+                  发现 {duplicates.length} 组重复 · 共 {duplicates.reduce((s, g) => s + g.count, 0)} 个文件 · 可清理 {duplicates.reduce((s, g) => s + g.count - 1, 0)} 个。
+                  每组默认保留最早导入的，可点选其他项保留。
+                </p>
+                {duplicates.map((g) => {
+                  const keepId = keepMap[g.hash] || g.items[0]?.id
+                  const toRemove = g.items.filter((i) => i.id !== keepId)
+                  return (
+                    <div key={g.hash} className="rounded-lg border border-surface-border p-2.5">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-mono text-muted truncate">#{g.hash.slice(0, 10)}… · {g.count} 个相同</span>
+                        <button
+                          onClick={() => handleRemoveGroup(g)}
+                          disabled={toRemove.length === 0}
+                          className="px-2 py-1 rounded text-[11px] bg-[#3a2a2a] hover:bg-[#4a3333] border border-[#5a3a3a] text-red-200 disabled:opacity-40"
+                        >
+                          删除其余 {toRemove.length} 个
+                        </button>
+                      </div>
+                      <div className="space-y-1">
+                        {g.items.map((item) => {
+                          const isKeep = item.id === keepId
+                          return (
+                            <label
+                              key={item.id}
+                              className={`flex items-center gap-2 rounded px-2 py-1 text-xs cursor-pointer ${isKeep ? 'bg-[#1d2a1d] text-green-300' : 'hover:bg-surface-2'}`}
+                            >
+                              <input
+                                type="radio"
+                                name={`keep-${g.hash}`}
+                                checked={isKeep}
+                                onChange={() => setKeepMap((m) => ({ ...m, [g.hash]: item.id }))}
+                              />
+                              <span className="flex-1 truncate">{item.file_name}</span>
+                              <span className="text-muted">{formatSize(item.file_size)}</span>
+                              {isKeep && <span className="text-[10px] text-green-400">保留</span>}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+                <button
+                  onClick={handleRemoveAll}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-[#3a2a2a] hover:bg-[#4a3333] border border-[#5a3a3a] text-red-200"
+                >
+                  <Trash2 size={13} /> 一键清理全部重复
+                </button>
+              </div>
+            )}
+          </div>
         </Section>
 
         {/* Extra insights */}

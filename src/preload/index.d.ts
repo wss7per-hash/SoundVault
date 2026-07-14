@@ -43,6 +43,7 @@ export interface SoundVaultAPI {
   copyFileTo: (soundId: string, targetDir: string) => Promise<{ success: boolean; path?: string; message?: string }>
   moveFileTo: (soundId: string, targetDir: string) => Promise<{ success: boolean; path?: string; message?: string }>
   trashFile: (soundId: string) => Promise<{ success: boolean; message?: string }>
+  findDuplicates: () => Promise<DuplicateGroup[]>
   seamlessLoop: (soundId: string, crossfadeMs?: number, loopCount?: number) => Promise<{ success: boolean; outPath?: string; crossfadeMs?: number; loopCount?: number; importedId?: string; message?: string }>
   // 波形峰值（ffmpeg 抽 PCM，结果缓存进 preview_cache）
   getWaveform: (soundId: string) => Promise<{ success: boolean; peaks?: number[]; cached?: boolean; message?: string }>
@@ -252,6 +253,20 @@ export interface TagStatData {
   color: string | null
   count: number
   category?: string | null
+}
+
+export interface DuplicateItem {
+  id: string
+  file_name: string
+  file_path: string
+  file_size: number
+  imported_at: string
+}
+
+export interface DuplicateGroup {
+  hash: string
+  count: number
+  items: DuplicateItem[]
 }
 
 export interface SimilarSound {
