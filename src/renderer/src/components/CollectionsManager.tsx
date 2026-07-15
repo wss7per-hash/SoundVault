@@ -74,7 +74,7 @@ export function CollectionsManager(): JSX.Element {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[#2a2a28]">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-surface-panel">
         <div className="flex items-center gap-1.5">
           <Folder size={14} className="text-muted" />
           <span className="text-xs font-medium text-muted-light">收藏夹</span>
@@ -89,7 +89,7 @@ export function CollectionsManager(): JSX.Element {
       </div>
 
       {showAdd && (
-        <div className="px-3 py-2 border-b border-[#2a2a28] space-y-1.5">
+        <div className="px-3 py-2 border-b border-surface-panel space-y-1.5">
           <input
             className="w-full bg-surface-card border border-surface-border rounded px-2 py-1 text-xs outline-none focus:border-accent"
             placeholder="收藏夹名称"
@@ -101,7 +101,7 @@ export function CollectionsManager(): JSX.Element {
           <div className="flex gap-1.5">
             <button
               onClick={handleCreate}
-              className="px-2 py-0.5 bg-accent text-white text-2xs rounded hover:bg-[#6B5ED4]"
+              className="px-2 py-0.5 bg-accent text-white text-2xs rounded hover:bg-accent-light"
             >
               创建
             </button>
@@ -129,7 +129,7 @@ export function CollectionsManager(): JSX.Element {
           <span className="flex-1 truncate">收藏</span>
         </div>
 
-        {collections.length > 0 && <div className="h-px bg-[#2a2a28] my-1.5" />}
+        {collections.length > 0 && <div className="h-px bg-surface-panel my-1.5" />}
 
         {collections.length === 0 ? (
           <p className="text-2xs text-muted text-center py-4">暂无收藏夹</p>

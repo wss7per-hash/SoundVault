@@ -1,6 +1,6 @@
 import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron'
 import { readdir, stat, readFile, writeFile, copyFile, rename, mkdir, access, rm, unlink } from 'fs/promises'
-import { execFile } from 'child_process'
+import { execFile, execSync } from 'child_process'
 import { tmpdir } from 'os'
 // @ts-ignore - ffmpeg-static 无类型声明，但运行期返回二进制路径字符串
 import ffmpegPath from 'ffmpeg-static'
@@ -93,7 +93,22 @@ function execFileAsync(cmd: string, args: string[], opts: any): Promise<void> {
   })
 }
 
-async function importToAE(filePath: string): Promise<{ success: boolean; name?: string; message?: string }> {
+// 检测 After Effects 主程序（GUI 进程 AfterFX.exe）是否正在运行。
+// 仅当 AE 已打开时才允许 afterfx.exe -r 注入脚本，避免误拉起一个后台 AE 实例。
+function isAeRunning(): boolean {
+  try {
+    const out = execSync('tasklist /FI "IMAGENAME eq AfterFX.exe"', {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000
+    })
+    return /AfterFX\.exe/i.test(out)
+  } catch {
+    return false
+  }
+}
+
+async function importToAE(filePath: string): Promise<{ success: boolean; name?: string; message?: string; code?: string }> {
   const aeDir = findAEDir()
   if (!aeDir) {
     return { success: false, message: '未找到 After Effects，请确认已安装（默认位于 C:\\Program Files\\Adobe）' }
@@ -102,6 +117,15 @@ async function importToAE(filePath: string): Promise<{ success: boolean; name?: 
   const afterfx = join(supportDir, 'afterfx.exe')
   if (!existsSync(afterfx)) {
     return { success: false, message: '未找到 afterfx.exe（AE 安装可能不完整）' }
+  }
+
+  // 若 AE 未运行，不自动拉起 AE，给出友好提示（afterfx.exe -r 会在无实例时自启一个后台 AE）
+  if (!isAeRunning()) {
+    return {
+      success: false,
+      code: 'AE_CLOSED',
+      message: 'After Effects 当前未运行，请先打开 AE 后再执行「导出到 AE 工程」。'
+    }
   }
 
   const uid = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`

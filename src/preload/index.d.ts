@@ -12,7 +12,7 @@ export interface SoundVaultAPI {
   // 系统级文件拖拽（拖到 AE 等外部应用直接导入）
   startDragFile: (filePath: string) => void
   // 一键导入正在运行的 After Effects（官方 ExtendScript importFile）
-  importToAE: (filePath: string) => Promise<{ success: boolean; name?: string; message?: string }>
+  importToAE: (filePath: string) => Promise<{ success: boolean; name?: string; message?: string; code?: string }>
 
   // Dialog
   selectFolder: () => Promise<string[]>

@@ -5,20 +5,25 @@ module.exports = {
     extend: {
       colors: {
         surface: {
-          DEFAULT: '#1a1a18',
-          card: '#2C2C2A',
-          panel: '#222220',
-          hover: '#353533',
-          border: '#3E3E3C'
+          DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
+          card: 'rgb(var(--color-surface-card) / <alpha-value>)',
+          panel: 'rgb(var(--color-surface-panel) / <alpha-value>)',
+          hover: 'rgb(var(--color-surface-hover) / <alpha-value>)',
+          border: 'rgb(var(--color-surface-border) / <alpha-value>)'
         },
         accent: {
-          DEFAULT: '#534AB7',
-          light: '#7F77DD',
-          muted: '#3C3489'
+          DEFAULT: 'rgb(var(--color-accent) / <alpha-value>)',
+          light: 'rgb(var(--color-accent-light) / <alpha-value>)',
+          muted: 'rgb(var(--color-accent-muted) / <alpha-value>)'
         },
         muted: {
-          DEFAULT: '#888780',
-          light: '#B4B2A9'
+          DEFAULT: 'rgb(var(--color-muted) / <alpha-value>)',
+          light: 'rgb(var(--color-muted-light) / <alpha-value>)'
+        },
+        fg: {
+          DEFAULT: 'rgb(var(--color-fg) / <alpha-value>)',
+          muted: 'rgb(var(--color-fg-muted) / <alpha-value>)',
+          subtle: 'rgb(var(--color-fg-subtle) / <alpha-value>)'
         }
       },
       fontFamily: {

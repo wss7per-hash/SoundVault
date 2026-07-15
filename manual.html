@@ -396,6 +396,9 @@
   /* ---------- Status bar ---------- */
   .statusbar { height:32px; flex-shrink:0; border-top:1px solid #2a2a28; display:flex; align-items:center; padding:0 16px; font-size:12px; color:#6a6a64; gap:20px; }
   .statusbar .accent { margin-left:auto; color:#7F77DD; }
+  .kbd{display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:8px;background:#2C2C2A;border:1px solid #2C2C2A;color:#888780;cursor:default;font-family:var(--mono,monospace)}
+  .libbtn{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;background:#23223a;border:1px solid #3a3768;color:#b9b0ff;font-weight:600;cursor:default}
+  .libbtn:hover{background:#2a2950}
 </style>
 </head>
 <body>
@@ -422,7 +425,14 @@ const I = {
   sparkles:'<path d="M12 3l1.8 4.7L18.5 9.5 13.8 11.3 12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" fill="currentColor" stroke="none"/>',
   chevronr:'<polyline points="9 6 15 12 9 18"/>',
   chevrond:'<polyline points="6 9 12 15 18 9"/>',
-  hash:'<line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/><line x1="10" y1="4" x2="8" y2="20"/><line x1="16" y1="4" x2="14" y2="20"/>'
+  hash:'<line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/><line x1="10" y1="4" x2="8" y2="20"/><line x1="16" y1="4" x2="14" y2="20"/>',
+  package:'<path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+  foldercog:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="15.5" cy="14" r="1.6"/><path d="M15.5 11.2v1.1m0 3.4v1.1m-2.3-2.3-1-.7m6.6 0-1 .7m0 2.6 1 .7m-6.6 0 1-.7"/>',
+  trash:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
+  bar:'<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  wand:'<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/>',
+  rows:'<rect x="3" y="5" width="18" height="6" rx="1"/><rect x="3" y="13" width="18" height="6" rx="1"/>',
+  keyboard:'<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8M6 14h.01M18 14h.01"/>'
 };
 function ic(n,s,c){ return '<svg viewBox="0 0 24 24" width="'+s+'" height="'+s+'" fill="none" stroke="'+(c||'currentColor')+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+I[n]+'</svg>'; }
 function wave(seed){ let d='M0,24'; for(let i=0;i<40;i++){ const h=Math.sin(i*0.45+seed)*9+Math.sin(i*1.3+seed)*5+Math.sin(i*0.18)*3; d+=' L'+(i*5)+','+(24+h).toFixed(1);} return d; }
@@ -479,14 +489,12 @@ function card(s,i){
 const win=document.getElementById('win');
 win.innerHTML =
   '<div class="sb">'+
-    '<div class="sb-head"><div class="logo"><span>SV</span></div><div class="sb-title">SoundVault</div>'+
-      '<div class="sp"><div class="iconbtn" title="导入音效">'+ic('upload',16)+'</div>'+
-      '<div class="iconbtn" title="AI 模型配置">'+ic('settings',16)+'</div></div></div>'+
+    '<div class="sb-head"><div class="logo"><span>SV</span></div><div class="sb-title">SoundVault</div></div>'+
     '<div class="sb-tabs">'+
       '<div class="t on" title="标签">'+ic('hash',16)+'</div>'+
-      '<div class="t" title="收藏夹">'+ic('grid',16)+'</div>'+
-      '<div class="t" title="智能">'+ic('settings',16)+'</div>'+
-      '<div class="t" title="回收站">'+ic('x',16)+'</div></div>'+
+      '<div class="t" title="收藏夹">'+ic('star',16)+'</div>'+
+      '<div class="t" title="智能文件夹">'+ic('foldercog',16)+'</div>'+
+      '<div class="t" title="回收站">'+ic('trash',16)+'</div></div>'+
     '<div class="sb-body">'+
       '<div class="sb-sec-head"><div class="lbl">'+ic('hash',14)+'标签</div>'+
         '<div class="iconbtn" title="新建标签" style="width:24px;height:24px">'+ic('plus',14)+'</div></div>'+
@@ -498,16 +506,18 @@ win.innerHTML =
   '<div class="main">'+
     '<div class="toolbar">'+
       '<div class="searchbox">'+ic('search',16)+'<input placeholder="搜索音效、场景、情绪..."><span style="color:#6a6a64;font-size:12px">清除</span></div>'+
+      '<div class="kbd" title="全局快捷搜索（也可随时按快捷键）">'+ic('keyboard',14)+'<span>Ctrl+Shift+Space</span></div>'+
       '<div class="resize"><i></i></div>'+
       '<div class="vline"></div>'+
-      '<div class="tbtn" title="导出资源库">'+ic('download',16)+'</div>'+
-      '<div class="tbtn" title="导入资源库">'+ic('upload',16)+'</div>'+
-      '<div class="fs-pill" title="调整界面文字大小">'+ic('type',12)+
-        '<button title="缩小">'+ic('minus',11)+'</button><span class="num">14</span><button title="放大">'+ic('plus',11)+'</button></div>'+
-      '<div class="tbtn active" title="筛选与排序">'+ic('sliders',16)+'</div>'+
+      '<div class="libbtn" title="库管理 · 导入 / 导出 / 清理">'+ic('package',15)+'<span>库管理</span>'+ic('chevrond',12)+'</div>'+
       '<div class="vline"></div>'+
+      '<div class="tbtn active" title="筛选与排序">'+ic('sliders',16)+'</div>'+
       '<div class="tbtn active" title="网格视图">'+ic('grid',16)+'</div>'+
       '<div class="tbtn" title="列表视图">'+ic('list',16)+'</div>'+
+      '<div class="tbtn" title="网格密度（紧凑/舒适）">'+ic('rows',16)+'</div>'+
+      '<div class="tbtn" title="设置 · AI 配置 / 主题 / 字号">'+ic('settings',16)+'</div>'+
+      '<div class="tbtn" title="库洞察 · 统计面板">'+ic('bar',16)+'</div>'+
+      '<div class="tbtn" title="AI 生成音效（云端文本→音效）">'+ic('wand',16)+'</div>'+
       '<div class="win-ctrl">'+
         '<button title="最小化">'+ic('minimize',14)+'</button>'+
         '<button title="最大化">'+ic('square',12)+'</button>'+
@@ -583,10 +593,10 @@ win.innerHTML =
   </script>
 
   <div style="margin-top:18px;display:flex;flex-wrap:wrap;gap:8px">
-    <span class="ztag">① 左侧栏顶部 — SoundVault logo / 导入按钮 / AI 配置</span>
-    <span class="ztag">② 四个导航 Tab（标签 · 收藏夹 · 智能 · 回收站）</span>
-    <span class="ztag">③ 标签树 — 八大分类可展开，点击即筛选中间网格</span>
-    <span class="ztag">④ 工具栏 — 搜索框 · 导出/导入 · 字号调节 · 筛排 · 网格/列表切换 · 窗口控制</span>
+    <span class="ztag">① 左侧栏 — SoundVault logo；四个导航 Tab（标签 · 收藏夹 · 智能 · 回收站）</span>
+    <span class="ztag">② 标签树 — 八大分类可展开，点击即筛选中间网格</span>
+    <span class="ztag">③ 工具栏 — 搜索框（可拖拽右边缘调宽）· 全局搜索快捷键提示 ·「库管理 ▾」下拉（导入 / 导出 / 清理）</span>
+    <span class="ztag">④ 右侧工具组 — 筛选排序 · 网格/列表切换 · 网格密度 · 设置 · 库洞察 · AI 生成 · 窗口控制</span>
     <span class="ztag">⑤ 音效卡片网格 — 波形图 + 文件名 + AI 描述 + 时长/格式/大小，悬停预览</span>
     <span class="ztag">⑥ 右侧详情面板 — 音频播放器、AI 描述、适用场景、情绪、标签、质量评分、技术信息、操作按钮</span>
     <span class="ztag">⑦ 底部状态栏 — 总量 / 收藏数 / 文件总大小 / 选中数量</span>
@@ -813,10 +823,10 @@ win.innerHTML =
     <div class="num">7</div>
     <div>
       <h3>资源库导出 / 导入（跨电脑迁移）</h3>
-      <span class="path">中间工具栏右侧 &nbsp;·&nbsp; 「导出」⤓ / 「导入」⤒ 图标</span>
+      <span class="path">工具栏「库管理 ▾」下拉 &nbsp;·&nbsp; 导入音效库 / 导出音效库</span>
       <p>工具栏的「导出 / 导入」按钮，生成类似 Eagle 的便携式资源包。</p>
       <div class="detail">
-        <div class="row"><span class="k">导出范围</span><span class="v">点「⤓ 导出」→ 弹面板：<b>全部导出</b> / <b>选中项导出</b>（需先多选）/ <b>按收藏夹导出</b>（列出收藏夹供选）</span></div>
+        <div class="row"><span class="k">导出范围</span><span class="v">点「导出音效库」→ 弹面板：<b>全部导出</b>（整库）/ <b>自定义导出</b>（手动勾选 · 按智能文件夹 · 按标签 · 按收藏夹，可单选或组合）</span></div>
         <div class="row"><span class="k">导出进度</span><span class="v">全屏面板：进度条 +「已处理 X / 总数」+ <b>实时用时</b> + 当前正在复制的文件名 + 已复制/缺失计数 +「<b>取消导出</b>」按钮（取消自动清理半成品）</span></div>
         <div class="row"><span class="k">完成提示</span><span class="v">弹出<strong style="color:var(--text)">含总用时</strong>的成功 toast（复制 N 个音频 / 缺失 M 个）+「打开文件夹」按钮一键定位</span></div>
         <div class="row"><span class="k">导入</span><span class="v">点「⤒ 导入」→ 选导出包目录→ 全屏「正在导入资源库…」遮罩→ 自动<strong style="color:var(--text)">合并</strong>进当前库</span></div>
@@ -836,17 +846,17 @@ win.innerHTML =
     <div class="num">8</div>
     <div>
       <h3>排序、筛选与界面效率</h3>
-      <span class="path">中间工具栏右侧 &nbsp;·&nbsp; 「⚙ 筛选排序」图标 / 字号控件 / 窗口控制</span>
+      <span class="path">中间工具栏右侧 &nbsp;·&nbsp; 「⚙ 筛选排序」图标 / 网格密度 / 窗口控制</span>
       <p>工具栏右侧集中了所有浏览与窗口控制。</p>
       <div class="detail">
         <div class="row"><span class="k">筛选排序 ▸</span><span class="v"><b>排序方式</b>：导入时间 / 文件名 / 时长 / 大小；<b>排序方向</b>：升序 / 降序；<b>格式过滤</b>：全部 / MP3 / WAV / FLAC / OGG / M4A / AIFF（已激活的筛选会在按钮上显示小圆点）</span></div>
         <div class="row"><span class="k">搜索框</span><span class="v">可拖动右边缘调整宽度（180–680px），有内容时显示「清除」；宽度会被记住</span></div>
-        <div class="row"><span class="k">字号控件</span><span class="v">「<b>A 字号</b>」药丸：− / 数字 / +，范围 <b>12–20px</b>，适配不同屏幕与视力</span></div>
+        <div class="row"><span class="k">网格密度</span><span class="v">工具栏「⠿ 密度」图标：在<b>舒适 / 紧凑</b>两种网格间距间切换，紧凑模式一屏容纳更多卡片</span></div>
         <div class="row"><span class="k">窗口控制</span><span class="v">无边框窗口，右上角「<b>▁ 最小化</b> / <b>▢ 最大化·还原</b> / <b>✕ 关闭</b>」；最大化后再次点还原</span></div>
         <div class="row"><span class="k">回收站</span><span class="v">左侧第四个 Tab「回收站」查看已删音效，可在此恢复</span></div>
       </div>
       <ul>
-        <li>工具栏右侧可<strong style="color:var(--text)">调节界面字号</strong>（12–20px），适配不同屏幕与视力。</li>
+        <li>界面字号在<strong style="color:var(--text)">「设置」面板</strong>中调节（12–20px），适配不同屏幕与视力；工具栏右侧可切换网格密度（舒适 / 紧凑）。</li>
         <li>无边框窗口，右上角提供最小化 / 最大化 / 关闭。</li>
         <li>删除的音效先进入<strong style="color:var(--text)">回收站</strong>，误删可恢复。</li>
       </ul>
@@ -858,7 +868,7 @@ win.innerHTML =
     <div class="num">9</div>
     <div>
       <h3>配置 AI 模型（首次必看）</h3>
-      <span class="path">左侧栏顶部「⚙ 模型配置」&nbsp; 或 &nbsp; 未配 Key 时点分析自动弹出</span>
+      <span class="path">工具栏右侧「⚙ 设置」→「模型配置」&nbsp; 或 &nbsp; 未配 Key 时点分析自动弹出</span>
       <p>这个 580px 的弹窗决定 AI 用哪家、怎么连。所有 Key 只存在你本机。</p>
       <div class="detail">
         <div class="row"><span class="k">服务商</span><span class="v">网格选一个：<b>DeepSeek</b>（默认，高性价比中文强）/ OpenAI / 通义千问 / Kimi / 豆包 / 硅基流动 / Claude / Gemini / Azure OpenAI / Ollama（本地）/ TokenDance / 自定义</span></div>
@@ -1042,6 +1052,47 @@ win.innerHTML =
         <li><b>安全清除</b>：被清理的副本会<strong style="color:var(--text)">移入系统回收站</strong>（与右键删除一致），可随时从回收站恢复，不会永久丢失。</li>
       </ul>
       <div class="callout tip" style="margin-top:12px"><b>典型场景</b>：从多个来源批量导入素材后，点一次「查找重复文件」，把几十个重复副本一键清掉，库瞬间清爽、还能腾出磁盘空间。</div>
+    </div>
+  </div>
+
+  <!-- Step 14 (设置与个性化) -->
+  <div class="step">
+    <div class="num">14</div>
+    <div>
+      <h3>个性化设置（主题 / 字号 / 默认格式）</h3>
+      <span class="path">工具栏右侧「⚙ 设置」&nbsp;·&nbsp; 打开设置面板（一级视图）</span>
+      <p>所有外观与默认偏好都集中在一个设置面板里，改完即时生效并自动记住。</p>
+      <div class="detail">
+        <div class="row"><span class="k">外观 · 主题</span><span class="v">深 / 浅色一键切换（<b>深色</b>护眼 / <b>浅色</b>明亮）；偏好自动记住，下次启动沿用</span></div>
+        <div class="row"><span class="k">界面字号</span><span class="v">滑块调节 <b>12–20px</b>，放大便于远距或高分屏阅读，全局统一生效</span></div>
+        <div class="row"><span class="k">默认导出格式</span><span class="v">选 WAV / MP3 等，作为「导出音效库」的默认目标格式</span></div>
+        <div class="row"><span class="k">AI 模型配置</span><span class="v">同一面板内选择服务商、填 Key、测试连接（详见 Step 9）</span></div>
+        <div class="row"><span class="k">导入后自动 AI 标注</span><span class="v">开关：导入新音效后自动批量分析，免手动逐条点</span></div>
+      </div>
+      <ul>
+        <li>设置面板是一级视图，点工具栏「⚙」即可进入，无需先选中音效。</li>
+        <li>主题、字号等偏好保存在本机，换库不影响；Key 仍仅存本地。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Step 15 (全局搜索 + 键盘导航) -->
+  <div class="step">
+    <div class="num">15</div>
+    <div>
+      <h3>全局快捷搜索与键盘导航</h3>
+      <span class="path">随时按快捷键 &nbsp;·&nbsp; 呼出迷你搜索浮层 / 在网格中用键盘浏览</span>
+      <p>SoundVault 内置两套效率通道，双手不用离开键盘也能飞快找音效。</p>
+      <div class="detail">
+        <div class="row"><span class="k">🌐 全局快捷搜索</span><span class="v">按 <b>Ctrl/Cmd + Shift + Space</b> 随时呼出悬浮搜索框（软件失焦也能唤出），输入即搜文件名 / 场景 / 情绪，回车跳回主区定位结果；快捷键可在设置里查看</span></div>
+        <div class="row"><span class="k">⌨ 网格键盘导航</span><span class="v">主区聚焦时，<b>方向键</b>在卡片间移动焦点、<b>空格</b>播放 / 暂停当前选中、<b>字符键</b>按文件名前缀快速跳转（连续输入环绕查找）</span></div>
+        <div class="row"><span class="k">配合右键</span><span class="v">右键任意卡片还可在「工具 / 导出此音效 / 导出到 AE 工程 / 收藏 / AI 分析 / 重命名 / 删除」间快速操作</span></div>
+      </div>
+      <ul>
+        <li>全局搜索浮层是「随时呼出」的，正在别的应用里也能一键拉起找音效。</li>
+        <li>键盘导航在输入框聚焦时自动让行，不会和打字冲突。</li>
+      </ul>
+      <div class="callout tip">小技巧：在大库里先按全局搜索定位到一批，再用方向键 + 空格逐个试听，比鼠标点选快得多。</div>
     </div>
   </div>
 

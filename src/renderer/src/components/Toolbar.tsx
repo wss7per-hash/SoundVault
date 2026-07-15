@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
-import { Search, LayoutGrid, List, SlidersHorizontal, Minus, Plus, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Type, Upload, Download, Loader2, Check, Package, FolderOpen, Ban, CheckCircle2, BarChart3, Wand2 } from 'lucide-react'
+import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown } from 'lucide-react'
+import { ExportDialog } from './ExportDialog'
 
 const SORT_OPTIONS = [
   { value: 'date', label: '导入时间', icon: Calendar },
@@ -36,11 +37,13 @@ function makeToken(): string {
 }
 
 export function Toolbar(): JSX.Element {
-  const { searchQuery, setSearchQuery, fontSize, setFontSize } = useAppStore()
+  const { searchQuery, setSearchQuery } = useAppStore()
   const [showFilter, setShowFilter] = useState(false)
   const [isMaximized, setIsMaximized] = useState(false)
   const [busy, setBusy] = useState<null | 'import'>(null)
-  const [showExportMenu, setShowExportMenu] = useState(false)
+  const [showLibMenu, setShowLibMenu] = useState(false)
+  // 导出选择弹窗（全部 / 自定义）
+  const [showExportDlg, setShowExportDlg] = useState(false)
   // Export progress state
   const [exportState, setExportState] = useState<null | {
     token: string
@@ -146,6 +149,8 @@ export function Toolbar(): JSX.Element {
 
   const viewMode = useAppStore((s) => s.viewMode)
   const setViewMode = useAppStore((s) => s.setViewMode)
+  const gridDensity = useAppStore((s) => s.gridDensity)
+  const setGridDensity = useAppStore((s) => s.setGridDensity)
   const activeView = useAppStore((s) => s.activeView)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -158,17 +163,12 @@ export function Toolbar(): JSX.Element {
   // ---- Library export / import ----
 
   const sounds = useAppStore((s) => s.sounds)
+  const tags = useAppStore((s) => s.tags)
   const collections = useAppStore((s) => s.collections)
-  const selectedSoundIds = useAppStore((s) => s.selectedSoundIds)
-
-  /** Open the export scope picker (not the folder dialog yet). */
-  const handleExportClick = useCallback(() => {
-    setShowExportMenu((v) => !v)
-  }, [])
+  const smartFolders = useAppStore((s) => s.smartFolders)
 
   /** Execute export with a given set of sound IDs (undefined = all). */
   const doExport = useCallback(async (exportSoundIds?: string[]) => {
-    setShowExportMenu(false)
     const dirs = await window.api.selectFolder()
     if (!dirs || dirs.length === 0) return
     const token = makeToken()
@@ -244,6 +244,14 @@ export function Toolbar(): JSX.Element {
           store.refreshSmartFolders()
         ])
         toast.success(`已导入资源库（${res.imported} 个音效）`)
+        // 自动标注：导入成功后对未分析音效批量分析
+        if (store.autoAnalyzeOnImport) {
+          const ids = store.sounds.filter((s) => !s.ai_analyzed_at).map((s) => s.id)
+          if (ids.length) {
+            toast('已开启自动标注，正在分析新导入的音效…', { icon: '✨' })
+            store.analyzeBatch(ids)
+          }
+        }
       } else {
         toast.error(res.error || '导入失败')
       }
@@ -255,17 +263,24 @@ export function Toolbar(): JSX.Element {
   }, [])
 
   // 清理无效文件：先扫描统计，再确认永久删除缺失条目
+  const [cleanupScanning, setCleanupScanning] = useState(false)
   const handleCleanupScan = useCallback(async () => {
+    setCleanupScanning(true)
     try {
       const res = await window.api.cleanupMissing('scan')
       if (res.success && res.missing > 0) {
         setCleanupCount(res.missing)
         setShowCleanupDlg(true)
+      } else if (res.success) {
+        toast('✅ 所有音效文件完整，无需清理')
       } else {
-        toast('没有发现无效文件（本地音频均存在）')
+        toast.error(res.message || '检测失败')
       }
-    } catch {
-      toast.error('检测失败')
+    } catch (err) {
+      console.error('cleanupMissing scan error:', err)
+      toast.error('检测失败，请检查日志后重试')
+    } finally {
+      setCleanupScanning(false)
     }
   }, [])
 
@@ -293,12 +308,12 @@ export function Toolbar(): JSX.Element {
         setShowFilter(false)
       }
       if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
-        setShowExportMenu(false)
+        setShowLibMenu(false)
       }
     }
-    if (showFilter || showExportMenu) document.addEventListener('mousedown', handleClickOutside)
+    if (showFilter || showLibMenu) document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showFilter, showExportMenu])
+  }, [showFilter, showLibMenu])
 
   // Live elapsed-time ticker while an export is running.
   const exporting = exportState !== null
@@ -363,127 +378,77 @@ export function Toolbar(): JSX.Element {
         <div className={`w-px h-3.5 ${isResizing ? 'bg-white/70' : 'bg-surface-border group-hover:bg-accent-light'} transition-colors`} />
       </div>
 
-      {/* Library export / import */}
+      {/* Library management dropdown */}
       <div className="flex items-center gap-0.5 no-drag relative" ref={exportRef}>
         <div className="w-px h-5 bg-surface-border mx-1" />
         <button
-          onClick={handleExportClick}
+          onClick={() => setShowLibMenu(!showLibMenu)}
           disabled={busy !== null || exportState !== null}
           className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-colors ${
-            showExportMenu
+            showLibMenu
               ? 'bg-accent/20 text-accent-light'
               : 'text-muted hover:bg-surface-hover hover:text-muted-light'
           } disabled:opacity-30 disabled:cursor-default`}
+          title="库管理 · 导入 / 导出 / 清理"
         >
-          <Download size={14} />
-          导出
+          <Package size={14} />
+          库管理
+          <ChevronDown size={12} className={`transition-transform ${showLibMenu ? 'rotate-180' : ''}`} />
         </button>
 
-        {/* Export scope picker panel */}
-        {showExportMenu && (
-          <div className="absolute right-0 top-full mt-2 w-60 bg-[#1f1f1d] border border-surface-border rounded-xl shadow-2xl py-3 z-50">
-            <p className="px-3 pb-2 text-xs text-muted font-medium">选择导出范围</p>
-
-            {/* Export all */}
+        {showLibMenu && (
+          <div className="absolute left-0 top-full mt-2 w-64 bg-surface-panel border border-surface-border rounded-xl shadow-2xl py-3 z-50">
+            {/* Import */}
             <button
-              onClick={() => doExport()}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors"
+              onClick={() => { setShowLibMenu(false); handleImport() }}
+              disabled={busy !== null || exportState !== null}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
             >
-              <Package size={14} className="text-accent-light" />
+              <Upload size={14} className="text-accent-light" />
               <div className="text-left">
-                <div>全部导出</div>
-                <div className="text-[10px] text-muted/60">导出整个资源库（{sounds.length} 个音效）</div>
+                <div>导入音效库</div>
+                <div className="text-[10px] text-muted/60">选择文件夹导入（也可拖放文件）</div>
               </div>
             </button>
 
-            {/* Export selected */}
-            {selectedSoundIds.length > 0 && (
-              <button
-                onClick={() => doExport(selectedSoundIds)}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors"
-              >
-                <Check size={14} className="text-green-400" />
-                <div className="text-left">
-                  <div>选中项导出</div>
-                  <div className="text-[10px] text-muted/60">仅导出选中的 {selectedSoundIds.length} 个音效</div>
-                </div>
-              </button>
-            )}
+            <div className="h-px bg-surface-border/50 my-1.5" />
 
-            {/* Export by collection */}
-            {collections.length > 0 && (
-              <>
-                <div className="px-3 pt-2 pb-1 text-[10px] text-muted/50 uppercase tracking-wider">按收藏夹导出</div>
-                <div className="max-h-40 overflow-y-auto px-1">
-                  {collections.map((col) => (
-                    <button
-                      key={col.id}
-                      onClick={async () => {
-                        const colSounds = await window.api.getCollectionSounds(col.id)
-                        doExport(colSounds.map((s) => s.id))
-                      }}
-                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors"
-                    >
-                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: col.color || '#534AB7' }} />
-                      {col.name}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            {/* Export — single entry opens scope-choice dialog */}
+            <button
+              onClick={() => { setShowLibMenu(false); setShowExportDlg(true) }}
+              disabled={busy !== null || exportState !== null}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
+            >
+              <Download size={14} className="text-accent-light" />
+              <div className="text-left">
+                <div>导出音效库</div>
+                <div className="text-[10px] text-muted/60">{sounds.length} 个音效 · 选择范围导出</div>
+              </div>
+            </button>
+
+            <div className="h-px bg-surface-border/50 my-1.5" />
+
+            {/* Cleanup */}
+            <button
+              onClick={() => { setShowLibMenu(false); handleCleanupScan() }}
+              disabled={busy !== null || exportState !== null || cleanupScanning}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
+            >
+              {cleanupScanning ? (
+                <Loader2 size={14} className="text-red-400 animate-spin" />
+              ) : (
+                <Ban size={14} className="text-red-400" />
+              )}
+              <div className="text-left">
+                <div>{cleanupScanning ? '正在检测…' : '清理无效文件'}</div>
+                <div className="text-[10px] text-muted/60">{cleanupScanning ? '扫描音效文件是否存在' : '移除本地音频已丢失的条目'}</div>
+              </div>
+            </button>
           </div>
         )}
-
-        <button
-          onClick={handleImport}
-          disabled={busy !== null || exportState !== null}
-          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-colors text-muted hover:bg-surface-hover hover:text-muted-light disabled:opacity-30 disabled:cursor-default"
-        >
-          <Upload size={14} />
-          导入
-        </button>
-
-        {/* 清理无效文件：本地音频已丢失的条目 */}
-        <button
-          onClick={handleCleanupScan}
-          disabled={busy !== null || exportState !== null}
-          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-colors text-muted hover:bg-surface-hover hover:text-muted-light disabled:opacity-30 disabled:cursor-default"
-          title="清理本地音频已丢失的无效条目"
-        >
-          <Ban size={14} />
-          清理
-        </button>
       </div>
 
-      {/* Font size control — polished pill */}
-      <div className="flex items-center no-drag ml-auto" title="调整界面文字大小">
-        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-surface-card/60 border border-surface-border/50">
-          <Type size={12} className="text-muted/60" />
-          <button
-            onClick={() => setFontSize(Math.max(12, fontSize - 1))}
-            disabled={fontSize <= 12}
-            className="w-5 h-5 flex items-center justify-center rounded text-muted hover:text-accent-light hover:bg-surface-hover disabled:opacity-25 disabled:cursor-default transition-colors"
-            title="缩小"
-          >
-            <Minus size={11} strokeWidth={2.5} />
-          </button>
-          <span
-            className="text-[10px] font-medium text-muted-light tabular-nums min-w-[22px] text-center leading-none cursor-default select-none"
-          >
-            {fontSize}
-          </span>
-          <button
-            onClick={() => setFontSize(Math.min(20, fontSize + 1))}
-            disabled={fontSize >= 20}
-            className="w-5 h-5 flex items-center justify-center rounded text-muted hover:text-accent-light hover:bg-surface-hover disabled:opacity-25 disabled:cursor-default transition-colors"
-            title="放大"
-          >
-            <Plus size={11} strokeWidth={2.5} />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-1 no-drag">
+      <div className="flex items-center gap-1 no-drag ml-auto">
         {/* Filter / Sort */}
         <div className="relative" ref={filterRef}>
           <button
@@ -502,7 +467,7 @@ export function Toolbar(): JSX.Element {
           </button>
 
           {showFilter && (
-            <div className="absolute right-0 top-full mt-2 w-56 bg-[#1f1f1d] border border-surface-border rounded-xl shadow-2xl py-3 z-50">
+            <div className="absolute right-0 top-full mt-2 w-56 bg-surface-panel border border-surface-border rounded-xl shadow-2xl py-3 z-50">
               {/* Sort by */}
               <div className="px-3 pb-2 mb-2 border-b border-surface-border/50">
                 <p className="text-xs text-muted mb-2">排序方式</p>
@@ -597,6 +562,28 @@ export function Toolbar(): JSX.Element {
           <List size={16} />
         </button>
         <button
+          onClick={() => setGridDensity(gridDensity === 'compact' ? 'comfortable' : 'compact')}
+          className={`p-1.5 rounded-md transition-colors ${
+            gridDensity === 'compact'
+              ? 'bg-accent/20 text-accent-light'
+              : 'text-muted hover:bg-surface-hover hover:text-muted-light'
+          }`}
+          title={gridDensity === 'compact' ? '网格密度：紧凑（点击切回舒适）' : '网格密度：舒适（点击切到紧凑）'}
+        >
+          {gridDensity === 'compact' ? <Rows4 size={16} /> : <Rows3 size={16} />}
+        </button>
+        <button
+          onClick={() => setActiveView(activeView === 'settings' ? 'library' : 'settings')}
+          className={`p-1.5 rounded-md transition-colors ${
+            activeView === 'settings'
+              ? 'bg-accent/20 text-accent-light'
+              : 'text-muted hover:bg-surface-hover hover:text-muted-light'
+          }`}
+          title="设置 · AI 配置 / 主题 / 字号 / 默认格式"
+        >
+          <Settings size={16} />
+        </button>
+        <button
           onClick={() => setActiveView(activeView === 'stats' ? 'library' : 'stats')}
           className={`p-1.5 rounded-md transition-colors ${
             activeView === 'stats'
@@ -644,7 +631,7 @@ export function Toolbar(): JSX.Element {
       {/* Library export progress panel (live progress + cancel) */}
       {exportState && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-sm">
-          <div className="relative w-[360px] bg-[#232321] border border-surface-border rounded-2xl shadow-2xl p-5">
+          <div className="relative w-[360px] bg-surface-panel border border-surface-border rounded-2xl shadow-2xl p-5">
             <div className="flex items-center gap-2.5 mb-3">
               <Loader2 size={18} className="text-accent-light animate-spin shrink-0" />
               <div className="text-sm text-muted-light font-medium">正在导出资源库…</div>
@@ -692,10 +679,10 @@ export function Toolbar(): JSX.Element {
       {/* 清理无效文件确认弹窗 */}
       {showCleanupDlg && (
         <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/55 backdrop-blur-sm">
-          <div className="w-[360px] bg-[#1f1f1d] border border-surface-border rounded-2xl shadow-2xl p-5">
+          <div className="w-[360px] bg-surface-panel border border-surface-border rounded-2xl shadow-2xl p-5">
             <div className="flex items-center gap-2.5 mb-3">
               <AlertTriangle size={18} className="text-amber-400 shrink-0" />
-              <h3 className="text-sm font-semibold text-[#f0ede6]">清理无效文件</h3>
+              <h3 className="text-sm font-semibold text-fg">清理无效文件</h3>
             </div>
             <p className="text-xs text-muted-light leading-relaxed mb-1">
               检测到 <span className="text-amber-400 font-medium">{cleanupCount}</span> 个音效的本地音频文件已不存在（可能被外部删除或移动）。
@@ -722,6 +709,18 @@ export function Toolbar(): JSX.Element {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 导出范围选择弹窗（全部 / 自定义） */}
+      {showExportDlg && (
+        <ExportDialog
+          sounds={sounds}
+          tags={tags}
+          collections={collections}
+          smartFolders={smartFolders}
+          onClose={() => setShowExportDlg(false)}
+          onExport={(ids) => doExport(ids ?? undefined)}
+        />
       )}
     </div>
   )

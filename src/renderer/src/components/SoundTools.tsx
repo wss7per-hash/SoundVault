@@ -154,6 +154,8 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
       const res = await window.api.importToAE(sound.file_path)
       if (res.success) {
         toast.success(`已导入 After Effects${res.name ? '：' + res.name : ''}`)
+      } else if (res.code === 'AE_CLOSED') {
+        toast('After Effects 未运行，请先打开 AE 后再导出到工程', { icon: '💡', duration: 5000 })
       } else {
         toast.error(res.message || '导入失败')
       }
@@ -358,19 +360,19 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
   return (
     <div className="flex flex-col gap-4">
       {/* Player (for crop preview) */}
-      <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+      <div className="rounded-md border border-surface-panel bg-surface px-3 py-2.5">
         <div className="flex items-center gap-3 mb-2">
-          <span className="text-xs text-[#8a8a82] truncate flex-1" title={sound.file_name}>
+          <span className="text-xs text-muted truncate flex-1" title={sound.file_name}>
             {sound.file_name}
           </span>
-          <span className="text-xs text-[#6a6a64] font-mono tabular-nums shrink-0">
+          <span className="text-xs text-muted-light font-mono tabular-nums shrink-0">
             {formatDuration(sound.duration_ms)}
           </span>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={skipBack}
-            className="p-1 hover:text-[#b8b8b4] text-[#6a6a64] transition-colors"
+            className="p-1 hover:text-muted-light text-muted-light transition-colors"
             title="后退5秒"
           >
             <SkipBack size={14} />
@@ -381,10 +383,10 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
           >
             {isPlaying ? <Pause size={14} fill="white" /> : <Play size={14} fill="white" className="ml-0.5" />}
           </button>
-          <button onClick={skipForward} className="p-1 hover:text-[#b8b8b4] text-[#6a6a64] transition-colors" title="前进5秒">
+          <button onClick={skipForward} className="p-1 hover:text-muted-light text-muted-light transition-colors" title="前进5秒">
             <SkipForward size={14} />
           </button>
-          <span className="text-xs text-[#8a8a82] font-mono tabular-nums ml-1">
+          <span className="text-xs text-muted font-mono tabular-nums ml-1">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
         </div>
@@ -392,13 +394,13 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
       </div>
 
       {/* 首尾无缝循环 */}
-      <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+      <div className="rounded-md border border-surface-panel bg-surface px-3 py-2.5">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+          <span className="text-xs text-muted flex items-center gap-1.5 font-medium">
             <Repeat size={13} className="text-accent" /> 首尾无缝循环
           </span>
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
+            <label className="flex items-center gap-1 text-[10px] text-muted-light">
               交叉
               <input
                 type="number"
@@ -406,11 +408,11 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
                 max={500}
                 value={loopMs}
                 onChange={(e) => setLoopMs(Math.max(10, Math.min(500, Number(e.target.value) || 30)))}
-                className="w-12 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center"
+                className="w-12 bg-surface-card border border-surface-panel rounded px-1 py-0.5 text-[10px] text-muted-light text-center"
               />
               ms
             </label>
-            <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
+            <label className="flex items-center gap-1 text-[10px] text-muted-light">
               循环
               <input
                 type="number"
@@ -418,7 +420,7 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
                 max={50}
                 value={loopCount}
                 onChange={(e) => setLoopCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                className="w-10 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center"
+                className="w-10 bg-surface-card border border-surface-panel rounded px-1 py-0.5 text-[10px] text-muted-light text-center"
               />
               次
             </label>
@@ -432,21 +434,21 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
           <Repeat size={13} />
           {looping ? '生成中…' : '生成无缝循环文件'}
         </button>
-        <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
-          用 ffmpeg 将尾音交叉淡入开头，生成 <code className="text-[#8a8a82]">原名_loop次数.wav</code>（不覆盖原文件）。
+        <p className="text-[10px] text-muted-light mt-1.5 leading-relaxed">
+          用 ffmpeg 将尾音交叉淡入开头，生成 <code className="text-muted">原名_loop次数.wav</code>（不覆盖原文件）。
         </p>
       </div>
 
       {/* 裁剪截取片段 */}
-      <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+      <div className="rounded-md border border-surface-panel bg-surface px-3 py-2.5">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+          <span className="text-xs text-muted flex items-center gap-1.5 font-medium">
             <Scissors size={13} className="text-accent" /> 裁剪截取片段
           </span>
           <button
             onClick={handleCropPreview}
             disabled={!duration}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-[#b8b8b4] bg-[#252524] hover:bg-[#2f2f2c] border border-[#2a2a28] transition-colors disabled:opacity-40"
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-muted-light bg-surface-card hover:bg-surface-hover border border-surface-panel transition-colors disabled:opacity-40"
           >
             {cropPreview ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
             {cropPreview ? '停止试听' : '试听选区'}
@@ -455,7 +457,7 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
 
         <div
           ref={cropWaveRef}
-          className="relative h-14 bg-[#141412] rounded-lg overflow-hidden mb-2 select-none touch-none"
+          className="relative h-14 bg-surface rounded-lg overflow-hidden mb-2 select-none touch-none"
           onPointerMove={onCropWaveMove}
           onPointerUp={onCropWaveUp}
           onPointerLeave={onCropWaveUp}
@@ -496,7 +498,7 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-[10px] text-[#6a6a64] mb-2">
+        <div className="flex items-center gap-2 text-[10px] text-muted-light mb-2">
           <label className="flex items-center gap-1">
             起点
             <input
@@ -506,7 +508,7 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
               step={0.1}
               value={Number(cropStart.toFixed(2))}
               onChange={(e) => setCropStart(Math.max(0, Math.min(Number(e.target.value) || 0, cropEnd - 0.02)))}
-              className="w-14 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[#b8b8b4] text-center"
+              className="w-14 bg-surface-card border border-surface-panel rounded px-1 py-0.5 text-muted-light text-center"
             />
             s
           </label>
@@ -519,11 +521,11 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
               step={0.1}
               value={Number(cropEnd.toFixed(2))}
               onChange={(e) => setCropEnd(Math.max(Number(e.target.value) || 0, cropStart + 0.02))}
-              className="w-14 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[#b8b8b4] text-center"
+              className="w-14 bg-surface-card border border-surface-panel rounded px-1 py-0.5 text-muted-light text-center"
             />
             s
           </label>
-          <span className="ml-auto font-mono tabular-nums text-[#8a8a82]">{(cropEnd - cropStart).toFixed(2)}s</span>
+          <span className="ml-auto font-mono tabular-nums text-muted">{(cropEnd - cropStart).toFixed(2)}s</span>
         </div>
 
         <button
@@ -534,13 +536,13 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
           <Scissors size={13} />
           {cropping ? '截取中…' : '生成片段'}
         </button>
-        <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">拖动把手选取区间；生成 <code className="text-[#8a8a82]">原名_clip_起-止.wav</code> 自动入库。</p>
+        <p className="text-[10px] text-muted-light mt-1.5 leading-relaxed">拖动把手选取区间；生成 <code className="text-muted">原名_clip_起-止.wav</code> 自动入库。</p>
       </div>
 
       {/* 格式转换 WAV↔MP3 */}
-      <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+      <div className="rounded-md border border-surface-panel bg-surface px-3 py-2.5">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+          <span className="text-xs text-muted flex items-center gap-1.5 font-medium">
             <FileAudio size={13} className="text-accent" /> 格式转换 WAV↔MP3
           </span>
         </div>
@@ -548,7 +550,7 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
           <button
             onClick={() => setConvFmt('wav')}
             className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${
-              convFmt === 'wav' ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'
+              convFmt === 'wav' ? 'bg-accent text-white border-accent/60' : 'bg-surface-card text-muted-light border-surface-panel hover:bg-surface-hover'
             }`}
           >
             WAV
@@ -556,21 +558,21 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
           <button
             onClick={() => setConvFmt('mp3')}
             className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${
-              convFmt === 'mp3' ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'
+              convFmt === 'mp3' ? 'bg-accent text-white border-accent/60' : 'bg-surface-card text-muted-light border-surface-panel hover:bg-surface-hover'
             }`}
           >
             MP3
           </button>
         </div>
         {convFmt === 'mp3' && (
-          <div className="flex items-center gap-2 text-[10px] text-[#6a6a64] mb-2">
+          <div className="flex items-center gap-2 text-[10px] text-muted-light mb-2">
             <span>码率</span>
             {[128, 192, 256, 320].map((b) => (
               <button
                 key={b}
                 onClick={() => setConvBitrate(b)}
                 className={`px-1.5 py-0.5 rounded border transition-colors ${
-                  convBitrate === b ? 'bg-[#534AB7]/20 text-[#9C92F6] border-[#534AB7]/40' : 'bg-[#252524] text-[#8a8a82] border-[#2a2a28] hover:bg-[#2f2f2c]'
+                  convBitrate === b ? 'bg-accent/20 text-accent-light border-accent/40' : 'bg-surface-card text-muted border-surface-panel hover:bg-surface-hover'
                 }`}
               >
                 {b}
@@ -587,16 +589,16 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
           <FileAudio size={13} />
           {converting ? '转换中…' : `转换为 ${convFmt.toUpperCase()}`}
         </button>
-        <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">生成 <code className="text-[#8a8a82]">原名_conv.{convFmt}</code> 自动入库。</p>
+        <p className="text-[10px] text-muted-light mt-1.5 leading-relaxed">生成 <code className="text-muted">原名_conv.{convFmt}</code> 自动入库。</p>
       </div>
 
       {/* 变速不变调 */}
-      <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+      <div className="rounded-md border border-surface-panel bg-surface px-3 py-2.5">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+          <span className="text-xs text-muted flex items-center gap-1.5 font-medium">
             <Gauge size={13} className="text-accent" /> 变速不变调
           </span>
-          <span className="text-[10px] text-[#6a6a64]">改变速度 · 保持音高</span>
+          <span className="text-[10px] text-muted-light">改变速度 · 保持音高</span>
         </div>
         <div className="flex items-center gap-1.5 mb-2 flex-wrap">
           {SPEED_PRESETS.map((s) => (
@@ -604,7 +606,7 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
               key={s}
               onClick={() => setSpeed(s)}
               className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${
-                speed === s ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'
+                speed === s ? 'bg-accent text-white border-accent/60' : 'bg-surface-card text-muted-light border-surface-panel hover:bg-surface-hover'
               }`}
             >
               {s}x
@@ -619,15 +621,15 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
           <Gauge size={13} />
           {stretching ? '变速中…' : `变速为 ${speed}x（不变调）`}
         </button>
-        <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">
-          生成 <code className="text-[#8a8a82]">原名_{speed}x.{sound.file_ext?.replace(/^\./, '') || 'wav'}</code> 自动入库。
+        <p className="text-[10px] text-muted-light mt-1.5 leading-relaxed">
+          生成 <code className="text-muted">原名_{speed}x.{sound.file_ext?.replace(/^\./, '') || 'wav'}</code> 自动入库。
         </p>
       </div>
 
       {/* After Effects */}
-      <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+      <div className="rounded-md border border-surface-panel bg-surface px-3 py-2.5">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+          <span className="text-xs text-muted flex items-center gap-1.5 font-medium">
             <Import size={13} className="text-accent" /> 导入到 After Effects
           </span>
         </div>
@@ -639,7 +641,7 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
           <Import size={13} />
           {importing ? '导入中…' : '导入到正在运行的 AE 工程'}
         </button>
-        <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">需先在 AE 中开启「允许脚本写入文件和访问网络」。</p>
+        <p className="text-[10px] text-muted-light mt-1.5 leading-relaxed">需先在 AE 中开启「允许脚本写入文件和访问网络」。</p>
       </div>
     </div>
   )

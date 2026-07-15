@@ -27,10 +27,10 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.error) {
       return (
-        <div className="h-full w-full flex items-center justify-center bg-[#1a1a18] text-[#b8b8b4] p-8">
+        <div className="h-full w-full flex items-center justify-center bg-surface text-muted-light p-8">
           <div className="max-w-md text-center">
             <p className="text-sm font-medium mb-2">界面出现了一个错误</p>
-            <p className="text-xs text-[#6a6a64] mb-4 break-words">{this.state.error.message}</p>
+            <p className="text-xs text-muted-light mb-4 break-words">{this.state.error.message}</p>
             <button
               onClick={this.handleReload}
               className="px-4 py-2 bg-accent text-white text-xs rounded hover:bg-accent/80"

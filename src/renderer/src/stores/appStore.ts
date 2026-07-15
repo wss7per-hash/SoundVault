@@ -23,17 +23,20 @@ interface AppState {
   activeSmartFolderId: string | null
   searchQuery: string
   viewMode: 'grid' | 'list'
-  activeView: 'library' | 'stats' | 'tools'
+  gridDensity: 'comfortable' | 'compact'
+  activeView: 'library' | 'stats' | 'tools' | 'settings'
   sidebarTab: 'tags' | 'folders' | 'collections' | 'smart' | 'trash'
   stats: { total: number; starred: number; missing: number; totalSize: number; totalDurationMs: number; analyzed: number; unanalyzed: number; byExt: { wav: number; mp3: number; flac: number; other: number }; avgQuality: number | null; tagCount: number; taggedSounds: number; withOnomatopoeia: number }
   fontSize: number
+  theme: 'dark' | 'light'
+  defaultExportFormat: string
+  autoAnalyzeOnImport: boolean
   sortBy: 'name' | 'duration' | 'size' | 'date'
   sortOrder: 'asc' | 'desc'
   formatFilter: string | null
 
   // UI modals
   showScanDialog: boolean
-  showModelConfig: boolean
   showGenerate: boolean
   // Per-sound analysis state (allows concurrent analyses + cancellation).
   analyzingIds: string[]
@@ -56,8 +59,12 @@ interface AppState {
   setActiveSmartFolder: (id: string | null) => void
   setSearchQuery: (query: string) => void
   setViewMode: (mode: 'grid' | 'list') => void
-  setActiveView: (view: 'library' | 'stats' | 'tools') => void
+  setGridDensity: (density: 'comfortable' | 'compact') => void
+  setActiveView: (view: 'library' | 'stats' | 'tools' | 'settings') => void
   setFontSize: (size: number) => void
+  setTheme: (theme: 'dark' | 'light') => void
+  setDefaultExportFormat: (format: string) => void
+  setAutoAnalyzeOnImport: (v: boolean) => void
   setSidebarTab: (tab: 'tags' | 'folders' | 'collections' | 'smart' | 'trash') => void
   setStats: (stats: { total: number; starred: number; missing: number; totalSize: number; totalDurationMs: number; analyzed: number; unanalyzed: number; byExt: { wav: number; mp3: number; flac: number; other: number }; avgQuality: number | null; tagCount: number; taggedSounds: number; withOnomatopoeia: number }) => void
   setSortBy: (by: 'name' | 'duration' | 'size' | 'date') => void
@@ -65,7 +72,6 @@ interface AppState {
   setFormatFilter: (format: string | null) => void
   getFilteredSounds: () => SoundData[]
   toggleScanDialog: () => void
-  toggleModelConfig: () => void
   toggleGenerate: () => void
   handleAnalyzeError: (msg: string, code: string | undefined, fallback: string) => void
 
@@ -98,15 +104,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeSmartFolderId: null,
   searchQuery: '',
   viewMode: 'grid',
+  gridDensity: (typeof localStorage !== 'undefined' ? (localStorage.getItem('sv-grid-density') as 'comfortable' | 'compact') : null) || 'comfortable',
   activeView: 'library',
   sidebarTab: 'tags',
   stats: { total: 0, starred: 0, missing: 0, totalSize: 0, withOnomatopoeia: 0 },
   fontSize: 14,
+  theme: (typeof localStorage !== 'undefined' ? (localStorage.getItem('sv-theme') as 'dark' | 'light') : null) || 'dark',
+  defaultExportFormat: (typeof localStorage !== 'undefined' ? localStorage.getItem('sv-export-format') : null) || 'wav',
+  autoAnalyzeOnImport: (typeof localStorage !== 'undefined' ? localStorage.getItem('sv-auto-analyze') : null) === '1',
   sortBy: 'date',
   sortOrder: 'desc',
   formatFilter: null,
   showScanDialog: false,
-  showModelConfig: false,
   showGenerate: false,
   analyzingIds: [],
   batchAnalyzing: false,
@@ -140,15 +149,30 @@ export const useAppStore = create<AppState>((set, get) => ({
   setActiveSmartFolder: (id) => set({ activeSmartFolderId: id }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setViewMode: (mode) => set({ viewMode: mode }),
+  setGridDensity: (density) => {
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('sv-grid-density', density) } catch { /* ignore */ }
+    set({ gridDensity: density })
+  },
   setActiveView: (view) => set({ activeView: view }),
   setFontSize: (size) => set({ fontSize: size }),
+  setTheme: (theme) => {
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('sv-theme', theme) } catch { /* ignore */ }
+    set({ theme })
+  },
+  setDefaultExportFormat: (format) => {
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('sv-export-format', format) } catch { /* ignore */ }
+    set({ defaultExportFormat: format })
+  },
+  setAutoAnalyzeOnImport: (v) => {
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('sv-auto-analyze', v ? '1' : '0') } catch { /* ignore */ }
+    set({ autoAnalyzeOnImport: v })
+  },
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
   setStats: (stats) => set({ stats }),
   setSortBy: (by) => set({ sortBy: by }),
   setSortOrder: (order) => set({ sortOrder: order }),
   setFormatFilter: (format) => set({ formatFilter: format }),
   toggleScanDialog: () => set((s) => ({ showScanDialog: !s.showScanDialog })),
-  toggleModelConfig: () => set((s) => ({ showModelConfig: !s.showModelConfig })),
   toggleGenerate: () => set((s) => ({ showGenerate: !s.showGenerate })),
 
   handleAnalyzeError: (msg, code, fallback) => {
@@ -157,14 +181,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       toast('请先在设置中配置 AI 服务商和 API 密钥，才能使用智能分析', {
         icon: '⚙️',
         duration: 5000,
-        style: { background: '#2a2a28', color: '#e5e5e5', border: '1px solid #555' }
+        style: { background: 'rgb(var(--color-surface-card))', color: 'rgb(var(--color-fg-muted))', border: '1px solid rgb(var(--color-surface-border))' }
       })
-      // 面板未打开时才自动弹出（避免把已打开的面板 toggle 关掉）
-      if (!get().showModelConfig) {
-        setTimeout(() => {
-          if (!get().showModelConfig) set({ showModelConfig: true })
-        }, 400)
-      }
+      // 自动跳转到设置面板（若未在设置页）
+      if (get().activeView !== 'settings') set({ activeView: 'settings' })
     } else {
       toast.error(msg || fallback)
     }

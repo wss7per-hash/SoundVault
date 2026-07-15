@@ -203,16 +203,16 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1f1f1d] border border-[#3a3a38] rounded-xl w-[560px] max-h-[88vh] flex flex-col shadow-2xl">
+      <div className="bg-surface-panel border border-surface-border rounded-xl w-[560px] max-h-[88vh] flex flex-col shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a28]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-panel">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#534AB7]/20 flex items-center justify-center">
-              <Wand2 className="w-4 h-4 text-[#7C72E6]" />
+            <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
+              <Wand2 className="w-4 h-4 text-accent-light" />
             </div>
             <div>
               <div className="text-sm font-semibold text-muted-light flex items-center gap-1.5">
-                AI 生成音效 <Sparkles className="w-3.5 h-3.5 text-[#7C72E6]" />
+                AI 生成音效 <Sparkles className="w-3.5 h-3.5 text-accent-light" />
               </div>
               <div className="text-xs text-muted mt-0.5">用文字描述，云端生成音效并自动入库</div>
             </div>
@@ -245,8 +245,8 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
                     }}
                     className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${
                       config.provider === p
-                        ? 'border-[#534AB7] bg-[#534AB7]/15 text-muted-light'
-                        : 'border-[#3a3a38] text-muted hover:border-[#555] hover:text-muted-light'
+                        ? 'border-accent bg-accent/15 text-muted-light'
+                        : 'border-surface-border text-muted hover:border-muted hover:text-muted-light'
                     }`}
                   >
                     <div className="text-sm font-medium">{PROVIDER_META[p].name}</div>
@@ -277,7 +277,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
                       )
                     }
                     placeholder={config.provider === 'fal' ? 'fal-xxxxxxxxxxxx' : 'xi-xxxxxxxxxxxx'}
-                    className="w-full bg-[#151513] border border-[#3a3a38] rounded-lg px-3 py-2 text-sm text-muted-light placeholder:text-muted/50 focus:outline-none focus:border-[#534AB7]"
+                    className="w-full bg-surface border border-surface-border rounded-lg px-3 py-2 text-sm text-muted-light placeholder:text-muted/50 focus:outline-none focus:border-accent"
                   />
                   <button
                     onClick={() => setShowKey((s) => !s)}
@@ -290,7 +290,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
                 <button
                   onClick={checkBalance}
                   disabled={checking}
-                  className="px-3 py-2 rounded-lg border border-[#3a3a38] text-xs text-muted hover:text-muted-light hover:border-[#555] transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-3 py-2 rounded-lg border border-surface-border text-xs text-muted hover:text-muted-light hover:border-muted transition-colors disabled:opacity-50 flex items-center gap-1.5"
                   title="查询账户/免费额度"
                 >
                   {checking ? <Loader2 size={13} className="animate-spin" /> : <Coins size={13} />}
@@ -298,7 +298,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
                 </button>
                 <button
                   onClick={saveConfig}
-                  className="px-3 py-2 rounded-lg bg-[#534AB7] hover:bg-[#6258c9] text-white text-xs transition-colors"
+                  className="px-3 py-2 rounded-lg bg-accent hover:bg-accent text-white text-xs transition-colors"
                 >
                   保存
                 </button>
@@ -340,7 +340,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={3}
                 placeholder="例如：打铁敲击声，金属质感，短促有力，带轻微回响"
-                className="w-full bg-[#151513] border border-[#3a3a38] rounded-lg px-3 py-2 text-sm text-muted-light placeholder:text-muted/50 focus:outline-none focus:border-[#534AB7] resize-none"
+                className="w-full bg-surface border border-surface-border rounded-lg px-3 py-2 text-sm text-muted-light placeholder:text-muted/50 focus:outline-none focus:border-accent resize-none"
               />
             </div>
 
@@ -396,7 +396,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
             )}
 
             {/* 花费 / 统计 */}
-            <div className="rounded-lg bg-[#151513] border border-[#2a2a28] px-3 py-2.5 text-xs text-muted space-y-1">
+            <div className="rounded-lg bg-surface border border-surface-panel px-3 py-2.5 text-xs text-muted space-y-1">
               <div className="flex items-center justify-between">
                 <span>本次预计消耗</span>
                 <span className="text-muted-light font-medium">${cost.toFixed(2)}（{meta.name}）</span>
@@ -435,7 +435,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
                 <div className="flex gap-2 mt-2">
                   <button
                     onClick={viewInLibrary}
-                    className="flex-1 px-3 py-1.5 rounded-lg bg-[#534AB7] hover:bg-[#6258c9] text-white text-xs transition-colors"
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent text-white text-xs transition-colors"
                   >
                     在库中查看
                   </button>
@@ -444,7 +444,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
                       setResult(null)
                       setError(null)
                     }}
-                    className="px-3 py-1.5 rounded-lg border border-[#3a3a38] text-xs text-muted hover:text-muted-light hover:border-[#555] transition-colors"
+                    className="px-3 py-1.5 rounded-lg border border-surface-border text-xs text-muted hover:text-muted-light hover:border-muted transition-colors"
                   >
                     再生成一个
                   </button>
@@ -456,7 +456,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
 
         {/* Footer */}
         {!loading && (
-          <div className="border-t border-[#2a2a28] px-6 py-4 flex items-center gap-3">
+          <div className="border-t border-surface-panel px-6 py-4 flex items-center gap-3">
             {generating ? (
               <>
                 <button
@@ -466,7 +466,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
                   取消生成
                 </button>
                 <div className="flex items-center gap-2 text-sm text-muted">
-                  <Loader2 size={16} className="animate-spin text-[#7C72E6]" />
+                  <Loader2 size={16} className="animate-spin text-accent-light" />
                   生成中…（最长约 2 分钟）
                 </div>
               </>
@@ -474,7 +474,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
               <button
                 onClick={openConfirm}
                 disabled={!prompt.trim() || !currentKey}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-[#534AB7] hover:bg-[#6258c9] text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <Wand2 size={15} /> 生成音效（约 ${cost.toFixed(2)}）
               </button>
@@ -486,10 +486,10 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
       {/* 花费确认弹窗 */}
       {confirmOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="w-[380px] bg-[#232321] border border-[#3a3a38] rounded-2xl shadow-2xl p-5">
+          <div className="w-[380px] bg-surface-panel border border-surface-border rounded-2xl shadow-2xl p-5">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-[#534AB7]/20 flex items-center justify-center">
-                <Coins className="w-4 h-4 text-[#7C72E6]" />
+              <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
+                <Coins className="w-4 h-4 text-accent-light" />
               </div>
               <div className="text-sm font-medium text-muted-light">确认生成</div>
             </div>
@@ -506,13 +506,13 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
             <div className="flex gap-2 mt-2">
               <button
                 onClick={() => setConfirmOpen(false)}
-                className="flex-1 px-4 py-2 rounded-lg border border-[#3a3a38] text-sm text-muted hover:text-muted-light hover:border-[#555] transition-colors"
+                className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-sm text-muted hover:text-muted-light hover:border-muted transition-colors"
               >
                 再想想
               </button>
               <button
                 onClick={doGenerate}
-                className="flex-1 px-4 py-2 rounded-lg bg-[#534AB7] hover:bg-[#6258c9] text-white text-sm font-medium transition-colors"
+                className="flex-1 px-4 py-2 rounded-lg bg-accent hover:bg-accent text-white text-sm font-medium transition-colors"
               >
                 确认生成
               </button>

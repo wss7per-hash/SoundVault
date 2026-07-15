@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import type { SoundData, CollectionData, TagData } from '../../preload/index.d'
 import {
   Play, Pause, Star, Check, Music, FolderOpen, Folder, Copy, FileInput, Pencil, Tag, FolderPlus,
-  Sparkles, Trash2, X, Volume2, Heart, MoreHorizontal, Film, Wrench
+  Sparkles, Trash2, X, Volume2, Heart, MoreHorizontal, Film, Wrench, Download
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
@@ -44,7 +44,16 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
   const collections = useAppStore((s) => s.collections)
   const tags = useAppStore((s) => s.tags)
   const refreshSounds = useAppStore((s) => s.refreshSounds)
+  const gridDensity = useAppStore((s) => s.gridDensity)
   const isMultiSelecting = selectedIds.length > 0
+
+  // 键盘导航所需的实时引用（避免 window 监听器反复重绑）
+  const stateRef = useRef({ sounds, selectedId })
+  stateRef.current = { sounds, selectedId }
+  const playingIdRef = useRef<string | null>(null)
+  playingIdRef.current = playingId
+  const typeaheadRef = useRef('')
+  const typeaheadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Audio preview logic
   const startPreview = useCallback((sound: SoundData) => {
@@ -225,6 +234,109 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
     }
   }, [stopPreview])
 
+  // ---- Keyboard grid navigation ----
+  // 计算当前网格列数：第一行卡片的 offsetTop 相同，数出这一行有几个。
+  const getColumns = useCallback((): number => {
+    const cards = containerRef.current?.querySelectorAll('[data-sound-id]')
+    if (!cards || cards.length === 0) return 1
+    const firstTop = cards[0].getBoundingClientRect().top
+    let cols = 0
+    for (const c of cards) {
+      if (Math.abs(c.getBoundingClientRect().top - firstTop) < 1) cols++
+      else break
+    }
+    return Math.max(1, cols)
+  }, [])
+
+  // 移动单选焦点（并联动右侧详情面板），必要时滚动到可见区域。
+  const focusIndex = useCallback((idx: number) => {
+    const list = stateRef.current.sounds
+    if (list.length === 0) return
+    const clamped = Math.max(0, Math.min(list.length - 1, idx))
+    const sound = list[clamped]
+    useAppStore.getState().selectSound(sound.id)
+    const card = containerRef.current?.querySelectorAll('[data-sound-id]')[clamped] as HTMLElement | undefined
+    card?.scrollIntoView({ block: 'nearest' })
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      // 不拦截输入框 / 可编辑元素内的按键
+      const target = e.target as HTMLElement
+      const tag = target.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return
+      // 网格内的上下文菜单 / 重命名弹窗打开时交给它们处理
+      if (contextMenu || renameSound) return
+      // 修饰键组合（Ctrl/Alt/Cmd）留给浏览器与 App 级快捷键（如 Ctrl+A）
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+
+      const list = stateRef.current.sounds
+      if (list.length === 0) return
+      const curIdx = list.findIndex((s) => s.id === stateRef.current.selectedId)
+
+      // 字符快速跳转（typeahead）：支持连续输入前缀，800ms 内有效
+      if (e.key.length === 1 && e.key !== ' ') {
+        e.preventDefault()
+        typeaheadRef.current += e.key.toLowerCase()
+        if (typeaheadTimerRef.current) clearTimeout(typeaheadTimerRef.current)
+        typeaheadTimerRef.current = setTimeout(() => { typeaheadRef.current = '' }, 800)
+        const q = typeaheadRef.current
+        let found = -1
+        // 先从当前项之后环绕查找「文件名以 q 开头」
+        for (let i = 1; i <= list.length; i++) {
+          const idx = ((curIdx >= 0 ? curIdx : -1) + i) % list.length
+          if (list[idx].file_name.toLowerCase().startsWith(q)) { found = idx; break }
+        }
+        if (found < 0) {
+          // 退而求其次：文件名包含 q
+          for (let i = 1; i <= list.length; i++) {
+            const idx = ((curIdx >= 0 ? curIdx : -1) + i) % list.length
+            if (list[idx].file_name.toLowerCase().includes(q)) { found = idx; break }
+          }
+        }
+        if (found >= 0) focusIndex(found)
+        return
+      }
+
+      switch (e.key) {
+        case 'ArrowRight':
+        case 'ArrowLeft':
+        case 'ArrowUp':
+        case 'ArrowDown': {
+          e.preventDefault()
+          const cols = getColumns()
+          let next = curIdx < 0 ? 0 : curIdx
+          if (e.key === 'ArrowRight') next = curIdx < 0 ? 0 : curIdx + 1
+          else if (e.key === 'ArrowLeft') next = curIdx < 0 ? 0 : curIdx - 1
+          else if (e.key === 'ArrowDown') next = curIdx < 0 ? 0 : curIdx + cols
+          else if (e.key === 'ArrowUp') next = curIdx < 0 ? 0 : curIdx - cols
+          next = Math.max(0, Math.min(list.length - 1, next))
+          focusIndex(next)
+          break
+        }
+        case ' ':
+        case 'Spacebar': {
+          e.preventDefault()
+          const idx = curIdx < 0 ? 0 : curIdx
+          const sound = list[idx]
+          if (!sound) return
+          if (playingIdRef.current === sound.id) stopPreview()
+          else startPreview(sound)
+          break
+        }
+        case 'Enter': {
+          if (curIdx >= 0) {
+            e.preventDefault()
+            useAppStore.getState().selectSound(list[curIdx].id)
+          }
+          break
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [contextMenu, renameSound, getColumns, focusIndex, startPreview, stopPreview])
+
   const closeContextMenu = useCallback(() => {
     setContextMenu(null)
     setTagInputVisible(false)
@@ -257,17 +369,21 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
     >
       {/* Rubber band selection box */}
       <div
-        className="absolute border border-[#7C72E6]/70 bg-[#7C72E6]/15 rounded pointer-events-none z-40"
+        className="absolute border border-accent-light/70 bg-accent-light/15 rounded pointer-events-none z-40"
         style={boxStyle}
       />
 
       {viewMode === 'grid' ? (
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        <div
+          className={gridDensity === 'compact' ? 'grid gap-2' : 'grid gap-3'}
+          style={{ gridTemplateColumns: gridDensity === 'compact' ? 'repeat(auto-fill, minmax(150px, 1fr))' : 'repeat(auto-fill, minmax(200px, 1fr))' }}
+        >
           {sounds.map((sound, idx) => (
             <SoundCard
               key={sound.id}
               sound={sound}
               index={idx}
+              compact={gridDensity === 'compact'}
               isSelected={sound.id === selectedId}
               isHovered={sound.id === hoveredId}
               isPlaying={sound.id === playingId}
@@ -392,7 +508,7 @@ function SoundPreviewTooltip({ sound, x, y, isPlaying }: { sound: SoundData; x: 
 
   return (
     <div
-      className="fixed z-50 w-72 p-3 rounded-xl border border-surface-border bg-[#252522] shadow-2xl"
+      className="fixed z-50 w-72 p-3 rounded-xl border border-surface-border bg-surface-panel shadow-2xl"
       style={{ left, top }}
     >
       <div className="flex items-center gap-2 mb-2.5">
@@ -417,7 +533,7 @@ function SoundPreviewTooltip({ sound, x, y, isPlaying }: { sound: SoundData; x: 
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {tags.map((tag, i) => (
-            <span key={i} className="px-1.5 py-0.5 rounded bg-[#2a2a28] text-[10px] text-muted">{tag}</span>
+            <span key={i} className="px-1.5 py-0.5 rounded bg-surface-panel text-[10px] text-muted">{tag}</span>
           ))}
         </div>
       )}
@@ -432,6 +548,7 @@ function SoundPreviewTooltip({ sound, x, y, isPlaying }: { sound: SoundData; x: 
 interface SoundCardProps {
   sound: SoundData
   index: number
+  compact?: boolean
   isSelected: boolean
   isHovered: boolean
   isPlaying: boolean
@@ -445,7 +562,7 @@ interface SoundCardProps {
   onDragFile?: () => void
 }
 
-function SoundCard({ sound, isSelected, isHovered, isPlaying, isChecked, isMultiSelecting, onClick, onCheck, onMouseEnter, onMouseLeave, onContextMenu, onDragFile }: SoundCardProps): JSX.Element {
+function SoundCard({ sound, compact = false, isSelected, isHovered, isPlaying, isChecked, isMultiSelecting, onClick, onCheck, onMouseEnter, onMouseLeave, onContextMenu, onDragFile }: SoundCardProps): JSX.Element {
   const formatDuration = (ms: number | null): string => {
     if (!ms) return '--:--'
     const s = Math.floor(ms / 1000)
@@ -482,7 +599,7 @@ function SoundCard({ sound, isSelected, isHovered, isPlaying, isChecked, isMulti
       }`}
     >
       {/* Waveform + Play area */}
-      <div className="h-24 bg-surface-card flex items-center justify-center relative">
+      <div className={`${compact ? 'h-20' : 'h-24'} bg-surface-card flex items-center justify-center relative`}>
         <div className="w-full h-full px-4 flex items-center justify-center">
           <svg viewBox="0 0 200 48" className="w-full h-10" preserveAspectRatio="none" style={{ opacity: isPlaying ? 0.7 : 0.35 }}>
             <path
@@ -527,7 +644,7 @@ function SoundCard({ sound, isSelected, isHovered, isPlaying, isChecked, isMulti
       </div>
 
       {/* Card info */}
-      <div className="p-3">
+      <div className={compact ? 'p-2.5' : 'p-3'}>
         <p className="text-sm font-medium text-muted-light truncate mb-1.5" title={sound.file_name}>
           {sound.file_name}
         </p>
@@ -541,7 +658,7 @@ function SoundCard({ sound, isSelected, isHovered, isPlaying, isChecked, isMulti
         <div className="flex items-center justify-between text-xs text-muted">
           <div className="flex items-center gap-2">
             <span>{formatDuration(sound.duration_ms)}</span>
-            <span className="px-1.5 py-0.5 rounded bg-[#2a2a28] text-xs">{sound.file_ext.toUpperCase()}</span>
+            <span className="px-1.5 py-0.5 rounded bg-surface-panel text-xs">{sound.file_ext.toUpperCase()}</span>
           </div>
           <span>{formatSize(sound.file_size)}</span>
         </div>
@@ -612,7 +729,7 @@ function SoundListRow({ sound, isSelected, isPlaying, isChecked, isMultiSelectin
         >
           {isChecked && <Check size={12} className="text-white" />}
         </div>
-        <div className="w-9 h-9 rounded-lg bg-[#2a2a28] flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-lg bg-surface-panel flex items-center justify-center shrink-0">
           {isPlaying ? <Volume2 size={16} className="text-accent" /> : <Music size={16} className="text-muted" />}
         </div>
         <div className="min-w-0">
@@ -627,7 +744,7 @@ function SoundListRow({ sound, isSelected, isPlaying, isChecked, isMultiSelectin
 
       <div className="col-span-2 flex flex-wrap gap-1 min-w-0">
         {tags.length > 0 ? tags.map((tag, i) => (
-          <span key={i} className="px-1.5 py-0.5 rounded bg-[#2a2a28] text-xs text-muted truncate max-w-[80px]">
+          <span key={i} className="px-1.5 py-0.5 rounded bg-surface-panel text-xs text-muted truncate max-w-[80px]">
             {tag}
           </span>
         )) : (
@@ -637,7 +754,7 @@ function SoundListRow({ sound, isSelected, isPlaying, isChecked, isMultiSelectin
       </div>
 
       <div className="col-span-1">
-        <span className="px-1.5 py-0.5 rounded bg-[#2a2a28] text-xs text-muted">{sound.file_ext.toUpperCase()}</span>
+        <span className="px-1.5 py-0.5 rounded bg-surface-panel text-xs text-muted">{sound.file_ext.toUpperCase()}</span>
       </div>
 
       <div className="col-span-1 text-xs text-muted">{formatDuration(sound.duration_ms)}</div>
@@ -758,12 +875,25 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
       const res = await window.api.importToAE(sound.file_path)
       if (res.success) {
         toast.success('已导入到 After Effects 工程')
+      } else if (res.code === 'AE_CLOSED') {
+        toast('After Effects 未运行，请先打开 AE 后再导出到工程', { icon: '💡', duration: 5000 })
       } else {
         toast.error(res.message || '导入 AE 失败')
       }
     } catch {
       toast.error('导入 AE 出错')
     }
+  }
+
+  const handleExportSingle = async () => {
+    const result = await window.api.selectFolder()
+    if (!result || result.length === 0) return
+    onClose()
+    const toastId = toast.loading('正在导出…')
+    const res = await window.api.copyFileTo(sound.id, result[0])
+    toast.dismiss(toastId)
+    if (res.success) toast.success('已导出此音效到所选文件夹')
+    else toast.error(res.message || '导出失败')
   }
 
   const handleOpenTools = () => {
@@ -819,6 +949,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     { icon: Heart, label: sound.is_starred ? '取消收藏' : '收藏', action: handleStar },
     { icon: Sparkles, label: 'AI 分析', action: handleAnalyze },
     { icon: Wrench, label: '工具（裁剪/转换/变速…）', action: handleOpenTools },
+    { icon: Download, label: '导出此音效…', action: handleExportSingle },
     { icon: Film, label: '导出到 AE 工程', action: handleImportToAE },
     { divider: true },
     { icon: Trash2, label: '删除', action: handleTrash, danger: true },
@@ -828,7 +959,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     <>
     <div
       ref={menuRef}
-      className="fixed z-[100] w-52 py-1.5 rounded-xl border border-surface-border bg-[#252522] shadow-2xl"
+      className="fixed z-[100] w-52 py-1.5 rounded-xl border border-surface-border bg-surface-panel shadow-2xl"
       style={{ left, top }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -866,7 +997,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
                 <button
                   key={tag.id}
                   onClick={() => handleAddTag(tag.name)}
-                  className="px-1.5 py-0.5 rounded bg-[#2a2a28] text-[10px] text-muted hover:text-muted-light hover:bg-surface-hover"
+                  className="px-1.5 py-0.5 rounded bg-surface-panel text-[10px] text-muted hover:text-muted-light hover:bg-surface-hover"
                 >
                   {tag.name}
                 </button>
@@ -880,7 +1011,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
 
       {collectionMenuVisible && (
         <div
-          className="fixed z-[101] w-48 rounded-xl border border-surface-border bg-[#252522] shadow-2xl py-2"
+          className="fixed z-[101] w-48 rounded-xl border border-surface-border bg-surface-panel shadow-2xl py-2"
           style={{ left: flyoutLeft, top: flyoutTop }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -955,7 +1086,7 @@ function RenameModal({ sound, value, onChange, onClose, onConfirm }: {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') onConfirm(value); if (e.key === 'Escape') onClose() }}
-          className="w-full px-3 py-2 text-sm rounded-lg bg-[#2a2a28] border border-surface-border text-muted-light focus:border-accent outline-none mb-4"
+          className="w-full px-3 py-2 text-sm rounded-lg bg-surface-panel border border-surface-border text-muted-light focus:border-accent outline-none mb-4"
         />
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="px-3 py-1.5 text-xs text-muted hover:text-muted-light">取消</button>

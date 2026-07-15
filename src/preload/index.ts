@@ -60,6 +60,10 @@ const api = {
   trashFile: (soundId: string) => ipcRenderer.invoke('file:trash', soundId),
   findDuplicates: () => ipcRenderer.invoke('library:findDuplicates'),
 
+  // Cleanup missing files (scan or remove)
+  cleanupMissing: (mode: 'scan' | 'remove') =>
+    ipcRenderer.invoke('sound:cleanupMissing', mode) as Promise<{ success: boolean; total: number; missing: number; removed: number; message?: string }>,
+
   // Seamless Loop (ffmpeg crossfade)
   seamlessLoop: (soundId: string, crossfadeMs?: number, loopCount?: number) =>
     ipcRenderer.invoke('audio:seamlessLoop', soundId, crossfadeMs, loopCount),

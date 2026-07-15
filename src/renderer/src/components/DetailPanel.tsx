@@ -218,6 +218,8 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       const res = await window.api.importToAE(sound.file_path)
       if (res.success) {
         toast.success(`已导入 After Effects${res.name ? '：' + res.name : ''}`)
+      } else if (res.code === 'AE_CLOSED') {
+        toast('After Effects 未运行，请先打开 AE 后再导出到工程', { icon: '💡', duration: 5000 })
       } else {
         toast.error(res.message || '导入失败')
       }
@@ -522,16 +524,16 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
   // RENDER
   // ================================================================
   return (
-    <div className="w-80 h-full border-l border-[#2a2a28] flex flex-col shrink-0 bg-[#1e1e1c]">
+    <div className="w-80 h-full border-l border-surface-panel flex flex-col shrink-0 bg-surface-panel">
       {/* Hidden audio element */}
       <audio ref={audioRef} src={`sv://${sound.id}`} preload="auto" />
 
       {/* ════════════════ FIXED TOP AREA (never scrolls) ════════════════ */}
       <div className="shrink-0">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a28]">
-          <span className="text-sm font-medium text-[#b8b8b4]">音效详情</span>
-          <button onClick={onClose} className="p-1 rounded-md text-[#6a6a64] hover:bg-[#252524] hover:text-[#b8b8b4] transition-colors">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-surface-panel">
+          <span className="text-sm font-medium text-muted-light">音效详情</span>
+          <button onClick={onClose} className="p-1 rounded-md text-muted-light hover:bg-surface-card hover:text-muted-light transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -540,10 +542,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
           {/* File name + star row */}
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-base font-medium text-[#c8c8c4] truncate" title={sound.file_name}>
+              <p className="text-base font-medium text-fg-muted truncate" title={sound.file_name}>
                 {sound.file_name}
               </p>
-              <p className="text-xs text-[#6a6a64] truncate mt-0.5" title={sound.file_path}>
+              <p className="text-xs text-muted-light truncate mt-0.5" title={sound.file_path}>
                 {sound.file_path}
               </p>
             </div>
@@ -552,7 +554,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
               className={`p-1.5 rounded-md shrink-0 transition-colors ${
                 sound.is_starred
                   ? 'text-amber-400 hover:bg-amber-400/10'
-                  : 'text-[#6a6a64] hover:bg-[#252524] hover:text-amber-400'
+                  : 'text-muted-light hover:bg-surface-card hover:text-amber-400'
               }`}
               title={sound.is_starred ? '取消收藏' : '收藏'}
             >
@@ -565,9 +567,9 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
             onClick={isCurrentAnalyzing ? handleCancelAnalyze : handleAnalyze}
             className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               isCurrentAnalyzing
-                ? 'bg-[#534AB7]/20 text-[#9C92F6] border border-[#534AB7]/30'
+                ? 'bg-accent/20 text-accent-light border border-accent/30'
                 : sound.ai_analyzed_at
-                  ? 'bg-[#1a1a18] text-[#b8b8b4] hover:bg-[#252524] border border-[#2a2a28]'
+                  ? 'bg-surface text-muted-light hover:bg-surface-card border border-surface-panel'
                   : 'bg-accent text-white hover:bg-accent/80 border border-transparent'
             }`}
           >
@@ -579,16 +581,16 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
           </button>
 
           {/* Waveform Player — always visible */}
-          <div className="bg-[#1a1a18] rounded-lg border border-[#2a2a28] p-3">
+          <div className="bg-surface rounded-lg border border-surface-panel p-3">
             {audioError ? (
               <div className="flex flex-col items-center gap-2 py-3">
-                <Volume2 size={20} className="text-[#5a5a54]" />
-                <span className="text-xs text-[#6a6a64]">无法播放此格式</span>
+                <Volume2 size={20} className="text-muted-light" />
+                <span className="text-xs text-muted-light">无法播放此格式</span>
               </div>
             ) : (
               <>
                 <div
-                  className="h-14 bg-[#141412] rounded-lg cursor-pointer relative overflow-hidden mb-2.5"
+                  className="h-14 bg-surface rounded-lg cursor-pointer relative overflow-hidden mb-2.5"
                   onClick={handleSeek}
                 >
                   <svg className="absolute inset-0 w-full h-full" viewBox="0 0 300 56" preserveAspectRatio="none">
@@ -616,7 +618,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
-                    <button onClick={skipBack} className="p-1 hover:text-[#b8b8b4] text-[#6a6a64] transition-colors" title="后退5秒">
+                    <button onClick={skipBack} className="p-1 hover:text-muted-light text-muted-light transition-colors" title="后退5秒">
                       <SkipBack size={14} />
                     </button>
                     <button
@@ -625,11 +627,11 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                     >
                       {isPlaying ? <Pause size={14} fill="white" /> : <Play size={14} fill="white" className="ml-0.5" />}
                     </button>
-                    <button onClick={skipForward} className="p-1 hover:text-[#b8b8b4] text-[#6a6a64] transition-colors" title="前进5秒">
+                    <button onClick={skipForward} className="p-1 hover:text-muted-light text-muted-light transition-colors" title="前进5秒">
                       <SkipForward size={14} />
                     </button>
                   </div>
-                  <span className="text-xs text-[#8a8a82] font-mono tabular-nums">
+                  <span className="text-xs text-muted font-mono tabular-nums">
                     {formatTime(currentTime)} / {formatDuration(sound.duration_ms)}
                   </span>
                 </div>
@@ -639,15 +641,15 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
         </div>
 
         {/* ===== Tab Bar ===== */}
-        <div className="flex border-b border-[#2a2a28] px-4">
+        <div className="flex border-b border-surface-panel px-4">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
                 activeTab === tab.key
-                  ? 'border-accent text-[#c8c8c4]'
-                  : 'border-transparent text-[#6a6a64] hover:text-[#8a8a82] hover:border-[#3a3a38]'
+                  ? 'border-accent text-fg-muted'
+                  : 'border-transparent text-muted-light hover:text-muted hover:border-surface-border'
               }`}
             >
               {tab.icon}
@@ -666,10 +668,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
             {/* AI Description */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <p className="text-xs text-[#6a6a64] uppercase tracking-wider">AI 描述</p>
+                <p className="text-xs text-muted-light uppercase tracking-wider">AI 描述</p>
                 <button
                   onClick={() => { if (!descEditing) { setDescValue(sound.description || ''); setDescEditing(true) } else { setDescEditing(false) } }}
-                  className="p-0.5 hover:bg-[#252524] rounded text-[#6a6a64] hover:text-[#b8b8b4] transition-colors"
+                  className="p-0.5 hover:bg-surface-card rounded text-muted-light hover:text-muted-light transition-colors"
                 >
                   {descEditing ? <X size={14} /> : <Edit3 size={13} />}
                 </button>
@@ -679,7 +681,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                   <textarea
                     value={descValue}
                     onChange={(e) => setDescValue(e.target.value)}
-                    className="w-full bg-[#141412] border border-[#2a2a28] rounded-md p-2 text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] resize-none focus:outline-none focus:border-accent/50 min-h-[56px] leading-relaxed"
+                    className="w-full bg-surface border border-surface-panel rounded-md p-2 text-sm text-fg-muted placeholder:text-muted-light resize-none focus:outline-none focus:border-accent/50 min-h-[56px] leading-relaxed"
                     placeholder="输入音效描述..." rows={3}
                   />
                   <button onClick={handleSaveDescription} className="self-end flex items-center gap-1 px-3 py-1 rounded-md text-xs bg-accent text-white hover:bg-accent/80 transition-colors">
@@ -688,21 +690,21 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                 </div>
               ) : sound.description ? (
                 <div>
-                  <p className="text-sm text-[#c8c8c4] leading-relaxed">{sound.description}</p>
-                  {sound.ai_model && <p className="text-xs text-[#5a5a54] mt-1">分析模型: {sound.ai_model}</p>}
+                  <p className="text-sm text-fg-muted leading-relaxed">{sound.description}</p>
+                  {sound.ai_model && <p className="text-xs text-muted-light mt-1">分析模型: {sound.ai_model}</p>}
                 </div>
               ) : (
-                <p className="text-sm text-[#5a5a54] italic">尚未分析，点击上方 AI 分析按钮</p>
+                <p className="text-sm text-muted-light italic">尚未分析，点击上方 AI 分析按钮</p>
               )}
             </div>
 
             {/* Best For */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <p className="text-xs text-[#6a6a64] uppercase tracking-wider">详细分析</p>
+                <p className="text-xs text-muted-light uppercase tracking-wider">详细分析</p>
                 <button
                   onClick={() => { if (!bestForEditing) { setBestForValue(sound.best_for || ''); setBestForEditing(true) } else { setBestForEditing(false) } }}
-                  className="p-0.5 hover:bg-[#252524] rounded text-[#6a6a64] hover:text-[#b8b8b4] transition-colors"
+                  className="p-0.5 hover:bg-surface-card rounded text-muted-light hover:text-muted-light transition-colors"
                 >
                   {bestForEditing ? <X size={14} /> : <Edit3 size={13} />}
                 </button>
@@ -712,7 +714,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                   <textarea
                     value={bestForValue}
                     onChange={(e) => setBestForValue(e.target.value)}
-                    className="w-full bg-[#141412] border border-[#2a2a28] rounded-md p-2 text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] resize-none focus:outline-none focus:border-accent/50 min-h-[56px] leading-relaxed"
+                    className="w-full bg-surface border border-surface-panel rounded-md p-2 text-sm text-fg-muted placeholder:text-muted-light resize-none focus:outline-none focus:border-accent/50 min-h-[56px] leading-relaxed"
                     placeholder="输入详细分析..." rows={3}
                   />
                   <button onClick={handleSaveBestFor} className="self-end flex items-center gap-1 px-3 py-1 rounded-md text-xs bg-accent text-white hover:bg-accent/80 transition-colors">
@@ -721,17 +723,17 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                 </div>
               )}
               {!bestForEditing && sound.best_for && (
-                <p className="text-sm text-[#8a8a82] leading-relaxed">{sound.best_for}</p>
+                <p className="text-sm text-muted leading-relaxed">{sound.best_for}</p>
               )}
             </div>
 
             {/* Use Cases */}
             {sound.use_cases && (
               <div>
-                <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">适用场景</p>
+                <p className="text-xs text-muted-light uppercase tracking-wider mb-1.5">适用场景</p>
                 <div className="flex flex-wrap gap-1.5">
                   {sound.use_cases.split(/[,;，；]/).filter(Boolean).map((uc, i) => (
-                    <span key={i} className="text-xs px-2 py-1 rounded-full bg-[#534AB7]/10 text-[#9C92F6] border border-[#534AB7]/20">
+                    <span key={i} className="text-xs px-2 py-1 rounded-full bg-accent/10 text-accent-light border border-accent/20">
                       {uc.trim()}
                     </span>
                   ))}
@@ -742,18 +744,18 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
             {/* Emotion */}
             {sound.emotion && (
               <div>
-                <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1">情绪</p>
-                <p className="text-sm text-[#c8c8c4]">{sound.emotion}</p>
+                <p className="text-xs text-muted-light uppercase tracking-wider mb-1">情绪</p>
+                <p className="text-sm text-fg-muted">{sound.emotion}</p>
               </div>
             )}
 
             {/* Notes */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <p className="text-xs text-[#6a6a64] uppercase tracking-wider">备注 / 笔记</p>
+                <p className="text-xs text-muted-light uppercase tracking-wider">备注 / 笔记</p>
                 <button
                   onClick={() => { if (!notesEditing) { setNotesValue(sound.notes || ''); setNotesEditing(true) } else { setNotesEditing(false) } }}
-                  className="p-0.5 hover:bg-[#252524] rounded text-[#6a6a64] hover:text-[#b8b8b4] transition-colors"
+                  className="p-0.5 hover:bg-surface-card rounded text-muted-light hover:text-muted-light transition-colors"
                 >
                   {notesEditing ? <X size={14} /> : <Edit3 size={13} />}
                 </button>
@@ -763,7 +765,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                   <textarea
                     value={notesValue}
                     onChange={(e) => setNotesValue(e.target.value)}
-                    className="w-full bg-[#141412] border border-[#2a2a28] rounded-md p-2 text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] resize-none focus:outline-none focus:border-accent/50 min-h-[56px] leading-relaxed"
+                    className="w-full bg-surface border border-surface-panel rounded-md p-2 text-sm text-fg-muted placeholder:text-muted-light resize-none focus:outline-none focus:border-accent/50 min-h-[56px] leading-relaxed"
                     placeholder="记录使用心得、来源、版权信息..." rows={3}
                   />
                   <button onClick={handleSaveNotes} className="self-end flex items-center gap-1 px-3 py-1 rounded-md text-xs bg-accent text-white hover:bg-accent/80 transition-colors">
@@ -771,20 +773,20 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                   </button>
                 </div>
               ) : sound.notes ? (
-                <p className="text-sm text-[#c8c8c4] leading-relaxed whitespace-pre-wrap">{sound.notes}</p>
+                <p className="text-sm text-fg-muted leading-relaxed whitespace-pre-wrap">{sound.notes}</p>
               ) : (
-                <p className="text-sm text-[#5a5a54] italic">暂无备注，点击编辑</p>
+                <p className="text-sm text-muted-light italic">暂无备注，点击编辑</p>
               )}
             </div>
 
             {/* Onomatopoeia (多语种 + 拼音) */}
             <div>
-              <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <p className="text-xs text-muted-light uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                 <Volume2 size={13} className="text-accent-light" /> 拟声词
               </p>
               {onoList.length === 0 ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-[#5a5a54] italic">暂无拟声词</span>
+                  <span className="text-xs text-muted-light italic">暂无拟声词</span>
                   <button
                     onClick={() => analyzeSound(sound.id)}
                     className="text-xs text-accent-light hover:text-white transition-colors underline underline-offset-2"
@@ -793,10 +795,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {onoList.map((o, i) => (
-                    <div key={i} className="px-3 py-2 rounded-lg bg-[#1e1e1c] border border-[#2a2a28] flex flex-col gap-0.5 min-w-[120px]">
-                      <div className="text-base text-[#e8e8e4] font-medium leading-none">{o.zh}</div>
-                      {o.pinyin && <div className="text-xs text-[#8a8a82]">{o.pinyin}</div>}
-                      <div className="flex gap-3 text-xs text-[#6a6a64] mt-0.5">
+                    <div key={i} className="px-3 py-2 rounded-lg bg-surface-panel border border-surface-panel flex flex-col gap-0.5 min-w-[120px]">
+                      <div className="text-base text-fg font-medium leading-none">{o.zh}</div>
+                      {o.pinyin && <div className="text-xs text-muted">{o.pinyin}</div>}
+                      <div className="flex gap-3 text-xs text-muted-light mt-0.5">
                         {o.ja && <span>日 {o.ja}</span>}
                         {o.en && <span>英 {o.en}</span>}
                       </div>
@@ -808,9 +810,9 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
 
             {/* Tags */}
             <div>
-              <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">标签</p>
+              <p className="text-xs text-muted-light uppercase tracking-wider mb-1.5">标签</p>
               <div className="relative mb-2">
-                <div className="flex items-center gap-1 bg-[#141412] border border-[#2a2a28] rounded-md focus-within:border-accent/50 transition-colors">
+                <div className="flex items-center gap-1 bg-surface border border-surface-panel rounded-md focus-within:border-accent/50 transition-colors">
                   <input
                     type="text"
                     value={newTagInput}
@@ -822,23 +824,23 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                       if (e.key === 'Escape') { setNewTagInput(''); setShowTagSuggestions(false) }
                     }}
                     placeholder="添加标签..."
-                    className="flex-1 bg-transparent text-sm text-[#c8c8c4] placeholder:text-[#5a5a54] outline-none px-2.5 py-1.5 min-w-0"
+                    className="flex-1 bg-transparent text-sm text-fg-muted placeholder:text-muted-light outline-none px-2.5 py-1.5 min-w-0"
                   />
                   <button
                     onClick={() => handleAddTag(newTagInput)}
                     disabled={!newTagInput.trim()}
-                    className="px-2 py-1 mr-1 text-accent-light hover:text-white disabled:text-[#5a5a54] disabled:cursor-default transition-colors"
+                    className="px-2 py-1 mr-1 text-accent-light hover:text-white disabled:text-muted-light disabled:cursor-default transition-colors"
                   >
                     <Plus size={15} />
                   </button>
                 </div>
                 {showTagSuggestions && filteredSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#1e1e1c] border border-[#2a2a28] rounded-md shadow-lg z-10 max-h-36 overflow-y-auto">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-surface-panel border border-surface-panel rounded-md shadow-lg z-10 max-h-36 overflow-y-auto">
                     {filteredSuggestions.map((t) => (
                       <button
                         key={t.id}
                         onMouseDown={() => handleAddTag(t.name)}
-                        className="w-full text-left px-3 py-2 text-sm text-[#b8b8b4] hover:bg-[#252524] transition-colors first:rounded-t-md last:rounded-b-md"
+                        className="w-full text-left px-3 py-2 text-sm text-muted-light hover:bg-surface-card transition-colors first:rounded-t-md last:rounded-b-md"
                       >
                         {t.name}
                       </button>
@@ -848,10 +850,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
               </div>
               <div className="flex flex-wrap gap-1.5 min-h-[28px]">
                 {tags.length === 0 ? (
-                  <span className="text-xs text-[#5a5a54] italic">暂无标签</span>
+                  <span className="text-xs text-muted-light italic">暂无标签</span>
                 ) : (
                   tags.map((tag) => (
-                    <span key={tag.id} className="text-xs pl-2.5 pr-1 py-1 rounded-full bg-[#252524] text-[#8a8a82] border border-[#333] flex items-center gap-1 group">
+                    <span key={tag.id} className="text-xs pl-2.5 pr-1 py-1 rounded-full bg-surface-card text-muted border border-surface-border flex items-center gap-1 group">
                       {tag.is_manual ? '✎ ' : ''}{tag.name}
                       <button onClick={() => handleRemoveTag(tag.id)} className="p-0.5 rounded-full hover:bg-red-500/20 hover:text-red-400 transition-colors" title="移除标签">
                         <X size={10} />
@@ -865,19 +867,19 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
             {/* Quality Score */}
             {sound.quality_score !== null && sound.quality_score !== undefined && (
               <div>
-                <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">质量评分</p>
+                <p className="text-xs text-muted-light uppercase tracking-wider mb-1.5">质量评分</p>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: 5 }, (_, i) => (
-                    <div key={i} className={`w-5 h-5 rounded-sm ${i < sound.quality_score! ? 'bg-[#534AB7]' : 'bg-[#2a2a28]'}`} />
+                    <div key={i} className={`w-5 h-5 rounded-sm ${i < sound.quality_score! ? 'bg-accent' : 'bg-surface-panel'}`} />
                   ))}
-                  <span className="text-xs text-[#6a6a64] ml-1.5">{sound.quality_score}/5</span>
+                  <span className="text-xs text-muted-light ml-1.5">{sound.quality_score}/5</span>
                 </div>
               </div>
             )}
 
             {/* Technical Info */}
             <div>
-              <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">技术信息</p>
+              <p className="text-xs text-muted-light uppercase tracking-wider mb-1.5">技术信息</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                 <InfoRow label="时长" value={formatDuration(sound.duration_ms)} />
                 <InfoRow label="格式" value={sound.file_ext.toUpperCase().replace('.', '')} />
@@ -892,7 +894,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
 
             {/* Stats */}
             <div>
-              <p className="text-xs text-[#6a6a64] uppercase tracking-wider mb-1.5">使用统计</p>
+              <p className="text-xs text-muted-light uppercase tracking-wider mb-1.5">使用统计</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                 <InfoRow label="播放" value={`${sound.play_count} 次`} />
                 <InfoRow label="导出" value={`${sound.export_count} 次`} />
@@ -902,10 +904,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
 
             {/* Action Buttons */}
             <div className="flex flex-col gap-1.5 pb-1">
-              <button onClick={handleCopyPath} className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm bg-[#1a1a18] text-[#8a8a82] hover:bg-[#252524] hover:text-[#b8b8b4] border border-[#2a2a28] transition-colors">
+              <button onClick={handleCopyPath} className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm bg-surface text-muted hover:bg-surface-card hover:text-muted-light border border-surface-panel transition-colors">
                 <Copy size={15} /> 复制路径
               </button>
-              <button onClick={handleOpenFolder} className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm bg-[#1a1a18] text-[#8a8a82] hover:bg-[#252524] hover:text-[#b8b8b4] border border-[#2a2a28] transition-colors">
+              <button onClick={handleOpenFolder} className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm bg-surface text-muted hover:bg-surface-card hover:text-muted-light border border-surface-panel transition-colors">
                 <FolderOpen size={15} /> 打开文件位置
               </button>
             </div>
@@ -916,38 +918,38 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
         {activeTab === 'tools' && (
           <>
             {/* 首尾无缝循环 */}
-            <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+            <div className="rounded-md border border-surface-panel bg-surface px-3 py-2.5">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+                <span className="text-xs text-muted flex items-center gap-1.5 font-medium">
                   <Repeat size={13} className="text-accent" /> 首尾无缝循环
                 </span>
                 <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
-                    交叉<input type="number" min={10} max={500} value={loopMs} onChange={(e) => setLoopMs(Math.max(10, Math.min(500, Number(e.target.value) || 30)))} className="w-12 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center" />ms
+                  <label className="flex items-center gap-1 text-[10px] text-muted-light">
+                    交叉<input type="number" min={10} max={500} value={loopMs} onChange={(e) => setLoopMs(Math.max(10, Math.min(500, Number(e.target.value) || 30)))} className="w-12 bg-surface-card border border-surface-panel rounded px-1 py-0.5 text-[10px] text-muted-light text-center" />ms
                   </label>
-                  <label className="flex items-center gap-1 text-[10px] text-[#6a6a64]">
-                    循环<input type="number" min={1} max={50} value={loopCount} onChange={(e) => setLoopCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} className="w-10 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[10px] text-[#b8b8b4] text-center" />次
+                  <label className="flex items-center gap-1 text-[10px] text-muted-light">
+                    循环<input type="number" min={1} max={50} value={loopCount} onChange={(e) => setLoopCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} className="w-10 bg-surface-card border border-surface-panel rounded px-1 py-0.5 text-[10px] text-muted-light text-center" />次
                   </label>
                 </div>
               </div>
               <button onClick={handleSeamlessLoop} disabled={looping} className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50">
                 <Repeat size={13} />{looping ? '生成中…' : '生成无缝循环文件'}
               </button>
-              <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">用 ffmpeg 将尾音交叉淡入开头，生成 <code className="text-[#8a8a82]">原名_loop次数.wav</code>（不覆盖原文件）。</p>
+              <p className="text-[10px] text-muted-light mt-1.5 leading-relaxed">用 ffmpeg 将尾音交叉淡入开头，生成 <code className="text-muted">原名_loop次数.wav</code>（不覆盖原文件）。</p>
             </div>
 
             {/* 裁剪截取片段 */}
-            <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+            <div className="rounded-md border border-surface-panel bg-surface px-3 py-2.5">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+                <span className="text-xs text-muted flex items-center gap-1.5 font-medium">
                   <Scissors size={13} className="text-accent" /> 裁剪截取片段
                 </span>
-                <button onClick={handleCropPreview} disabled={!duration} className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-[#b8b8b4] bg-[#252524] hover:bg-[#2f2f2c] border border-[#2a2a28] transition-colors disabled:opacity-40">
+                <button onClick={handleCropPreview} disabled={!duration} className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-muted-light bg-surface-card hover:bg-surface-hover border border-surface-panel transition-colors disabled:opacity-40">
                   {cropPreview ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}{cropPreview ? '停止试听' : '试听选区'}
                 </button>
               </div>
 
-              <div ref={cropWaveRef} className="relative h-14 bg-[#141412] rounded-lg overflow-hidden mb-2 select-none touch-none" onPointerMove={onCropWaveMove} onPointerUp={onCropWaveUp} onPointerLeave={onCropWaveUp}>
+              <div ref={cropWaveRef} className="relative h-14 bg-surface rounded-lg overflow-hidden mb-2 select-none touch-none" onPointerMove={onCropWaveMove} onPointerUp={onCropWaveUp} onPointerLeave={onCropWaveUp}>
                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 56" preserveAspectRatio="none">
                   {peaks.length > 0 ? peaks.map((p, i) => {
                     const h = Math.max(2, p * 50)
@@ -969,73 +971,73 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
                 )}
               </div>
 
-              <div className="flex items-center gap-2 text-[10px] text-[#6a6a64] mb-2">
-                <label className="flex items-center gap-1">起点<input type="number" min={0} max={duration || 0} step={0.1} value={Number(cropStart.toFixed(2))} onChange={(e) => setCropStart(Math.max(0, Math.min(Number(e.target.value) || 0, cropEnd - 0.02)))} className="w-14 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[#b8b8b4] text-center" />s</label>
-                <label className="flex items-center gap-1">终点<input type="number" min={0} max={duration || 0} step={0.1} value={Number(cropEnd.toFixed(2))} onChange={(e) => setCropEnd(Math.max(Number(e.target.value) || 0, cropStart + 0.02))} className="w-14 bg-[#252524] border border-[#2a2a28] rounded px-1 py-0.5 text-[#b8b8b4] text-center" />s</label>
-                <span className="ml-auto font-mono tabular-nums text-[#8a8a82]">{(cropEnd - cropStart).toFixed(2)}s</span>
+              <div className="flex items-center gap-2 text-[10px] text-muted-light mb-2">
+                <label className="flex items-center gap-1">起点<input type="number" min={0} max={duration || 0} step={0.1} value={Number(cropStart.toFixed(2))} onChange={(e) => setCropStart(Math.max(0, Math.min(Number(e.target.value) || 0, cropEnd - 0.02)))} className="w-14 bg-surface-card border border-surface-panel rounded px-1 py-0.5 text-muted-light text-center" />s</label>
+                <label className="flex items-center gap-1">终点<input type="number" min={0} max={duration || 0} step={0.1} value={Number(cropEnd.toFixed(2))} onChange={(e) => setCropEnd(Math.max(Number(e.target.value) || 0, cropStart + 0.02))} className="w-14 bg-surface-card border border-surface-panel rounded px-1 py-0.5 text-muted-light text-center" />s</label>
+                <span className="ml-auto font-mono tabular-nums text-muted">{(cropEnd - cropStart).toFixed(2)}s</span>
               </div>
 
               <button onClick={handleCrop} disabled={cropping || !duration} className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50">
                 <Scissors size={13} />{cropping ? '截取中…' : '生成片段'}
               </button>
-              <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">拖动把手选取区间；生成 <code className="text-[#8a8a82]">原名_clip_起-止.wav</code> 自动入库。</p>
+              <p className="text-[10px] text-muted-light mt-1.5 leading-relaxed">拖动把手选取区间；生成 <code className="text-muted">原名_clip_起-止.wav</code> 自动入库。</p>
             </div>
 
             {/* 格式转换 WAV↔MP3 */}
-            <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+            <div className="rounded-md border border-surface-panel bg-surface px-3 py-2.5">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+                <span className="text-xs text-muted flex items-center gap-1.5 font-medium">
                   <FileAudio size={13} className="text-accent" /> 格式转换 WAV↔MP3
                 </span>
               </div>
               <div className="flex items-center gap-2 mb-2">
-                <button onClick={() => setConvFmt('wav')} className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${convFmt === 'wav' ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}>WAV</button>
-                <button onClick={() => setConvFmt('mp3')} className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${convFmt === 'mp3' ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}>MP3</button>
+                <button onClick={() => setConvFmt('wav')} className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${convFmt === 'wav' ? 'bg-accent text-white border-accent/60' : 'bg-surface-card text-muted-light border-surface-panel hover:bg-surface-hover'}`}>WAV</button>
+                <button onClick={() => setConvFmt('mp3')} className={`flex-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${convFmt === 'mp3' ? 'bg-accent text-white border-accent/60' : 'bg-surface-card text-muted-light border-surface-panel hover:bg-surface-hover'}`}>MP3</button>
               </div>
               {convFmt === 'mp3' && (
-                <div className="flex items-center gap-2 text-[10px] text-[#6a6a64] mb-2">
+                <div className="flex items-center gap-2 text-[10px] text-muted-light mb-2">
                   <span>码率</span>
                   {[128, 192, 256, 320].map((b) => (
-                    <button key={b} onClick={() => setConvBitrate(b)} className={`px-1.5 py-0.5 rounded border transition-colors ${convBitrate === b ? 'bg-[#534AB7]/20 text-[#9C92F6] border-[#534AB7]/40' : 'bg-[#252524] text-[#8a8a82] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}>{b}</button>
+                    <button key={b} onClick={() => setConvBitrate(b)} className={`px-1.5 py-0.5 rounded border transition-colors ${convBitrate === b ? 'bg-accent/20 text-accent-light border-accent/40' : 'bg-surface-card text-muted border-surface-panel hover:bg-surface-hover'}`}>{b}</button>
                   ))}<span>kbps</span>
                 </div>
               )}
               <button onClick={handleConvert} disabled={converting} className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50">
                 <FileAudio size={13} />{converting ? '转换中…' : `转换为 ${convFmt.toUpperCase()}`}
               </button>
-              <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">生成 <code className="text-[#8a8a82]">原名_conv.{convFmt}</code> 自动入库。</p>
+              <p className="text-[10px] text-muted-light mt-1.5 leading-relaxed">生成 <code className="text-muted">原名_conv.{convFmt}</code> 自动入库。</p>
             </div>
 
             {/* 变速不变调 */}
-            <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+            <div className="rounded-md border border-surface-panel bg-surface px-3 py-2.5">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+                <span className="text-xs text-muted flex items-center gap-1.5 font-medium">
                   <Gauge size={13} className="text-accent" /> 变速不变调
                 </span>
-                <span className="text-[10px] text-[#6a6a64]">改变速度 · 保持音高</span>
+                <span className="text-[10px] text-muted-light">改变速度 · 保持音高</span>
               </div>
               <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                 {SPEED_PRESETS.map((s) => (
-                  <button key={s} onClick={() => setSpeed(s)} className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${speed === s ? 'bg-accent text-white border-accent/60' : 'bg-[#252524] text-[#b8b8b4] border-[#2a2a28] hover:bg-[#2f2f2c]'}`}>{s}x</button>
+                  <button key={s} onClick={() => setSpeed(s)} className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${speed === s ? 'bg-accent text-white border-accent/60' : 'bg-surface-card text-muted-light border-surface-panel hover:bg-surface-hover'}`}>{s}x</button>
                 ))}
               </div>
               <button onClick={handleStretch} disabled={stretching} className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50">
                 <Gauge size={13} />{stretching ? '变速中…' : `变速为 ${speed}x（不变调）`}
               </button>
-              <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">生成 <code className="text-[#8a8a82]">原名_{speed}x.{sound.file_ext?.replace(/^\./, '') || 'wav'}</code> 自动入库。</p>
+              <p className="text-[10px] text-muted-light mt-1.5 leading-relaxed">生成 <code className="text-muted">原名_{speed}x.{sound.file_ext?.replace(/^\./, '') || 'wav'}</code> 自动入库。</p>
             </div>
 
             {/* After Effects */}
-            <div className="rounded-md border border-[#2a2a28] bg-[#1a1a18] px-3 py-2.5">
+            <div className="rounded-md border border-surface-panel bg-surface px-3 py-2.5">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-[#8a8a82] flex items-center gap-1.5 font-medium">
+                <span className="text-xs text-muted flex items-center gap-1.5 font-medium">
                   <Import size={13} className="text-accent" /> 导入到 After Effects
                 </span>
               </div>
               <button onClick={handleImportToAE} disabled={importing} className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-accent/80 hover:bg-accent border border-accent/60 transition-colors disabled:opacity-50">
                 <Import size={13} />{importing ? '导入中…' : '导入到正在运行的 AE 工程'}
               </button>
-              <p className="text-[10px] text-[#6a6a64] mt-1.5 leading-relaxed">需先在 AE 中开启「允许脚本写入文件和访问网络」。</p>
+              <p className="text-[10px] text-muted-light mt-1.5 leading-relaxed">需先在 AE 中开启「允许脚本写入文件和访问网络」。</p>
             </div>
           </>
         )}
@@ -1047,8 +1049,8 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
 function InfoRow({ label, value }: { label: string; value: string }): JSX.Element {
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <span className="text-xs text-[#5a5a54] shrink-0">{label}</span>
-      <span className="text-xs text-[#8a8a82] truncate">{value}</span>
+      <span className="text-xs text-muted-light shrink-0">{label}</span>
+      <span className="text-xs text-muted truncate">{value}</span>
     </div>
   )
 }

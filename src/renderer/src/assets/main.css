@@ -8,11 +8,58 @@
   box-sizing: border-box;
 }
 
+/* ── Theme tokens (default = dark) ── */
+:root {
+  --color-surface: 26 26 24;          /* #1a1a18 */
+  --color-surface-card: 44 44 42;     /* #2C2C2A */
+  --color-surface-panel: 34 34 32;    /* #222220 */
+  --color-surface-hover: 53 53 51;    /* #353533 */
+  --color-surface-border: 62 62 60;   /* #3E3E3C */
+  --color-accent: 83 74 183;          /* #534AB7 */
+  --color-accent-light: 127 119 221;   /* #7F77DD */
+  --color-accent-muted: 60 52 137;    /* #3C3489 */
+  --color-muted: 136 135 128;         /* #888780 */
+  --color-muted-light: 180 178 169;   /* #B4B2A9 */
+  --color-fg: 235 233 226;            /* #EBE9E2 最亮主文本 */
+  --color-fg-muted: 211 209 199;      /* #D3D1C7 中文本 */
+  --color-fg-subtle: 150 148 140;     /* #96948C 次文本 */
+  --color-scrollbar: 62 62 60;
+  --color-scrollbar-hover: 95 94 90;
+  --color-selection: 83 74 183;
+  --color-selection-fg: 255 255 255;
+  --color-range: 62 62 60;
+  --color-range-thumb: 83 74 183;
+  --color-range-thumb-hover: 124 114 230; /* #7C72E6 */
+}
+
+/* ── Light theme override ── */
+[data-theme="light"] {
+  --color-surface: 248 248 246;       /* 近白 */
+  --color-surface-card: 255 255 255;
+  --color-surface-panel: 240 240 237;
+  --color-surface-hover: 228 228 223;
+  --color-surface-border: 214 214 208;
+  --color-accent: 99 88 208;          /* 稍深便于浅底对比 */
+  --color-accent-light: 122 112 222;
+  --color-accent-muted: 224 220 244;
+  --color-muted: 120 118 110;
+  --color-muted-light: 90 88 82;
+  --color-fg: 28 28 26;               /* 近黑主文本 */
+  --color-fg-muted: 90 89 84;
+  --color-fg-subtle: 150 148 140;
+  --color-scrollbar: 214 214 208;
+  --color-scrollbar-hover: 180 180 174;
+  --color-selection: 99 88 208;
+  --color-range: 214 214 208;
+  --color-range-thumb: 99 88 208;
+  --color-range-thumb-hover: 122 112 222;
+}
+
 html, body, #root {
   height: 100%;
   overflow: hidden;
-  background: #1a1a18;
-  color: #D3D1C7;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-fg-muted));
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 14px;
   line-height: 1.5;
@@ -29,17 +76,17 @@ html, body, #root {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3E3E3C;
+  background: rgb(var(--color-scrollbar));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #5F5E5A;
+  background: rgb(var(--color-scrollbar-hover));
 }
 
 ::selection {
-  background: #534AB7;
-  color: #fff;
+  background: rgb(var(--color-selection));
+  color: rgb(var(--color-selection-fg));
 }
 
 .drag-region {
@@ -54,7 +101,7 @@ html, body, #root {
 input:focus-visible,
 textarea:focus-visible,
 button:focus-visible {
-  outline: 1px solid #534AB7;
+  outline: 1px solid rgb(var(--color-accent));
   outline-offset: -1px;
 }
 
@@ -63,7 +110,7 @@ input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
-  background: #3E3E3C;
+  background: rgb(var(--color-range));
   border-radius: 2px;
   outline: none;
 }
@@ -74,11 +121,11 @@ input[type="range"]::-webkit-slider-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #534AB7;
+  background: rgb(var(--color-range-thumb));
   cursor: pointer;
-  border: 2px solid #1a1a18;
+  border: 2px solid rgb(var(--color-surface));
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
-  background: #7C72E6;
+  background: rgb(var(--color-range-thumb-hover));
 }

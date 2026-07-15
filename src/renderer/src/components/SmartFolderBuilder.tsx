@@ -82,7 +82,7 @@ export function SmartFolderList(): JSX.Element {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[#2a2a28]">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-surface-panel">
         <div className="flex items-center gap-1.5">
           <FolderCog size={14} className="text-muted" />
           <span className="text-xs font-medium text-muted-light">智能文件夹</span>
@@ -218,7 +218,7 @@ export function SmartClassifyPanel(): JSX.Element {
   }
 
   return (
-    <div className="px-2 py-2 border-b border-[#2a2a28]">
+    <div className="px-2 py-2 border-b border-surface-panel">
       <div className="flex items-center gap-1.5 mb-2">
         <Wand2 size={13} className="text-accent" />
         <span className="text-2xs font-medium text-muted-light">一键智能分类</span>
@@ -378,7 +378,7 @@ function SmartFolderBuilderDialog({ folder, onClose }: SmartFolderBuilderDialogP
         className="bg-surface-panel border border-surface-border rounded-xl w-[520px] max-h-[80vh] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-[#2a2a28]">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-panel">
           <FolderCog size={16} className="text-accent" />
           <input
             className="flex-1 bg-transparent text-sm font-medium text-muted-light outline-none placeholder:text-muted"
@@ -387,7 +387,7 @@ function SmartFolderBuilderDialog({ folder, onClose }: SmartFolderBuilderDialogP
             onChange={(e) => setName(e.target.value)}
             autoFocus
           />
-          <button onClick={handleSave} className="px-3 py-1 bg-accent text-white text-xs rounded hover:bg-[#6B5ED4] flex items-center gap-1">
+          <button onClick={handleSave} className="px-3 py-1 bg-accent text-white text-xs rounded hover:bg-accent-light flex items-center gap-1">
             <Save size={12} />保存
           </button>
           <button onClick={onClose} className="p-1 hover:text-accent-light rounded text-muted">
@@ -505,14 +505,14 @@ function SmartFolderBuilderDialog({ folder, onClose }: SmartFolderBuilderDialogP
           </button>
         </div>
 
-        <div className="px-4 py-2 border-t border-[#2a2a28] flex items-center gap-3">
+        <div className="px-4 py-2 border-t border-surface-panel flex items-center gap-3">
           <span className="text-2xs text-muted shrink-0">
             {previewCount === null ? '匹配计算中…' : `当前匹配 ${previewCount} 个音效`}
           </span>
           <div className="flex-1" />
           <button
             onClick={handleSave}
-            className="flex-1 py-1.5 bg-accent text-white text-xs rounded hover:bg-[#6B5ED4]"
+            className="flex-1 py-1.5 bg-accent text-white text-xs rounded hover:bg-accent-light"
           >
             保存并应用
           </button>

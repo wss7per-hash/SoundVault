@@ -8,11 +8,12 @@ import { DetailPanel } from './components/DetailPanel'
 import { SimilarSoundsBar } from './components/SimilarSoundsBar'
 import { StatisticsPanel } from './components/StatisticsPanel'
 import { ToolsPanel } from './components/ToolsPanel'
+import { SettingsPanel } from './components/SettingsPanel'
 import { EmptyState } from './components/EmptyState'
 import { FloatingQuickBar } from './components/FloatingQuickBar'
 import { RecycleBin } from './components/RecycleBin'
+import { OnboardingTour } from './components/OnboardingTour'
 import ScanDialog from './components/ScanDialog'
-import ModelConfig from './components/ModelConfig'
 import GeneratePanel from './components/GeneratePanel'
 import { Toaster, toast } from 'react-hot-toast'
 import { Star, Upload } from 'lucide-react'
@@ -30,9 +31,9 @@ export default function App(): JSX.Element {
     setActiveView,
     selectedSoundId,
     showScanDialog,
-    showModelConfig,
     showGenerate,
     fontSize,
+    theme,
     sortBy,
     sortOrder,
     formatFilter,
@@ -46,7 +47,6 @@ export default function App(): JSX.Element {
     refreshSmartFolders,
     selectSound,
     toggleScanDialog,
-    toggleModelConfig,
     toggleGenerate
   } = useAppStore()
 
@@ -123,6 +123,11 @@ export default function App(): JSX.Element {
     document.documentElement.style.fontSize = `${fontSize}px`
   }, [fontSize]  )
 
+  // ── 主题：把 theme 写到 <html data-theme>，CSS 变量据此切换 ──
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+
   // ── 拖放导入：接收从系统拖入窗口的音频文件 / 文件夹 ──
   const hasFilesInDrag = (e: React.DragEvent): boolean =>
     Array.from(e.dataTransfer.types || []).includes('Files')
@@ -148,6 +153,15 @@ export default function App(): JSX.Element {
     try {
       const res = await window.api.importPaths(paths)
       await Promise.all([refreshSounds(), refreshStats()])
+      // 自动标注：导入成功后对未分析音效批量分析
+      const store = useAppStore.getState()
+      if (store.autoAnalyzeOnImport) {
+        const ids = store.sounds.filter((s) => !s.ai_analyzed_at).map((s) => s.id)
+        if (ids.length) {
+          toast('已开启自动标注，正在分析新导入的音效…', { icon: '✨' })
+          store.analyzeBatch(ids)
+        }
+      }
       if (res.imported > 0) {
         toast.success(
           `已导入 ${res.imported} 个音效` +
@@ -227,10 +241,10 @@ export default function App(): JSX.Element {
       {/* 拖放导入遮罩 */}
       {dragActive && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-none">
-          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-[#7C5CFF]/70 bg-[#1d1d1b] px-10 py-8">
-            <Upload size={40} className="text-[#9d86ff]" />
-            <p className="text-base font-medium text-[#e8e6df]">松开即可导入音效</p>
-            <p className="text-xs text-[#9a978d]">支持音频文件与文件夹（自动递归）</p>
+          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-accent/70 bg-surface-panel px-10 py-8">
+            <Upload size={40} className="text-accent-light" />
+            <p className="text-base font-medium text-fg">松开即可导入音效</p>
+            <p className="text-xs text-muted">支持音频文件与文件夹（自动递归）</p>
           </div>
         </div>
       )}
@@ -239,7 +253,7 @@ export default function App(): JSX.Element {
       {showSplash && <SplashScreen onDone={() => setShowSplash(false)} ready={dataReady} />}
 
       <Toaster position="bottom-right" toastOptions={{
-        style: { background: '#2C2C2A', color: '#D3D1C7', border: '0.5px solid #3E3E3C', fontSize: '12px' }
+        style: { background: 'rgb(var(--color-surface-card))', color: 'rgb(var(--color-fg-muted))', border: '0.5px solid rgb(var(--color-surface-border))', fontSize: '12px' }
       }} />
 
       <Sidebar />
@@ -250,6 +264,8 @@ export default function App(): JSX.Element {
         <div className="flex-1 flex min-h-0">
           {sidebarTab === 'trash' ? (
             <RecycleBin />
+          ) : activeView === 'settings' ? (
+            <SettingsPanel onClose={() => setActiveView('library')} />
           ) : activeView === 'tools' ? (
             <ToolsPanel onClose={() => setActiveView('library')} />
           ) : activeView === 'stats' ? (
@@ -258,7 +274,7 @@ export default function App(): JSX.Element {
             <>
               <div className="flex-1 flex flex-col min-w-0">
                 {sidebarTab === 'collections' && activeCollectionId === '__starred__' && (
-                  <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-[#2a2a28] text-xs text-amber-400 shrink-0">
+                  <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-surface-border text-xs text-amber-400 shrink-0">
                     <Star size={13} className="fill-amber-400" />
                     <span>收藏 · 已星标的音效（不归属于任何收藏夹）</span>
                   </div>
@@ -282,9 +298,11 @@ export default function App(): JSX.Element {
 
       <FloatingQuickBar />
 
+      {/* 首次启动引导 */}
+      <OnboardingTour />
+
       {/* Modals */}
       <ScanDialog isOpen={showScanDialog} onClose={() => toggleScanDialog()} />
-      <ModelConfig isOpen={showModelConfig} onClose={() => toggleModelConfig()} />
       <GeneratePanel isOpen={showGenerate} onClose={() => toggleGenerate()} />
     </div>
   )
@@ -327,15 +345,15 @@ function StatusBar(): JSX.Element {
   if (sidebarTab === 'trash') return <></>
 
   return (
-    <div className="h-8 border-t border-[#2a2a28] flex items-center px-4 text-xs text-[#6a6a64] shrink-0">
+    <div className="h-8 border-t border-surface-border flex items-center px-4 text-xs text-muted-light shrink-0">
       <span className="mr-5">{sounds.length} / {stats.total} 个音效</span>
       <span className="mr-5">{stats.starred} 个收藏</span>
       <span>共 {formatSize(stats.totalSize)}</span>
       {selectedSoundIds.length > 0 && (
-        <span className="ml-auto text-[#7C72E6]">已选中 {selectedSoundIds.length} 个</span>
+        <span className="ml-auto text-accent-light">已选中 {selectedSoundIds.length} 个</span>
       )}
       {analyzingIds.length > 0 && (
-        <span className="ml-auto text-[#F59E0B] animate-pulse">
+        <span className="ml-auto text-amber-400 animate-pulse">
           AI 分析中（{analyzingIds.length}{batchAnalyzing ? ' · 批量' : ''}）…
         </span>
       )}

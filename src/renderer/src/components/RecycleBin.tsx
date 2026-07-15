@@ -102,7 +102,7 @@ export function RecycleBin(): JSX.Element {
         {confirm.open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={cancelConfirm}>
             <div
-              className="bg-surface-panel border border-[#3a3a38] rounded-xl shadow-2xl w-[380px] p-5 mx-4"
+              className="bg-surface-panel border border-surface-border rounded-xl shadow-2xl w-[380px] p-5 mx-4"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start gap-3 mb-4">
@@ -110,10 +110,10 @@ export function RecycleBin(): JSX.Element {
                   <AlertTriangle size={18} className="text-red-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-[#f0ede6] mb-1">确认永久删除</h3>
+                  <h3 className="text-sm font-semibold text-fg mb-1">确认永久删除</h3>
                   <p className="text-xs text-muted leading-relaxed">
-                    将从 SoundVault 库中<strong className="text-[#f0ede6]">永久移除</strong> {confirm.count} 个音效记录。
-                    <br />此操作<span className="font-medium text-[#f0ede6]">不可撤销</span>。
+                    将从 SoundVault 库中<strong className="text-fg">永久移除</strong> {confirm.count} 个音效记录。
+                    <br />此操作<span className="font-medium text-fg">不可撤销</span>。
                   </p>
 
                   <label className="flex items-start gap-2 mt-3 cursor-pointer group">
@@ -123,7 +123,7 @@ export function RecycleBin(): JSX.Element {
                       onChange={(e) => setDeleteLocalFile(e.target.checked)}
                       className="mt-0.5 accent-red-500"
                     />
-                    <span className="text-xs text-muted group-hover:text-[#f0ede6] transition-colors leading-relaxed">
+                    <span className="text-xs text-muted group-hover:text-fg transition-colors leading-relaxed">
                       <HardDrive size={11} className="inline mr-1 -mt-0.5" />
                       同时删除本地音频文件（不可恢复）
                     </span>
@@ -137,7 +137,7 @@ export function RecycleBin(): JSX.Element {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#2a2a28]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-surface-panel">
                 <button
                   onClick={cancelConfirm}
                   className="px-3 py-1.5 text-xs text-muted-light bg-surface-card hover:bg-surface-border border border-surface-border rounded-md transition-colors"
@@ -171,7 +171,7 @@ export function RecycleBin(): JSX.Element {
       {confirm.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={cancelConfirm}>
           <div
-            className="bg-surface-panel border border-[#3a3a38] rounded-xl shadow-2xl w-[380px] p-5 mx-4"
+            className="bg-surface-panel border border-surface-border rounded-xl shadow-2xl w-[380px] p-5 mx-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-3 mb-4">
@@ -179,10 +179,10 @@ export function RecycleBin(): JSX.Element {
                 <AlertTriangle size={18} className="text-red-400" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-[#f0ede6] mb-1">确认永久删除</h3>
+                <h3 className="text-sm font-semibold text-fg mb-1">确认永久删除</h3>
                 <p className="text-xs text-muted leading-relaxed">
-                  将从 SoundVault 库中<strong className="text-[#f0ede6]">永久移除</strong> {confirm.count} 个音效记录。
-                  <br />此操作<span className="font-medium text-[#f0ede6]">不可撤销</span>。
+                  将从 SoundVault 库中<strong className="text-fg">永久移除</strong> {confirm.count} 个音效记录。
+                  <br />此操作<span className="font-medium text-fg">不可撤销</span>。
                 </p>
 
                 <label className="flex items-start gap-2 mt-3 cursor-pointer group">
@@ -192,7 +192,7 @@ export function RecycleBin(): JSX.Element {
                     onChange={(e) => setDeleteLocalFile(e.target.checked)}
                     className="mt-0.5 accent-red-500"
                   />
-                  <span className="text-xs text-muted group-hover:text-[#f0ede6] transition-colors leading-relaxed">
+                  <span className="text-xs text-muted group-hover:text-fg transition-colors leading-relaxed">
                     <HardDrive size={11} className="inline mr-1 -mt-0.5" />
                     同时删除本地音频文件（不可恢复）
                   </span>
@@ -206,7 +206,7 @@ export function RecycleBin(): JSX.Element {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-[#2a2a28]">
+            <div className="flex justify-end gap-2 pt-3 border-t border-surface-panel">
               <button
                 onClick={cancelConfirm}
                 className="px-3 py-1.5 text-xs text-muted-light bg-surface-card hover:bg-surface-border border border-surface-border rounded-md transition-colors"
@@ -225,7 +225,7 @@ export function RecycleBin(): JSX.Element {
         </div>
       )}
 
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-[#2a2a28]">
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-surface-panel">
         <div className="flex items-center gap-1.5 text-xs text-muted-light">
           <Trash2 size={14} className="text-red-400" />
           <span>回收站</span>
@@ -257,7 +257,7 @@ export function RecycleBin(): JSX.Element {
       <div className="flex-1 overflow-y-auto">
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-surface-panel">
-            <tr className="text-muted text-left border-b border-[#2a2a28]">
+            <tr className="text-muted text-left border-b border-surface-panel">
               <th className="w-8 px-3 py-1.5">
                 <input type="checkbox" checked={selected.size === trashSounds.length && trashSounds.length > 0} onChange={selectAll} className="accent-accent" />
               </th>
@@ -271,7 +271,7 @@ export function RecycleBin(): JSX.Element {
             {trashSounds.map((s) => (
               <tr
                 key={s.id}
-                className={`border-b border-[#1d1d1b] hover:bg-surface-card cursor-pointer ${
+                className={`border-b border-surface-panel hover:bg-surface-card cursor-pointer ${
                   selected.has(s.id) ? 'bg-accent/10' : ''
                 }`}
                 onClick={() => toggleSelect(s.id)}

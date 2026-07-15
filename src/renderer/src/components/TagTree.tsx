@@ -406,7 +406,7 @@ export function TagTree(): JSX.Element {
   return (
     <div className="flex flex-col h-full relative select-none">
       {/* 头部 */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[#2a2a28]">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-surface-panel">
         <div className="flex items-center gap-1.5">
           <Tags size={14} className="text-muted" />
           <span className="text-xs font-medium text-muted-light">标签</span>
@@ -431,7 +431,7 @@ export function TagTree(): JSX.Element {
 
       {/* 新建表单 */}
       {showAddForm && (
-        <div className="px-3 py-2 border-b border-[#2a2a28] space-y-2">
+        <div className="px-3 py-2 border-b border-surface-panel space-y-2">
           <input
             className="w-full bg-surface-card border border-surface-border rounded px-2 py-1 text-xs outline-none focus:border-accent"
             placeholder="标签名"
@@ -455,7 +455,7 @@ export function TagTree(): JSX.Element {
           <div className="flex gap-1.5">
             <button
               onClick={handleAdd}
-              className="px-2 py-0.5 bg-accent text-white text-2xs rounded hover:bg-[#6B5ED4]"
+              className="px-2 py-0.5 bg-accent text-white text-2xs rounded hover:bg-accent-light"
             >
               创建
             </button>
@@ -495,7 +495,7 @@ export function TagTree(): JSX.Element {
 
       {/* ====== 批量操作浮动栏 ====== */}
       {selectedTagIds.size > 0 && (
-        <div className="absolute bottom-2 left-2 right-2 z-20 flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1e1e1c] border border-surface-border shadow-xl animate-in fade-in slide-in-from-bottom-2">
+        <div className="absolute bottom-2 left-2 right-2 z-20 flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-panel border border-surface-border shadow-xl animate-in fade-in slide-in-from-bottom-2">
           <span className="text-xs text-muted-light font-medium whitespace-nowrap">
             已选 {selectedTagIds.size} 个标签
           </span>
@@ -522,7 +522,7 @@ export function TagTree(): JSX.Element {
       {contextMenu && (
         <div
           ref={menuRef}
-          className="fixed z-[100] w-48 py-1.5 rounded-xl border border-surface-border bg-[#252522] shadow-2xl"
+          className="fixed z-[100] w-48 py-1.5 rounded-xl border border-surface-border bg-surface-panel shadow-2xl"
           style={{ left: ctxLeft, top: ctxTop }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -562,7 +562,7 @@ export function TagTree(): JSX.Element {
       {/* ====== 合并选择器（内联浮层）===== */}
       {mergeMode && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-72 max-h-80 rounded-xl border border-surface-border bg-[#252522] shadow-2xl p-3 flex flex-col">
+          <div className="w-72 max-h-80 rounded-xl border border-surface-border bg-surface-panel shadow-2xl p-3 flex flex-col">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-muted-light">合并到…</span>
               <button

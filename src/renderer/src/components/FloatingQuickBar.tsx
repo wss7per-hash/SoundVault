@@ -80,7 +80,7 @@ export function FloatingQuickBar(): JSX.Element {
 
   const chipBase =
     'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors'
-  const chipOn = 'bg-[#534AB7]/25 text-[#9C92F6]'
+  const chipOn = 'bg-accent/25 text-accent-light'
   const chipOff = 'text-muted-light hover:bg-surface-card'
 
   return (
