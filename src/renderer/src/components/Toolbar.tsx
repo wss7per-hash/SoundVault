@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
-import { Search, LayoutGrid, List, SlidersHorizontal, Minus, Plus, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Type, Upload, Download, Loader2, Check, Package, FolderOpen, Ban, CheckCircle2, BarChart3, Wand2 } from 'lucide-react'
+import { Search, LayoutGrid, List, SlidersHorizontal, Minus, Plus, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Type, Upload, Download, Loader2, Check, Package, FolderOpen, Ban, CheckCircle2, BarChart3, Wand2, Wrench } from 'lucide-react'
 
 const SORT_OPTIONS = [
   { value: 'date', label: '导入时间', icon: Calendar },
@@ -606,6 +606,18 @@ export function Toolbar(): JSX.Element {
           title="库洞察 · 统计面板"
         >
           <BarChart3 size={16} />
+        </button>
+        <button
+          onClick={() => setActiveView(activeView === 'tools' ? 'library' : 'tools')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors ${
+            activeView === 'tools'
+              ? 'bg-accent/20 text-accent-light'
+              : 'text-muted hover:bg-surface-hover hover:text-muted-light'
+          }`}
+          title="工具 · 本地音频处理（裁剪 / 转换 / 变速 / 循环 / 导入 AE）"
+        >
+          <Wrench size={16} />
+          <span className="text-xs font-medium">工具</span>
         </button>
         <button
           onClick={() => useAppStore.getState().toggleGenerate()}

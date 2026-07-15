@@ -37,6 +37,7 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
   const selectedIds = useAppStore((s) => s.selectedSoundIds)
   const toggleSoundSelection = useAppStore((s) => s.toggleSoundSelection)
   const clearSelection = useAppStore((s) => s.clearSelection)
+  const selectSound = useAppStore((s) => s.selectSound)
   const setSelection = useAppStore((s) => s.setSelection)
   const selectRange = useAppStore((s) => s.selectRange)
   const viewMode = useAppStore((s) => s.viewMode)
@@ -130,13 +131,14 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
       if (isDragging) {
         collectSelectedCards()        // box select: replace selection
       } else {
-        clearSelection()              // plain click on empty area: clear selection
+        clearSelection()              // plain click on empty area: clear multi-selection
+        selectSound(null)             // also clear single-selection (right panel) so clicking blank deselects all
       }
     }
     setDragStart(null)
     setDragCurrent(null)
     setIsDragging(false)
-  }, [isDragging, dragStart, dragCurrent, clearSelection])
+  }, [isDragging, dragStart, dragCurrent, clearSelection, selectSound])
 
   const collectSelectedCards = useCallback(() => {
     if (!dragStart || !dragCurrent) return

@@ -23,7 +23,7 @@ interface AppState {
   activeSmartFolderId: string | null
   searchQuery: string
   viewMode: 'grid' | 'list'
-  activeView: 'library' | 'stats'
+  activeView: 'library' | 'stats' | 'tools'
   sidebarTab: 'tags' | 'folders' | 'collections' | 'smart' | 'trash'
   stats: { total: number; starred: number; missing: number; totalSize: number; totalDurationMs: number; analyzed: number; unanalyzed: number; byExt: { wav: number; mp3: number; flac: number; other: number }; avgQuality: number | null; tagCount: number; taggedSounds: number; withOnomatopoeia: number }
   fontSize: number
@@ -56,7 +56,7 @@ interface AppState {
   setActiveSmartFolder: (id: string | null) => void
   setSearchQuery: (query: string) => void
   setViewMode: (mode: 'grid' | 'list') => void
-  setActiveView: (view: 'library' | 'stats') => void
+  setActiveView: (view: 'library' | 'stats' | 'tools') => void
   setFontSize: (size: number) => void
   setSidebarTab: (tab: 'tags' | 'folders' | 'collections' | 'smart' | 'trash') => void
   setStats: (stats: { total: number; starred: number; missing: number; totalSize: number; totalDurationMs: number; analyzed: number; unanalyzed: number; byExt: { wav: number; mp3: number; flac: number; other: number }; avgQuality: number | null; tagCount: number; taggedSounds: number; withOnomatopoeia: number }) => void
