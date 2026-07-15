@@ -78,14 +78,6 @@ export function TagTree(): JSX.Element {
     return m
   }, [tagStats])
 
-  /** 所有标签节点扁平列表（用于 Shift 范围选择） */
-  const flatNodes = useMemo(() => {
-    const arr: TagTreeNode[] = []
-    const walk = (nodes: TagTreeNode[]) => { for (const n of nodes) { arr.push(n); walk(n.children) } }
-    walk(tree)
-    return arr
-  }, [tree]) // eslint-disable-line react-hooks/exhaustive-deps -- tree is stable within this scope
-
   const tree = useMemo(() => {
     const map = new Map<string, TagTreeNode>()
     const roots: TagTreeNode[] = []
@@ -105,6 +97,14 @@ export function TagTree(): JSX.Element {
 
     return roots
   }, [tags, statMap])
+
+  /** 所有标签节点扁平列表（用于 Shift 范围选择） */
+  const flatNodes = useMemo(() => {
+    const arr: TagTreeNode[] = []
+    const walk = (nodes: TagTreeNode[]) => { for (const n of nodes) { arr.push(n); walk(n.children) } }
+    walk(tree)
+    return arr
+  }, [tree])
 
   const filteredTree = useMemo(() => {
     if (!searchTag.trim()) return tree
