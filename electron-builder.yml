@@ -3,8 +3,8 @@ productName: SoundVault
 directories:
   buildResources: resources
   output: dist_build
-# 最高压缩，减小便携 exe 体积（ffmpeg 与 Electron 框架为必需项，无法进一步去除）
-compression: maximum
+# 普通压缩：maximum 在 portable 合成阶段会挂起（曾卡死 30min+），normal 快很多、体积仅略大
+compression: normal
 files:
   - "**/*"
   - "!**/.vscode/*"
