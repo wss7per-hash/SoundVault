@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { SoundTools } from './SoundTools'
-import { Wrench, X } from 'lucide-react'
+import { Wrench, X, ArrowLeft, BarChart3 } from 'lucide-react'
+import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
 
 interface ToolsPanelProps {
   onClose: () => void
@@ -15,6 +16,14 @@ export function ToolsPanel({ onClose }: ToolsPanelProps): JSX.Element {
   const sounds = useAppStore((s) => s.sounds)
   const selectedSoundId = useAppStore((s) => s.selectedSoundId)
   const refreshSounds = useAppStore((s) => s.refreshSounds)
+  const setActiveView = useAppStore((s) => s.setActiveView)
+
+  // ── 空白处右键菜单 ──
+  const toolsMenu = useContextMenu()
+  const toolsMenuItems: MenuItem[] = [
+    { type: 'item', label: '打开库洞察', icon: <BarChart3 size={14} />, onClick: () => setActiveView('stats') },
+    { type: 'item', label: '返回音频库', icon: <ArrowLeft size={14} />, onClick: onClose }
+  ]
 
   const [toolId, setToolId] = useState<string | null>(
     selectedSoundId && sounds.some((s) => s.id === selectedSoundId)
@@ -28,7 +37,7 @@ export function ToolsPanel({ onClose }: ToolsPanelProps): JSX.Element {
   )
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-[#161615]">
+    <div className="flex-1 flex flex-col min-h-0 bg-[#161615]" onContextMenu={toolsMenu.open}>
       {/* Header */}
       <div className="h-11 border-b border-[#2a2a28] flex items-center gap-3 px-4 shrink-0">
         <Wrench size={16} className="text-accent-light" />
@@ -71,6 +80,10 @@ export function ToolsPanel({ onClose }: ToolsPanelProps): JSX.Element {
           </div>
         )}
       </div>
+
+      {toolsMenu.pos && (
+        <PopupMenu x={toolsMenu.pos.x} y={toolsMenu.pos.y} items={toolsMenuItems} onClose={toolsMenu.close} />
+      )}
     </div>
   )
 }

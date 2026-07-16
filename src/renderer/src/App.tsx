@@ -16,8 +16,10 @@ import { OnboardingTour } from './components/OnboardingTour'
 import ScanDialog from './components/ScanDialog'
 import GeneratePanel from './components/GeneratePanel'
 import { Toaster, toast } from 'react-hot-toast'
-import { Star, Upload } from 'lucide-react'
+import { Star, Upload, FileInput, Tag, Search, RefreshCw, LayoutGrid, BarChart3, Undo2 } from 'lucide-react'
 import { SplashScreen } from './components/SplashScreen'
+import { PopupMenu, useContextMenu, type MenuItem } from './components/PopupMenu'
+import { performUndo } from './utils/undo'
 
 export default function App(): JSX.Element {
   const [showSplash, setShowSplash] = useState(true)
@@ -39,6 +41,8 @@ export default function App(): JSX.Element {
     formatFilter,
     selectedTagId,
     tags,
+    viewMode,
+    setViewMode,
     refreshSounds,
     refreshTags,
     refreshTagStats,
@@ -207,30 +211,6 @@ export default function App(): JSX.Element {
     return unsub
   }, [])
 
-  // 执行一次撤销：调后端弹栈回滚，成功后刷新全部数据视图
-  const performUndo = useCallback(async () => {
-    const peek = await window.api.undoPeek()
-    if (!peek) {
-      toast('没有可撤销的操作', { icon: '↩️' })
-      return
-    }
-    const res = await window.api.undoPerform()
-    if (res.success) {
-      toast.success(`已撤销：${res.label}`)
-      const store = useAppStore.getState()
-      await Promise.all([
-        store.refreshSounds(),
-        store.refreshTags(),
-        store.refreshTagStats(),
-        store.refreshStats(),
-        store.refreshCollections(),
-        store.refreshSmartFolders()
-      ])
-    } else {
-      toast.error(`撤销失败${res.error ? '：' + res.error : ''}`)
-    }
-  }, [])
-
   // Ctrl+A / Ctrl+D select all；Ctrl+Z 撤销
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -257,7 +237,59 @@ export default function App(): JSX.Element {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [filteredSounds, performUndo])
+  }, [filteredSounds])
+
+  // ── 音频库空白处右键菜单 ──
+  const libraryMenu = useContextMenu()
+
+  const refreshLibrary = useCallback(async () => {
+    await Promise.all([
+      refreshSounds(),
+      refreshTags(),
+      refreshTagStats(),
+      refreshStats(),
+      refreshCollections(),
+      refreshSmartFolders()
+    ])
+  }, [refreshSounds, refreshTags, refreshTagStats, refreshStats, refreshCollections, refreshSmartFolders])
+
+  const focusSearch = useCallback(() => {
+    const el = document.getElementById('global-search-input') as HTMLInputElement | null
+    el?.focus()
+    el?.select()
+  }, [])
+
+  const handleNewTagFromMenu = useCallback(async () => {
+    const name = window.prompt('新标签名称')
+    if (!name || !name.trim()) return
+    try {
+      await window.api.addTag(name.trim(), null, '#534AB7')
+      await Promise.all([refreshTags(), refreshTagStats()])
+      toast.success('已创建标签：' + name.trim())
+    } catch {
+      toast.error('创建标签失败，可能名称已存在')
+    }
+  }, [refreshTags, refreshTagStats])
+
+  const buildLibraryMenu = useCallback((): MenuItem[] => {
+    const store = useAppStore.getState()
+    return [
+      { type: 'item', label: '导入音效', icon: <FileInput size={14} />, onClick: () => store.toggleScanDialog() },
+      { type: 'item', label: '新建标签', icon: <Tag size={14} />, onClick: () => void handleNewTagFromMenu() },
+      { type: 'item', label: '聚焦搜索', icon: <Search size={14} />, onClick: focusSearch },
+      { type: 'separator' },
+      { type: 'item', label: '刷新库', icon: <RefreshCw size={14} />, onClick: () => void refreshLibrary() },
+      {
+        type: 'item',
+        label: viewMode === 'grid' ? '切换为列表视图' : '切换为网格视图',
+        icon: <LayoutGrid size={14} />,
+        onClick: () => store.setViewMode(viewMode === 'grid' ? 'list' : 'grid')
+      },
+      { type: 'separator' },
+      { type: 'item', label: '打开库洞察', icon: <BarChart3 size={14} />, onClick: () => store.setActiveView('stats') },
+      { type: 'item', label: '撤销', icon: <Undo2 size={14} />, shortcut: 'Ctrl+Z', onClick: () => void performUndo() }
+    ]
+  }, [handleNewTagFromMenu, focusSearch, refreshLibrary, viewMode])
 
   const handleSelectSound = useCallback(
     (id: string) => { selectSound(selectedSoundId === id ? null : id) },
@@ -300,7 +332,10 @@ export default function App(): JSX.Element {
             <StatisticsPanel onClose={() => setActiveView('library')} />
           ) : (
             <>
-              <div className="flex-1 flex flex-col min-w-0">
+              <div
+                className="flex-1 flex flex-col min-w-0"
+                onContextMenu={libraryMenu.open}
+              >
                 {sidebarTab === 'collections' && activeCollectionId === '__starred__' && (
                   <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-surface-border text-xs text-amber-400 shrink-0">
                     <Star size={13} className="fill-amber-400" />
@@ -332,6 +367,16 @@ export default function App(): JSX.Element {
       {/* Modals */}
       <ScanDialog isOpen={showScanDialog} onClose={() => toggleScanDialog()} />
       <GeneratePanel isOpen={showGenerate} onClose={() => toggleGenerate()} />
+
+      {/* 音频库空白处右键菜单 */}
+      {libraryMenu.pos && (
+        <PopupMenu
+          x={libraryMenu.pos.x}
+          y={libraryMenu.pos.y}
+          items={buildLibraryMenu()}
+          onClose={libraryMenu.close}
+        />
+      )}
     </div>
   )
 }

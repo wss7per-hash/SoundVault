@@ -2,10 +2,11 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import type { TagData, TagStatData } from '../../preload/index.d'
 import {
   Plus, Trash2, Edit3, ChevronRight, ChevronDown, Tags, Hash, Search,
-  Eye, ArrowRightLeft, Eraser, X, Check
+  Eye, ArrowRightLeft, Eraser, X, Check, RefreshCw
 } from 'lucide-react'
 import { useAppStore } from '../stores/appStore'
 import toast from 'react-hot-toast'
+import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
 
 const TAG_COLORS = ['#534AB7', '#E85D75', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#06B6D4']
 
@@ -43,6 +44,13 @@ export function TagTree(): JSX.Element {
   // ---- 右键菜单 ----
   const [contextMenu, setContextMenu] = useState<TagContextMenuTarget | null>(null)
   const [mergeMode, setMergeMode] = useState<string | null>(null) // 正在合并的源 tag id
+
+  // ── 标签栏空白处右键菜单 ──
+  const tagsMenu = useContextMenu()
+  const tagsMenuItems: MenuItem[] = [
+    { type: 'item', label: '新建标签', icon: <Plus size={14} />, onClick: () => setShowAddForm(true) },
+    { type: 'item', label: '刷新标签', icon: <RefreshCw size={14} />, onClick: () => { void refreshTags(); void refreshTagStats() } }
+  ]
   const menuRef = useRef<HTMLDivElement>(null)
 
   // ---- 多选批量操作 ----
@@ -402,7 +410,7 @@ export function TagTree(): JSX.Element {
   const ctxTop = contextMenu ? Math.min(contextMenu.y, window.innerHeight - 220) : 0
 
   return (
-    <div className="flex flex-col h-full relative select-none">
+    <div className="flex flex-col h-full relative select-none" onContextMenu={tagsMenu.open}>
       {/* 头部 */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-surface-panel">
         <div className="flex items-center gap-1.5">
@@ -597,6 +605,11 @@ export function TagTree(): JSX.Element {
             <p className="text-[10px] text-muted/60 text-center pb-1">点击目标标签完成合并</p>
           </div>
         </div>
+      )}
+
+      {/* 标签栏空白处右键菜单 */}
+      {tagsMenu.pos && (
+        <PopupMenu x={tagsMenu.pos.x} y={tagsMenu.pos.y} items={tagsMenuItems} onClose={tagsMenu.close} />
       )}
     </div>
   )

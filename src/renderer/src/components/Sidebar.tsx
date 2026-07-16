@@ -6,6 +6,7 @@ import { Tags, Star, FolderCog, Trash2, RotateCcw, AlertTriangle, HardDrive } fr
 import logoMark from '../assets/images/logo-mark.png'
 import { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
+import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
 
 export function Sidebar(): JSX.Element {
   const sidebarTab = useAppStore((s) => s.sidebarTab)
@@ -98,6 +99,13 @@ export function Sidebar(): JSX.Element {
       setTrashLoading(false)
     }
   }
+
+  // ── 回收站空白处右键菜单 ──
+  const trashMenu = useContextMenu()
+  const trashMenuItems: MenuItem[] = [
+    { type: 'item', label: '恢复全部', icon: <RotateCcw size={14} />, disabled: trashCount === 0, onClick: askRestoreAll },
+    { type: 'item', label: '清空回收站', icon: <AlertTriangle size={14} />, danger: true, disabled: trashCount === 0, onClick: askEmptyTrash }
+  ]
 
   const tabs: Array<{
     key: typeof sidebarTab
@@ -238,7 +246,7 @@ export function Sidebar(): JSX.Element {
           </div>
         )}
         {sidebarTab === 'trash' && (
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col h-full" onContextMenu={trashMenu.open}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-surface-panel">
               <div className="flex items-center gap-2">
                 <Trash2 size={16} className="text-red-400" />
@@ -282,6 +290,10 @@ export function Sidebar(): JSX.Element {
                   </button>
                 </div>
               </div>
+            )}
+
+            {trashMenu.pos && (
+              <PopupMenu x={trashMenu.pos.x} y={trashMenu.pos.y} items={trashMenuItems} onClose={trashMenu.close} />
             )}
           </div>
         )}

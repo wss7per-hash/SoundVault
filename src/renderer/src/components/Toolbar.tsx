@@ -421,6 +421,7 @@ export function Toolbar(): JSX.Element {
       >
         <Search size={16} className="text-muted shrink-0" />
         <input
+          id="global-search-input"
           type="text"
           value={searchQuery}
           onChange={handleSearch}

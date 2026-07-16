@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { SmartFolderData, SoundData } from '../../preload/index.d'
-import { FolderCog, Plus, Trash2, Save, Play, Search, X, GripVertical, Wand2 } from 'lucide-react'
+import { FolderCog, Plus, Trash2, Save, Play, Search, X, GripVertical, Wand2, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../stores/appStore'
 import toast from 'react-hot-toast'
+import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
 
 type ConditionField = 'file_name' | 'description' | 'emotion' | 'use_cases' | 'file_ext' | 'duration_ms' | 'quality_score' | 'is_starred' | 'is_missing' | 'ai_analyzed_at' | 'imported_at' | 'tags'
 type ConditionOp = 'contains' | 'not_contains' | 'equals' | 'starts_with' | 'gt' | 'lt' | 'is'
@@ -80,6 +81,13 @@ export function SmartFolderList(): JSX.Element {
     }
   }, [refreshSmartFolders])
 
+  // ── 智能文件夹空白处右键菜单 ──
+  const smartMenu = useContextMenu()
+  const smartMenuItems: MenuItem[] = [
+    { type: 'item', label: '新建智能文件夹', icon: <Plus size={14} />, onClick: () => { setEditFolder(null); setShowBuilder(true) } },
+    { type: 'item', label: '刷新智能文件夹', icon: <RefreshCw size={14} />, onClick: () => void refreshSmartFolders() }
+  ]
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-3 py-2 border-b border-surface-panel">
@@ -99,7 +107,7 @@ export function SmartFolderList(): JSX.Element {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 py-1.5">
+      <div className="flex-1 overflow-y-auto px-2 py-1.5" onContextMenu={smartMenu.open}>
         {smartFolders.length === 0 ? (
           <p className="text-2xs text-muted text-center py-4">暂无智能文件夹</p>
         ) : (
@@ -152,6 +160,10 @@ export function SmartFolderList(): JSX.Element {
             setEditFolder(null)
           }}
         />
+      )}
+
+      {smartMenu.pos && (
+        <PopupMenu x={smartMenu.pos.x} y={smartMenu.pos.y} items={smartMenuItems} onClose={smartMenu.close} />
       )}
     </div>
   )

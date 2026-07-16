@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { SoundData } from '../../preload/index.d'
 import { Trash2, RotateCcw, AlertTriangle, HardDrive } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
+import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
 
 interface ConfirmState {
   open: boolean
@@ -21,6 +22,24 @@ export function RecycleBin(): JSX.Element {
   const bumpTrashVersion = useAppStore((s) => s.bumpTrashVersion)
   const refreshSounds = useAppStore((s) => s.refreshSounds)
   const refreshStats = useAppStore((s) => s.refreshStats)
+
+  // ── 空白处右键菜单 ──
+  const rbMenu = useContextMenu()
+  const handleRestoreAllInBin = useCallback(async () => {
+    if (trashSounds.length === 0) return
+    setLoading(true)
+    try {
+      await window.api.restoreSounds(trashSounds.map((s) => s.id))
+      toast.success(`已恢复 ${trashSounds.length} 个音效`)
+      await loadTrash()
+      bumpTrashVersion()
+      await Promise.all([refreshSounds(), refreshStats()])
+    } catch {
+      toast.error('恢复失败，文件可能已被永久删除')
+    } finally {
+      setLoading(false)
+    }
+  }, [trashSounds, loadTrash, bumpTrashVersion, refreshSounds, refreshStats])
 
   const loadTrash = useCallback(async () => {
     try {
@@ -107,9 +126,17 @@ export function RecycleBin(): JSX.Element {
     return `${(bytes / 1024).toFixed(0)} KB`
   }
 
+  // 右键菜单项定义（放在所有 handler 之后，确保引用安全）
+  const rbMenuItems: MenuItem[] = useMemo(() => [
+    { type: 'item', label: '恢复选中', icon: <RotateCcw size={14} />, disabled: selected.size === 0, onClick: handleRestore },
+    { type: 'item', label: '恢复全部', icon: <RotateCcw size={14} />, disabled: trashSounds.length === 0, onClick: () => void handleRestoreAllInBin() },
+    { type: 'separator' },
+    { type: 'item', label: '永久删除选中', icon: <Trash2 size={14} />, danger: true, disabled: selected.size === 0, onClick: handlePermanentDelete }
+  ], [selected.size, trashSounds.length, handleRestore, handleRestoreAllInBin, handlePermanentDelete])
+
   if (trashSounds.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center relative">
+      <div className="flex-1 flex items-center justify-center relative" onContextMenu={rbMenu.open}>
         {/* 确认弹窗（空状态时也需渲染，以防状态残留） */}
         {confirm.open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={cancelConfirm}>
@@ -173,12 +200,16 @@ export function RecycleBin(): JSX.Element {
           <p className="text-sm text-muted">回收站是空的</p>
           <p className="text-2xs text-muted/60 mt-1">删除的音效会保留在此处，可随时恢复或永久移除</p>
         </div>
+
+        {rbMenu.pos && (
+          <PopupMenu x={rbMenu.pos.x} y={rbMenu.pos.y} items={rbMenuItems} onClose={rbMenu.close} />
+        )}
       </div>
     )
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 relative">
+    <div className="flex-1 flex flex-col min-h-0 relative" onContextMenu={rbMenu.open}>
       {/* 永久删除确认弹窗 */}
       {confirm.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={cancelConfirm}>
@@ -307,6 +338,10 @@ export function RecycleBin(): JSX.Element {
           </tbody>
         </table>
       </div>
+
+      {rbMenu.pos && (
+        <PopupMenu x={rbMenu.pos.x} y={rbMenu.pos.y} items={rbMenuItems} onClose={rbMenu.close} />
+      )}
     </div>
   )
 }

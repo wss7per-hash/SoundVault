@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { X, Check, AlertCircle, Loader2, Zap, Eye, EyeOff, ExternalLink, Sparkles } from 'lucide-react'
+import { X, Check, AlertCircle, Loader2, Zap, Eye, EyeOff, ExternalLink, Sparkles, ArrowLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
 import type { AIConfig } from '../../preload/index.d'
+import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
 
 // ── AI 服务商预设（与后端兼容） ──
 const PROVIDERS = [
@@ -257,8 +258,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const autoAnalyze = useAppStore((s) => s.autoAnalyzeOnImport)
   const setAutoAnalyze = useAppStore((s) => s.setAutoAnalyzeOnImport)
 
+  // ── 空白处右键菜单 ──
+  const settingsMenu = useContextMenu()
+  const settingsMenuItems: MenuItem[] = [
+    { type: 'item', label: '返回音频库', icon: <ArrowLeft size={14} />, onClick: onClose }
+  ]
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-surface">
+    <div className="flex-1 flex flex-col min-h-0 bg-surface" onContextMenu={settingsMenu.open}>
       {/* Header */}
       <div className="h-12 shrink-0 flex items-center gap-3 px-5 border-b border-surface-border">
         <h2 className="text-sm font-semibold text-fg">设置</h2>
@@ -321,6 +328,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <span>SoundVault · 让音效管理更高效</span>
         </div>
       </div>
+
+      {settingsMenu.pos && (
+        <PopupMenu x={settingsMenu.pos.x} y={settingsMenu.pos.y} items={settingsMenuItems} onClose={settingsMenu.close} />
+      )}
     </div>
   )
 }

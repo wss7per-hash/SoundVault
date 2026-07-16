@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { Database, Clock, HardDrive, Sparkles, Tags, ArrowLeft, Layers, Volume2, Copy, Trash2 } from 'lucide-react'
+import { Database, Clock, HardDrive, Sparkles, Tags, ArrowLeft, Layers, Volume2, Copy, Trash2, Wrench, RefreshCw } from 'lucide-react'
 import type { TagStatData, DuplicateGroup, DuplicateItem } from '../../preload/index.d'
+import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
 
 const formatDuration = (ms: number): string => {
   const totalSec = Math.floor(ms / 1000)
@@ -29,8 +30,17 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
   const refreshOnoStats = useAppStore((s) => s.refreshOnoStats)
   const duplicates = useAppStore((s) => s.duplicates)
   const refreshDuplicates = useAppStore((s) => s.refreshDuplicates)
+  const setActiveView = useAppStore((s) => s.setActiveView)
   const [keepMap, setKeepMap] = useState<Record<string, string>>({})
   const [scanning, setScanning] = useState(false)
+
+  // ── 空白处右键菜单 ──
+  const statsMenu = useContextMenu()
+  const statsMenuItems: MenuItem[] = [
+    { type: 'item', label: '刷新数据', icon: <RefreshCw size={14} />, onClick: () => { void refreshStats(); void refreshTagStats(); void refreshOnoStats() } },
+    { type: 'item', label: '返回音频库', icon: <ArrowLeft size={14} />, onClick: onClose },
+    { type: 'item', label: '打开工具箱', icon: <Wrench size={14} />, onClick: () => setActiveView('tools') }
+  ]
 
   useEffect(() => {
     refreshStats()
@@ -106,7 +116,7 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
   ].filter((r) => r.value > 0)
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-[#131311]">
+    <div className="flex-1 flex flex-col min-h-0 bg-[#131311]" onContextMenu={statsMenu.open}>
       {/* Header */}
       <div className="h-11 border-b border-surface-border flex items-center gap-3 px-4 shrink-0">
         <button
@@ -293,6 +303,10 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
           />
         </div>
       </div>
+
+      {statsMenu.pos && (
+        <PopupMenu x={statsMenu.pos.x} y={statsMenu.pos.y} items={statsMenuItems} onClose={statsMenu.close} />
+      )}
     </div>
   )
 }

@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react'
 import type { CollectionData } from '../../preload/index.d'
-import { Folder, Plus, Trash2, Edit3, Check, X, Star } from 'lucide-react'
+import { Folder, Plus, Trash2, Edit3, Check, X, Star, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../stores/appStore'
 import toast from 'react-hot-toast'
+import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
 
 const COLLECTION_COLORS = ['#534AB7', '#E85D75', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899']
 
@@ -72,6 +73,13 @@ export function CollectionsManager(): JSX.Element {
     await refreshSounds()
   }, [activeCollectionId, setActiveCollection, refreshSounds])
 
+  // ── 收藏夹空白处右键菜单 ──
+  const collMenu = useContextMenu()
+  const collMenuItems: MenuItem[] = [
+    { type: 'item', label: '新建收藏夹', icon: <Plus size={14} />, onClick: () => setShowAdd(true) },
+    { type: 'item', label: '刷新收藏夹', icon: <RefreshCw size={14} />, onClick: () => void refreshCollections() }
+  ]
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-3 py-2 border-b border-surface-panel">
@@ -115,7 +123,7 @@ export function CollectionsManager(): JSX.Element {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-2 py-1.5">
+      <div className="flex-1 overflow-y-auto px-2 py-1.5" onContextMenu={collMenu.open}>
         {/* 虚拟「收藏」项：所有已星标音效，不归属于任何收藏夹 */}
         <div
           className={`flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
@@ -192,6 +200,10 @@ export function CollectionsManager(): JSX.Element {
           ))
         )}
       </div>
+
+      {collMenu.pos && (
+        <PopupMenu x={collMenu.pos.x} y={collMenu.pos.y} items={collMenuItems} onClose={collMenu.close} />
+      )}
     </div>
   )
 }
