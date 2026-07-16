@@ -876,6 +876,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
   }
 
   const handleCopyTo = async () => {
+    onClose()
     const result = await window.api.selectFolder()
     if (!result || result.length === 0) return
     const toastId = toast.loading('正在复制...')
@@ -883,10 +884,10 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     toast.dismiss(toastId)
     if (res.success) toast.success('已复制到目标文件夹')
     else toast.error(res.message || '复制失败，请检查目标文件夹是否可写')
-    onClose()
   }
 
   const handleMoveTo = async () => {
+    onClose()
     const result = await window.api.selectFolder()
     if (!result || result.length === 0) return
     const toastId = toast.loading('正在移动...')
@@ -894,7 +895,6 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     toast.dismiss(toastId)
     if (res.success) { toast.success('已移动'); refreshSounds() }
     else toast.error(res.message || '移动失败，请检查目标文件夹是否可写')
-    onClose()
   }
 
   const handleTrash = async () => {
@@ -940,9 +940,9 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
   }
 
   const handleExportSingle = async () => {
+    onClose()
     const result = await window.api.selectFolder()
     if (!result || result.length === 0) return
-    onClose()
     const toastId = toast.loading('正在导出…')
     const res = await window.api.copyFileTo(sound.id, result[0])
     toast.dismiss(toastId)

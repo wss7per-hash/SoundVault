@@ -551,8 +551,8 @@ export function Toolbar(): JSX.Element {
             >
               <FileDown size={14} className="text-emerald-400" />
               <div className="text-left">
-                <div>备份元数据</div>
-                <div className="text-[10px] text-muted/60">导出标签/备注/收藏/智能夹为 JSON（不含音频）</div>
+              <div>备份元数据</div>
+              <div className="text-[10px] text-muted/60">把标签、备注、收藏夹、智能文件夹导出为 JSON 文件，方便迁移或灾备（不含音频文件本身）</div>
               </div>
             </button>
 
@@ -564,8 +564,8 @@ export function Toolbar(): JSX.Element {
             >
               <FileUp size={14} className="text-emerald-400" />
               <div className="text-left">
-                <div>恢复元数据</div>
-                <div className="text-[10px] text-muted/60">按文件指纹匹配当前库，合并叠加标签/备注/收藏</div>
+              <div>恢复元数据</div>
+              <div className="text-[10px] text-muted/60">选择之前备份的 JSON 文件，自动按文件指纹匹配当前库中的音效，把标签、备注、收藏等数据合并回来（不会重复添加）</div>
               </div>
             </button>
 
