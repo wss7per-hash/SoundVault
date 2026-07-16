@@ -40,7 +40,7 @@ const api = {
   importPaths: (paths: string[]) => ipcRenderer.invoke('library:importPaths', paths),
 
   // Sound CRUD
-  getSounds: () => ipcRenderer.invoke('sound:getAll'),
+  getSounds: (opts?: { sortBy?: string; sortOrder?: 'asc' | 'desc'; format?: string }) => ipcRenderer.invoke('sound:getAll', opts),
   getSoundById: (id: string) => ipcRenderer.invoke('sound:getById', id),
   deleteSound: (id: string) => ipcRenderer.invoke('sound:delete', id),
   toggleStar: (id: string) => ipcRenderer.invoke('sound:toggleStar', id),
@@ -52,6 +52,8 @@ const api = {
   getStats: () => ipcRenderer.invoke('sound:getStats'),
   renameSound: (id: string, newName: string) => ipcRenderer.invoke('sound:rename', id, newName),
   setNotes: (id: string, notes: string) => ipcRenderer.invoke('sound:setNotes', id, notes) as Promise<{ success: boolean; message?: string }>,
+  setDescription: (id: string, description: string) => ipcRenderer.invoke('sound:setDescription', id, description) as Promise<{ success: boolean; message?: string }>,
+  setBestFor: (id: string, bestFor: string) => ipcRenderer.invoke('sound:setBestFor', id, bestFor) as Promise<{ success: boolean; message?: string }>,
 
   // File Operations (Context Menu)
   showItemInFolder: (soundId: string) => ipcRenderer.invoke('file:showItemInFolder', soundId),

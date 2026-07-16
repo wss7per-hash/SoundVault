@@ -454,7 +454,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
 
   const handleSaveDescription = useCallback(async () => {
     try {
-      await window.api.setSetting(`desc:${sound.id}`, descValue)
+      await window.api.setDescription(sound.id, descValue)
       toast.success('描述已保存')
       setDescEditing(false)
       onUpdate()
@@ -465,7 +465,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
 
   const handleSaveBestFor = useCallback(async () => {
     try {
-      await window.api.setSetting(`best_for:${sound.id}`, bestForValue)
+      await window.api.setBestFor(sound.id, bestForValue)
       toast.success('详细分析已保存')
       setBestForEditing(false)
       onUpdate()

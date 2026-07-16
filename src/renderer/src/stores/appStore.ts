@@ -115,7 +115,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   gridDensity: (typeof localStorage !== 'undefined' ? (localStorage.getItem('sv-grid-density') as 'comfortable' | 'compact') : null) || 'comfortable',
   activeView: 'library',
   sidebarTab: 'tags',
-  stats: { total: 0, starred: 0, missing: 0, totalSize: 0, withOnomatopoeia: 0 },
+  stats: { total: 0, starred: 0, missing: 0, totalSize: 0, totalDurationMs: 0, analyzed: 0, unanalyzed: 0, byExt: { wav: 0, mp3: 0, flac: 0, other: 0 }, avgQuality: null, tagCount: 0, taggedSounds: 0, withOnomatopoeia: 0 },
   fontSize: 14,
   theme: (typeof localStorage !== 'undefined' ? (localStorage.getItem('sv-theme') as 'dark' | 'light') : null) || 'dark',
   defaultExportFormat: (typeof localStorage !== 'undefined' ? localStorage.getItem('sv-export-format') : null) || 'wav',

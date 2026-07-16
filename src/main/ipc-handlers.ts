@@ -641,19 +641,21 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('sound:getStats', () => {
-    const total = (db.prepare('SELECT COUNT(*) as c FROM sounds').get() as { c: number }).c
-    const starred = (db.prepare('SELECT COUNT(*) as c FROM sounds WHERE is_starred = 1').get() as { c: number }).c
-    const missing = (db.prepare('SELECT COUNT(*) as c FROM sounds WHERE is_missing = 1').get() as { c: number }).c
-    const totalSize = (db.prepare('SELECT COALESCE(SUM(file_size), 0) as t FROM sounds').get() as { t: number }).t
-    const totalDurationMs = (db.prepare('SELECT COALESCE(SUM(duration_ms), 0) as t FROM sounds').get() as { t: number }).t
-    const analyzed = (db.prepare("SELECT COUNT(*) as c FROM sounds WHERE ai_analyzed_at IS NOT NULL AND ai_analyzed_at != ''").get() as { c: number }).c
-    const avgQuality = (db.prepare('SELECT AVG(quality_score) as a FROM sounds WHERE quality_score IS NOT NULL').get() as { a: number | null }).a
+    // 所有统计均排除回收站中的音效，保持与库中可见数量一致
+    const notTrashed = 'is_trashed = 0 OR is_trashed IS NULL'
+    const total = (db.prepare(`SELECT COUNT(*) as c FROM sounds WHERE ${notTrashed}`).get() as { c: number }).c
+    const starred = (db.prepare(`SELECT COUNT(*) as c FROM sounds WHERE ${notTrashed} AND is_starred = 1`).get() as { c: number }).c
+    const missing = (db.prepare(`SELECT COUNT(*) as c FROM sounds WHERE ${notTrashed} AND is_missing = 1`).get() as { c: number }).c
+    const totalSize = (db.prepare(`SELECT COALESCE(SUM(file_size), 0) as t FROM sounds WHERE ${notTrashed}`).get() as { t: number }).t
+    const totalDurationMs = (db.prepare(`SELECT COALESCE(SUM(duration_ms), 0) as t FROM sounds WHERE ${notTrashed}`).get() as { t: number }).t
+    const analyzed = (db.prepare(`SELECT COUNT(*) as c FROM sounds WHERE ${notTrashed} AND ai_analyzed_at IS NOT NULL AND ai_analyzed_at != ''`).get() as { c: number }).c
+    const avgQuality = (db.prepare(`SELECT AVG(quality_score) as a FROM sounds WHERE ${notTrashed} AND quality_score IS NOT NULL`).get() as { a: number | null }).a
     const tagCount = (db.prepare('SELECT COUNT(*) as c FROM tags').get() as { c: number }).c
-    const taggedSounds = (db.prepare('SELECT COUNT(DISTINCT sound_id) as c FROM sound_tags').get() as { c: number }).c
-    const withOno = (db.prepare("SELECT COUNT(*) as c FROM sounds WHERE onomatopoeia IS NOT NULL AND onomatopoeia != '' AND onomatopoeia != '[]'").get() as { c: number }).c
+    const taggedSounds = (db.prepare(`SELECT COUNT(DISTINCT st.sound_id) as c FROM sound_tags st JOIN sounds s ON st.sound_id = s.id WHERE s.${notTrashed}`).get() as { c: number }).c
+    const withOno = (db.prepare(`SELECT COUNT(*) as c FROM sounds WHERE ${notTrashed} AND onomatopoeia IS NOT NULL AND onomatopoeia != '' AND onomatopoeia != '[]'`).get() as { c: number }).c
 
     // 按 file_ext 分组后归桶：wav / mp3 / flac / other
-    const extRows = db.prepare('SELECT file_ext as ext, COUNT(*) as c FROM sounds GROUP BY file_ext').all() as Array<{ ext: string; c: number }>
+    const extRows = db.prepare(`SELECT file_ext as ext, COUNT(*) as c FROM sounds WHERE ${notTrashed} GROUP BY file_ext`).all() as Array<{ ext: string; c: number }>
     const byExt = { wav: 0, mp3: 0, flac: 0, other: 0 }
     for (const r of extRows) {
       const e = (r.ext || '').toLowerCase()
@@ -3168,6 +3170,30 @@ ${clips}
       const row = db.prepare('SELECT id FROM sounds WHERE id = ?').get(soundId)
       if (!row) return { success: false, message: '找不到文件记录' }
       db.prepare('UPDATE sounds SET onomatopoeia = ?, updated_at = ? WHERE id = ?').run(json, new Date().toISOString(), soundId)
+      return { success: true }
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
+    }
+  })
+
+  // 描述（形象描述）：更新 sounds.description 字段
+  ipcMain.handle('sound:setDescription', async (_event, soundId: string, description: string) => {
+    try {
+      const row = db.prepare('SELECT id FROM sounds WHERE id = ?').get(soundId)
+      if (!row) return { success: false, message: '找不到文件记录' }
+      db.prepare('UPDATE sounds SET description = ?, updated_at = ? WHERE id = ?').run(description, new Date().toISOString(), soundId)
+      return { success: true }
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
+    }
+  })
+
+  // 详细分析（应用场景）：更新 sounds.best_for 字段
+  ipcMain.handle('sound:setBestFor', async (_event, soundId: string, bestFor: string) => {
+    try {
+      const row = db.prepare('SELECT id FROM sounds WHERE id = ?').get(soundId)
+      if (!row) return { success: false, message: '找不到文件记录' }
+      db.prepare('UPDATE sounds SET best_for = ?, updated_at = ? WHERE id = ?').run(bestFor, new Date().toISOString(), soundId)
       return { success: true }
     } catch (err) {
       return { success: false, message: (err as Error).message }

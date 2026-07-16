@@ -37,6 +37,8 @@ export interface SoundVaultAPI {
   cleanupMissing: (mode: 'scan' | 'remove') => Promise<{ success: boolean; total: number; missing: number; removed: number; message?: string }>
   renameSound: (id: string, newName: string) => Promise<{ success: boolean; fileName?: string; message?: string }>
   setNotes: (id: string, notes: string) => Promise<{ success: boolean; message?: string }>
+  setDescription: (id: string, description: string) => Promise<{ success: boolean; message?: string }>
+  setBestFor: (id: string, bestFor: string) => Promise<{ success: boolean; message?: string }>
 
   // File Operations (Context Menu)
   showItemInFolder: (soundId: string) => Promise<{ success: boolean; message?: string }>
