@@ -1,4 +1,4 @@
-import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron'
+import { ipcMain, dialog, app, shell, BrowserWindow, Menu } from 'electron'
 import { readdir, stat, readFile, writeFile, copyFile, rename, mkdir, access, rm, unlink } from 'fs/promises'
 import { execFile, execSync } from 'child_process'
 import { tmpdir } from 'os'
@@ -3011,6 +3011,49 @@ function ensureParentCategory(category: string, now: string): string | null {
       music: app.getPath('music'),
       videos: app.getPath('videos'),
     }
+  })
+
+  // ── 原生右键菜单（备用：PopupMenu portal 定位异常时使用）──
+  // 接收菜单项定义 + 坐标，用 Electron Menu.popup() 在主进程弹出。
+  // 返回被点击的 item label；未点击（关闭）返回 null。
+  interface NativeContextMenuItem {
+    label: string
+    enabled?: boolean
+    danger?: boolean   // 不影响原生样式，仅标记供前端识别
+    type?: 'separator' | 'normal'
+  }
+  ipcMain.handle('contextmenu:native', async (_e, items: NativeContextMenuItem[], x: number, y: number) => {
+    const win = BrowserWindow.getFocusedWindow()
+    if (!win) { return null }
+
+    const menuItems = items.map((it) => {
+      if (it.type === 'separator') { return { type: 'separator' as const } }
+      return {
+        label: it.label,
+        enabled: it.enabled !== false,
+        click: () => {}, // 占位：实际动作由前端通过返回的 label 匹配执行
+      }
+    })
+
+    const menu = Menu.buildFromTemplate(menuItems)
+    // popup 是同步的，但我们在 async handler 中需要 await 它
+    return new Promise<string | null>((resolve) => {
+      menu.popup({
+        window: win,
+        x: Math.round(x),
+        y: Math.round(y),
+        callback: (_menu, winRef, ev) => {
+          const clicked = (ev as { label?: string })?.label ?? null
+          resolve(clicked)
+        },
+      })
+      // 用户未点击任何项直接关闭时也需要 resolve
+      const onClosed = () => {
+        win.removeListener('closed', onClosed)
+        resolve(null)
+      }
+      win.on('closed', onClosed)
+    })
   })
 
   console.log('[IPC] All handlers registered')

@@ -35,9 +35,16 @@ const MENU_MAX_H = 340
  * 固定定位、视口内夹紧，点击外部 / Esc / 滚动 / 缩放时自动关闭。
  * 菜单内部再次发生 contextmenu 时阻止浏览器原生菜单冒泡。
  */
-export function PopupMenu({ x, y, items, onClose }: PopupMenuProps): JSX.Element {
+export function PopupMenu({ x, y, items, onClose }: PopupMenuProps): JSX.Element | null {
   const ref = useRef<HTMLDivElement>(null)
   const mounted = useRef(true)
+  const [portalReady, setPortalReady] = useState(false)
+
+  // 确保 DOM body 已就绪再渲染 portal（防止 SSR/hydration 边界崩溃）
+  useEffect(() => {
+    setPortalReady(true)
+    return () => { setPortalReady(false) }
+  }, [])
 
   useEffect(() => {
     mounted.current = true
@@ -115,6 +122,7 @@ export function PopupMenu({ x, y, items, onClose }: PopupMenuProps): JSX.Element
   )
 
   // 用 Portal 挂到 body，彻底避免父容器 overflow/transform 对 fixed 定位的干扰
+  if (!portalReady || typeof document === 'undefined' || !document.body) return null
   return createPortal(menu, document.body)
 }
 

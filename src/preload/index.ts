@@ -198,6 +198,13 @@ const api = {
   getSetting: (key: string) => ipcRenderer.invoke('settings:get', key),
   setSetting: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value),
 
+  // Native context menu (Electron Menu.popup, guaranteed correct positioning)
+  showNativeContextMenu: (
+    items: { label: string; enabled?: boolean; danger?: boolean; type?: 'separator' | 'normal' }[],
+    x: number,
+    y: number
+  ) => ipcRenderer.invoke('contextmenu:native', items, x, y) as Promise<string | null>,
+
   // Window Controls (frameless mode)
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   maximizeRestoreWindow: () => ipcRenderer.invoke('window:maximizeRestore'),

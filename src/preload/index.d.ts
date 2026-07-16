@@ -165,6 +165,13 @@ export interface SoundVaultAPI {
   // 获取常用目录路径（扫描快捷入口用）
   getCommonPaths: () => Promise<{ desktop: string; documents: string; downloads: string; music: string; videos: string }>
 
+  // Native context menu (Electron Menu.popup — guaranteed correct positioning)
+  showNativeContextMenu: (
+    items: { label: string; enabled?: boolean; danger?: boolean; type?: 'separator' | 'normal' }[],
+    x: number,
+    y: number
+  ) => Promise<string | null>  // returns clicked item label, or null if dismissed
+
   // Window Controls (frameless mode)
   minimizeWindow: () => Promise<void>
   maximizeRestoreWindow: () => Promise<void>
