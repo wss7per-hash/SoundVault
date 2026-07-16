@@ -461,7 +461,7 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
               toast.success('重命名成功')
               refreshSounds()
             } else {
-              toast.error(res.message || '重命名失败')
+              toast.error(res.message || '重命名失败，文件名可能已被占用')
             }
             setRenameSound(null)
           }}
@@ -577,7 +577,7 @@ function SoundCard({ sound, compact = false, isSelected, isHovered, isPlaying, i
 
   const handleStar = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
-    try { await window.api.toggleStar(sound.id); useAppStore.getState().refreshSounds() } catch { toast.error('操作失败') }
+    try { await window.api.toggleStar(sound.id); useAppStore.getState().refreshSounds() } catch { toast.error('收藏操作未成功，请稍后重试') }
   }, [sound.id])
 
   return (
@@ -700,7 +700,7 @@ function SoundListRow({ sound, isSelected, isPlaying, isChecked, isMultiSelectin
 
   const handleStar = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
-    try { await window.api.toggleStar(sound.id); useAppStore.getState().refreshSounds() } catch { toast.error('操作失败') }
+    try { await window.api.toggleStar(sound.id); useAppStore.getState().refreshSounds() } catch { toast.error('收藏操作未成功，请稍后重试') }
   }, [sound.id])
 
   const tags = (sound.tags || '').split(',').filter(Boolean).slice(0, 3)
@@ -817,7 +817,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
 
   const handleShowInFolder = async () => {
     const res = await window.api.showItemInFolder(sound.id)
-    if (!res.success) toast.error(res.message || '打开失败')
+    if (!res.success) toast.error(res.message || '无法打开文件位置，请确认文件仍然存在')
     onClose()
   }
 
@@ -828,7 +828,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     const res = await window.api.copyFileTo(sound.id, result[0])
     toast.dismiss(toastId)
     if (res.success) toast.success('已复制到目标文件夹')
-    else toast.error(res.message || '复制失败')
+    else toast.error(res.message || '复制失败，请检查目标文件夹是否可写')
     onClose()
   }
 
@@ -839,7 +839,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     const res = await window.api.moveFileTo(sound.id, result[0])
     toast.dismiss(toastId)
     if (res.success) { toast.success('已移动'); refreshSounds() }
-    else toast.error(res.message || '移动失败')
+    else toast.error(res.message || '移动失败，请检查目标文件夹是否可写')
     onClose()
   }
 
@@ -849,11 +849,11 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     if (selectedIds.length > 1) {
       const res = await window.api.batchDelete(selectedIds)
       if (res.success) { toast.success(`已移到回收站 (${selectedIds.length} 个)`); clearSelection(); refreshSounds() }
-      else toast.error(res.message || '批量删除失败')
+      else toast.error(res.message || '批量删除失败，请稍后重试')
     } else {
       const res = await window.api.trashFile(sound.id)
       if (res.success) { toast.success('已移到回收站'); refreshSounds() }
-      else toast.error(res.message || '删除失败')
+      else toast.error(res.message || '删除失败，文件可能已被占用')
     }
     onClose()
   }
@@ -878,10 +878,10 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
       } else if (res.code === 'AE_CLOSED') {
         toast('After Effects 未运行，请先打开 AE 后再导出到工程', { icon: '💡', duration: 5000 })
       } else {
-        toast.error(res.message || '导入 AE 失败')
+        toast.error(res.message || '导入 After Effects 失败，请确认 AE 正在运行')
       }
     } catch {
-      toast.error('导入 AE 出错')
+      toast.error('导入 After Effects 时出错，请稍后重试')
     }
   }
 
@@ -893,7 +893,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     const res = await window.api.copyFileTo(sound.id, result[0])
     toast.dismiss(toastId)
     if (res.success) toast.success('已导出此音效到所选文件夹')
-    else toast.error(res.message || '导出失败')
+    else toast.error(res.message || '导出失败，请检查目标文件夹是否可写')
   }
 
   const handleOpenTools = () => {
@@ -907,7 +907,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     if (!name) return
     const res = await window.api.addTagToSound(sound.id, name, 1)
     if (res.success) { toast.success(`已添加标签: ${name}`); refreshSounds() }
-    else toast.error('添加标签失败')
+    else toast.error('添加标签失败，请稍后重试')
     setTagValue('')
     setTagInputVisible(false)
     onClose()
@@ -916,7 +916,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
   const handleAddToCollection = async (collectionId: string) => {
     const res = await window.api.addToCollection(collectionId, sound.id)
     if (res.success) { toast.success('已加入收藏夹'); await refreshSounds() }
-    else toast.error('加入收藏夹失败')
+    else toast.error('加入收藏夹失败，请稍后重试')
     setCollectionMenuVisible(false)
     onClose()
   }
@@ -934,7 +934,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
       await refreshSounds()
       onClose()
     } catch {
-      toast.error('创建收藏夹失败')
+      toast.error('创建收藏夹失败，请稍后重试')
     }
   }
 

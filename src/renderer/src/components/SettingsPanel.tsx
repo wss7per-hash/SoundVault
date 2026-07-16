@@ -103,7 +103,7 @@ function AIConfigSection() {
 
   const handleSave = async () => {
     try { await window.api.saveAIConfig(config); toast.success('配置已保存') }
-    catch { toast.error('保存失败') }
+    catch { toast.error('保存配置失败，请稍后重试') }
   }
 
   const handleTest = async () => {

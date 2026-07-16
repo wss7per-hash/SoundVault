@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { FolderOpen, ArrowDown } from 'lucide-react'
+import { FolderOpen, FolderSearch, ArrowDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
 import emptyStateImg from '../assets/images/empty-state.png'
@@ -10,7 +10,7 @@ interface EmptyStateProps {
 
 export function EmptyState({ onImport }: EmptyStateProps): JSX.Element {
   const [isImporting, setIsImporting] = useState(false)
-  const { refreshSounds, refreshStats } = useAppStore()
+  const { refreshSounds, refreshStats, toggleScanDialog } = useAppStore()
 
   const handleBrowseFolder = useCallback(async () => {
     setIsImporting(true)
@@ -68,6 +68,15 @@ export function EmptyState({ onImport }: EmptyStateProps): JSX.Element {
           >
             <FolderOpen size={16} />
             {isImporting ? '正在扫描...' : '选择音效文件夹'}
+          </button>
+
+          <button
+            onClick={() => toggleScanDialog()}
+            disabled={isImporting}
+            className="flex items-center justify-center gap-2 bg-surface-card hover:bg-surface-hover text-muted-light border border-surface-border rounded-lg py-2 px-5 text-xs font-medium transition-colors disabled:opacity-50"
+          >
+            <FolderSearch size={14} />
+            高级扫描导入（可按格式过滤）
           </button>
 
           <p className="text-xs text-muted">

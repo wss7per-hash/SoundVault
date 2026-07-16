@@ -171,7 +171,7 @@ export default function App(): JSX.Element {
         toast('没有可导入的新音效（可能都已存在）')
       }
     } catch (err) {
-      toast.error(`导入失败：${(err as Error).message}`)
+      toast.error('导入音效时出错，请检查文件格式或磁盘空间后重试')
     }
   }, [refreshSounds, refreshStats])
 

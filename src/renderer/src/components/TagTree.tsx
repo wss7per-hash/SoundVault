@@ -165,7 +165,7 @@ export function TagTree(): JSX.Element {
       setSelectedTagIds((prev) => { const n = new Set(prev); n.delete(tag.id); return n })
       await Promise.all([refreshTags(), refreshTagStats(), refreshSounds()])
     } catch {
-      toast.error('删除失败')
+      toast.error('删除标签失败，请稍后重试')
     }
   }, [refreshTags, refreshTagStats, refreshSounds])
 
@@ -211,7 +211,7 @@ export function TagTree(): JSX.Element {
         await refreshTags()
         toast.success('标签已重命名')
       } catch {
-        toast.error('重命名失败')
+        toast.error('重命名失败，该名称可能已被使用')
       }
     },
     [refreshTags]
@@ -227,7 +227,7 @@ export function TagTree(): JSX.Element {
       await Promise.all([refreshTags(), refreshTagStats()])
       toast.success(`已创建标签: ${newTagName}`)
     } catch {
-      toast.error('创建失败')
+      toast.error('创建标签失败，请稍后重试')
     }
   }, [newTagName, newTagColor, refreshTags, refreshTagStats])
 
@@ -293,7 +293,7 @@ export function TagTree(): JSX.Element {
       await Promise.all([refreshTags(), refreshTagStats(), refreshSounds()])
     } catch {
       toast.dismiss(toastId)
-      toast.error('合并过程中出错')
+      toast.error('合并标签时出错，部分音效可能未迁移成功，请稍后重试')
       setMergeMode(null)
     }
   }, [mergeMode, tags, refreshTags, refreshTagStats, refreshSounds])

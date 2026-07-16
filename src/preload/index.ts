@@ -189,7 +189,11 @@ const api = {
     const listener = (_e: unknown, soundId: string): void => cb(soundId)
     ipcRenderer.on('main:selectSound', listener)
     return () => ipcRenderer.removeListener('main:selectSound', listener)
-  }
+  },
+
+  // 获取常用目录路径（扫描快捷入口用）
+  getCommonPaths: () =>
+    ipcRenderer.invoke('common:getPaths') as Promise<{ desktop: string; documents: string; downloads: string; music: string; videos: string }>
 }
 
 if (process.contextIsolated) {

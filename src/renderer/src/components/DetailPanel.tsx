@@ -162,7 +162,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       await navigator.clipboard.writeText(sound.file_path)
       toast.success('路径已复制')
     } catch {
-      toast.error('复制失败')
+      toast.error('复制路径失败，请稍后重试')
     }
   }, [sound.file_path])
 
@@ -172,7 +172,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       await navigator.clipboard.writeText(dir)
       toast.success('文件夹路径已复制到剪贴板')
     } catch {
-      toast.error('操作失败')
+      toast.error('操作未成功，请稍后重试')
     }
   }, [sound.file_path])
 
@@ -200,10 +200,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
           { duration: 5000 }
         )
       } else {
-        toast.error(res.message || '生成失败')
+        toast.error(res.message || '生成无缝循环失败，请检查音频时长是否足够')
       }
     } catch {
-      toast.error('生成失败')
+      toast.error('生成无缝循环时出错，请稍后重试')
     } finally {
       setLooping(false)
     }
@@ -221,10 +221,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       } else if (res.code === 'AE_CLOSED') {
         toast('After Effects 未运行，请先打开 AE 后再导出到工程', { icon: '💡', duration: 5000 })
       } else {
-        toast.error(res.message || '导入失败')
+        toast.error(res.message || '导入 After Effects 失败，请确认 AE 正在运行')
       }
     } catch {
-      toast.error('导入失败')
+      toast.error('导入 After Effects 时出错，请稍后重试')
     } finally {
       setImporting(false)
     }
@@ -303,7 +303,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       setCropPreview(false)
       return
     }
-    if (cropEnd - cropStart < 0.05) { toast.error('选区太短'); return }
+    if (cropEnd - cropStart < 0.05) { toast.error('选区太短，至少需要 0.05 秒'); return }
     audio.currentTime = Math.max(0, Math.min(cropStart, duration))
     audio.play().then(() => {
       setIsPlaying(true)
@@ -330,10 +330,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
           { duration: 5000 }
         )
       } else {
-        toast.error(res.message || '截取失败')
+        toast.error(res.message || '截取失败，请确认选区有效且文件未被占用')
       }
     } catch {
-      toast.error('截取失败')
+      toast.error('截取操作出错，请稍后重试')
     } finally {
       setCropping(false)
     }
@@ -365,10 +365,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
           { duration: 5000 }
         )
       } else {
-        toast.error(res.message || '转换失败')
+        toast.error(res.message || '格式转换失败，请检查磁盘空间')
       }
     } catch {
-      toast.error('转换失败')
+      toast.error('格式转换时出错，请稍后重试')
     } finally {
       setConverting(false)
     }
@@ -398,10 +398,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
           { duration: 5000 }
         )
       } else {
-        toast.error(res.message || '变速失败')
+        toast.error(res.message || '变速处理失败，请确认速度值在 0.25x–4x 之间')
       }
     } catch {
-      toast.error('变速失败')
+      toast.error('变速处理时出错，请稍后重试')
     } finally {
       setStretching(false)
     }
@@ -412,7 +412,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       await window.api.toggleStar(sound.id)
       onUpdate()
     } catch {
-      toast.error('操作失败')
+      toast.error('操作未成功，请稍后重试')
     }
   }, [sound.id, onUpdate])
 
@@ -435,7 +435,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       await window.api.removeTagFromSound(sound.id, tagId)
       setTags((prev) => prev.filter((t) => t.id !== tagId))
     } catch {
-      toast.error('移除标签失败')
+      toast.error('移除标签失败，请稍后重试')
     }
   }, [sound.id])
 
@@ -448,7 +448,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       setNewTagInput('')
       setShowTagSuggestions(false)
     } catch {
-      toast.error('添加标签失败')
+      toast.error('添加标签失败，请稍后重试')
     }
   }, [sound.id])
 
@@ -459,7 +459,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       setDescEditing(false)
       onUpdate()
     } catch {
-      toast.error('保存失败')
+      toast.error('保存失败，请检查磁盘空间或文件权限')
     }
   }, [descValue, sound.id, onUpdate])
 
@@ -470,7 +470,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       setBestForEditing(false)
       onUpdate()
     } catch {
-      toast.error('保存失败')
+      toast.error('保存失败，请检查磁盘空间或文件权限')
     }
   }, [bestForValue, sound.id, onUpdate])
 
@@ -481,7 +481,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       setNotesEditing(false)
       onUpdate()
     } catch {
-      toast.error('保存失败')
+      toast.error('保存失败，请检查磁盘空间或文件权限')
     }
   }, [notesValue, sound.id, onUpdate])
 

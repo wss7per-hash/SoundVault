@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react'
-import { X, FolderOpen, Search, Filter, ChevronDown, ChevronRight, AudioWaveform, HardDrive, Sparkles } from 'lucide-react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { X, FolderOpen, Search, Filter, ChevronDown, ChevronRight, AudioWaveform, HardDrive, Sparkles, Monitor, FileText, Download, Music, Film, ArrowLeft, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
 import type { ScanResult, ImportFile } from '../../preload/index.d'
@@ -11,6 +11,7 @@ interface ScanDialogProps {
 
 export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
   const refreshSounds = useAppStore((s) => s.refreshSounds)
+  const refreshStats = useAppStore((s) => s.refreshStats)
 
   // Step: 'config' | 'scanning' | 'preview' | 'importing' | 'done'
   const [step, setStep] = useState<'config' | 'scanning' | 'preview' | 'importing' | 'done'>('config')
@@ -22,8 +23,10 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
   const [includeVideo, setIncludeVideo] = useState(false)
   const [filenameIncludes, setFilenameIncludes] = useState('')
   const [filenameExcludes, setFilenameExcludes] = useState('')
-  const [minSizeKB, setMinSizeKB] = useState('')
-  const [maxSizeKB, setMaxSizeKB] = useState('')
+  const [minSizeKB, setMinSizeKB] = useState(0)        // 最小端 0，不漏小文件
+  const [maxSizeKB, setMaxSizeKB] = useState(51200)     // 默认最大 50MB
+  const [minDurationSec, setMinDurationSec] = useState(0) // 最短 0，不漏短音效
+  const [maxDurationSec, setMaxDurationSec] = useState(60) // 默认最长 60s
   const [autoTagFolder, setAutoTagFolder] = useState(true)
   const [autoAnalyze, setAutoAnalyze] = useState(false)
 
@@ -33,11 +36,80 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 })
   const [showAdvanced, setShowAdvanced] = useState(false)
 
+  // 扩展名过滤
+  const [extFilters, setExtFilters] = useState<Set<string>>(new Set())
+
+  // 预览页客户端二次过滤（0 = 不限制）
+  const [filterMinSizeKB, setFilterMinSizeKB] = useState(0)
+  const [filterMaxSizeKB, setFilterMaxSizeKB] = useState(0)
+  const [filterMinDurSec, setFilterMinDurSec] = useState(0)
+  const [filterMaxDurSec, setFilterMaxDurSec] = useState(0)
+  const AUDIO_EXTS = [
+    { ext: '.wav', label: 'WAV' },
+    { ext: '.mp3', label: 'MP3' },
+    { ext: '.ogg', label: 'OGG' },
+    { ext: '.flac', label: 'FLAC' },
+    { ext: '.aac', label: 'AAC' },
+    { ext: '.m4a', label: 'M4A' },
+    { ext: '.wma', label: 'WMA' },
+  ]
+
+  // 常用目录快捷扫描
+  const [commonPaths, setCommonPaths] = useState<Record<string, string> | null>(null)
+  const [quickScanningDir, setQuickScanningDir] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      window.api.getCommonPaths().then(setCommonPaths).catch(() => {})
+    }
+  }, [isOpen])
+
   const handleSelectFolder = async () => {
     const paths = await window.api.selectFolder()
     if (paths.length > 0) {
       setSelectedPaths(paths)
     }
+  }
+
+  // 快捷扫描：选中常用目录并自动开始扫描
+  const handleQuickScan = useCallback(async (dirKey: string, dirPath: string) => {
+    setSelectedPaths([dirPath])
+    setQuickScanningDir(dirKey)
+    setStep('scanning')
+
+    try {
+      const result = await window.api.scanFolder({
+        targetPath: dirPath,
+        recursive,
+        filenameIncludes: filenameIncludes.split(',').map((s) => s.trim()).filter(Boolean),
+        filenameExcludes: filenameExcludes.split(',').map((s) => s.trim()).filter(Boolean),
+        minSizeKB: minSizeKB || 0,
+        maxSizeKB: maxSizeKB || 0,
+        minDurationSec: minDurationSec || 0,
+        maxDurationSec: maxDurationSec || 0,
+        skipHidden,
+        includeVideo,
+        extFilters: extFilters.size > 0 ? Array.from(extFilters) : undefined,
+      })
+
+      setScanResult(result)
+      setSelectedFiles(new Set(result.files.map((_, i) => i)))
+      setStep('preview')
+    } catch (err) {
+      toast.error('扫描文件夹时出错，请确认文件夹可访问后重试')
+      setStep('config')
+    } finally {
+      setQuickScanningDir(null)
+    }
+  }, [recursive, filenameIncludes, filenameExcludes, minSizeKB, maxSizeKB, minDurationSec, maxDurationSec, skipHidden, includeVideo, extFilters])
+
+  const toggleExtFilter = (ext: string) => {
+    setExtFilters((prev) => {
+      const next = new Set(prev)
+      if (next.has(ext)) next.delete(ext)
+      else next.add(ext)
+      return next
+    })
   }
 
   const handleScan = async () => {
@@ -64,10 +136,13 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
           recursive,
           filenameIncludes: filenameIncludes.split(',').map((s) => s.trim()).filter(Boolean),
           filenameExcludes: filenameExcludes.split(',').map((s) => s.trim()).filter(Boolean),
-          minSizeKB: minSizeKB ? parseFloat(minSizeKB) : 0,
-          maxSizeKB: maxSizeKB ? parseFloat(maxSizeKB) : 0,
+          minSizeKB: minSizeKB || 0,
+          maxSizeKB: maxSizeKB || 0,
+          minDurationSec: minDurationSec || 0,
+          maxDurationSec: maxDurationSec || 0,
           skipHidden,
-          includeVideo
+          includeVideo,
+          extFilters: extFilters.size > 0 ? Array.from(extFilters) : undefined,
         })
 
         allResults.total += result.total
@@ -86,7 +161,7 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
       setSelectedFiles(new Set(allResults.files.map((_, i) => i)))
       setStep('preview')
     } catch (err) {
-      toast.error(`扫描失败: ${(err as Error).message}`)
+      toast.error('扫描文件夹时出错，请确认文件夹可访问后重试')
       setStep('config')
     }
   }
@@ -129,11 +204,11 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
         setImportProgress({ current: Math.min(i + batchSize, filesToImport.length), total: filesToImport.length })
       }
 
-      refreshSounds()
+      await Promise.all([refreshSounds(), refreshStats()])
       setStep('done')
       toast.success(`成功导入 ${filesToImport.length} 个音效文件`)
     } catch (err) {
-      toast.error(`导入失败: ${(err as Error).message}`)
+      toast.error('导入音效时出错，请检查磁盘空间或文件权限后重试')
       setStep('preview')
     }
   }
@@ -143,6 +218,12 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
     setScanResult(null)
     setSelectedPaths([])
     setSelectedFiles(new Set())
+    setExtFilters(new Set())
+    setQuickScanningDir(null)
+    setFilterMinSizeKB(0)
+    setFilterMaxSizeKB(0)
+    setFilterMinDurSec(0)
+    setFilterMaxDurSec(0)
     onClose()
   }
 
@@ -151,6 +232,35 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
     if (bytes > 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
     return `${(bytes / 1024).toFixed(1)} KB`
   }
+
+  const formatDuration = (ms: number | undefined): string => {
+    if (!ms) return '-'
+    if (ms < 1000) return `${ms}ms`
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+    const m = Math.floor(ms / 60000)
+    const s = Math.round((ms % 60000) / 1000)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
+  // 预览页客户端二次过滤
+  const filteredFiles = useMemo(() => {
+    if (!scanResult) return []
+    let files = scanResult.files
+    if (filterMinSizeKB > 0 || filterMaxSizeKB > 0 || filterMinDurSec > 0 || filterMaxDurSec > 0) {
+      files = files.filter((f) => {
+        const sizeKB = f.size / 1024
+        if (filterMinSizeKB > 0 && sizeKB < filterMinSizeKB) return false
+        if (filterMaxSizeKB > 0 && sizeKB > filterMaxSizeKB) return false
+        if (f.durationMs !== undefined) {
+          const durSec = f.durationMs / 1000
+          if (filterMinDurSec > 0 && durSec < filterMinDurSec) return false
+          if (filterMaxDurSec > 0 && durSec > filterMaxDurSec) return false
+        }
+        return true
+      })
+    }
+    return files
+  }, [scanResult, filterMinSizeKB, filterMaxSizeKB, filterMinDurSec, filterMaxDurSec])
 
   const maxBarWidth = scanResult
     ? Math.max(...Object.values(scanResult.byFormat), 1)
@@ -191,17 +301,72 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
           {/* Step 1: Config */}
           {step === 'config' && (
             <div className="space-y-5">
-              {/* Folder selection */}
+              {/* Quick scan: common directories */}
+              {commonPaths && (
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-2">快速扫描常用目录</label>
+                  <div className="grid grid-cols-5 gap-2">
+                    {[
+                      { key: 'desktop', label: '桌面', icon: Monitor, path: commonPaths.desktop },
+                      { key: 'documents', label: '文档', icon: FileText, path: commonPaths.documents },
+                      { key: 'downloads', label: '下载', icon: Download, path: commonPaths.downloads },
+                      { key: 'music', label: '音乐', icon: Music, path: commonPaths.music },
+                      { key: 'videos', label: '视频', icon: Film, path: commonPaths.videos },
+                    ].map(({ key, label, icon: Icon, path }) => (
+                      <button
+                        key={key}
+                        onClick={() => handleQuickScan(key, path)}
+                        disabled={quickScanningDir === key}
+                        className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-lg border transition-all text-center ${
+                          quickScanningDir === key
+                            ? 'border-accent/50 bg-accent/10 text-accent-light'
+                            : 'border-surface-border bg-surface-card hover:border-accent/30 hover:bg-accent/5 text-muted-light hover:text-fg'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span className="text-[10px] leading-tight">{quickScanningDir === key ? '扫描中…' : label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted mt-1.5">点击即可快速扫描该目录下的音频文件</p>
+                </div>
+              )}
+
+              {/* Folder selection (manual) */}
               <div>
                 <label className="block text-xs font-medium text-muted mb-2">目标文件夹</label>
                 <div className="space-y-2">
                   {selectedPaths.length > 0 ? (
-                    selectedPaths.map((p, i) => (
-                      <div key={i} className="flex items-center gap-2 px-3 py-2 bg-surface-card rounded-lg border border-surface-border">
-                        <FolderOpen className="w-4 h-4 text-accent-light shrink-0" />
-                        <span className="text-xs text-fg-muted truncate flex-1">{p}</span>
+                    <>
+                      {selectedPaths.map((p, i) => (
+                        <div key={i} className="flex items-center gap-2 px-3 py-2 bg-surface-card rounded-lg border border-surface-border group">
+                          <FolderOpen className="w-4 h-4 text-accent-light shrink-0" />
+                          <span className="text-xs text-fg-muted truncate flex-1">{p}</span>
+                          <button
+                            onClick={() => setSelectedPaths((prev) => prev.filter((_, idx) => idx !== i))}
+                            className="opacity-0 group-hover:opacity-100 text-muted-light hover:text-red-400 transition-all shrink-0"
+                            title="移除此文件夹"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => handleSelectFolder()}
+                          className="flex items-center gap-1.5 text-xs text-accent-light hover:text-accent transition-colors"
+                        >
+                          <FolderOpen size={13} />
+                          添加更多文件夹
+                        </button>
+                        <button
+                          onClick={() => { setSelectedPaths([]); setTimeout(() => handleSelectFolder(), 50) }}
+                          className="text-xs text-muted hover:text-muted-light transition-colors"
+                        >
+                          更换所选文件夹
+                        </button>
                       </div>
-                    ))
+                    </>
                   ) : (
                     <button
                       onClick={handleSelectFolder}
@@ -209,14 +374,6 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
                     >
                       <FolderOpen className="w-8 h-8 mx-auto mb-2 text-muted-light group-hover:text-accent-light transition-colors" />
                       <p className="text-xs text-muted group-hover:text-muted-light">点击选择文件夹</p>
-                    </button>
-                  )}
-                  {selectedPaths.length > 0 && (
-                    <button
-                      onClick={handleSelectFolder}
-                      className="text-xs text-accent-light hover:text-accent-light transition-colors"
-                    >
-                      + 添加更多文件夹
                     </button>
                   )}
                 </div>
@@ -239,6 +396,27 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
                     className="w-3.5 h-3.5 rounded border-surface-border bg-surface-card accent-[#534AB7]" />
                   <span className="text-xs text-muted-light">包含视频文件</span>
                 </label>
+              </div>
+
+              {/* Extension filter */}
+              <div>
+                <label className="block text-xs font-medium text-muted mb-2">文件格式（留空则扫描所有音频）</label>
+                <div className="flex flex-wrap gap-2">
+                  {AUDIO_EXTS.map(({ ext, label }) => (
+                    <button
+                      key={ext}
+                      onClick={() => toggleExtFilter(ext)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] border transition-all ${
+                        extFilters.has(ext)
+                          ? 'bg-accent/20 border-accent/50 text-accent-light'
+                          : 'border-surface-border bg-surface-card text-muted-light hover:border-surface-hover'
+                      }`}
+                    >
+                      {extFilters.has(ext) && <span className="mr-1">✓</span>}
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Advanced */}
@@ -276,28 +454,77 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* Size filter (slider) */}
+                    <div className="space-y-3">
                       <div>
-                        <label className="block text-xs font-medium text-muted mb-1.5">最小大小 (KB)</label>
-                        <input
-                          type="number"
-                          value={minSizeKB}
-                          onChange={(e) => setMinSizeKB(e.target.value)}
-                          placeholder="不限"
-                          min="0"
-                          className="w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-xs text-fg-muted placeholder-muted-light focus:outline-none focus:border-accent/50"
-                        />
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-medium text-muted">文件大小</label>
+                          <span className="text-[10px] text-muted-light">
+                            {minSizeKB > 0 ? `≥ ${minSizeKB >= 1024 ? `${(minSizeKB/1024).toFixed(1)} MB` : `${minSizeKB} KB`}` : '不限'}
+                            {' – '}
+                            {maxSizeKB > 0 ? `≤ ${maxSizeKB >= 1024 ? `${(maxSizeKB/1024).toFixed(1)} MB` : `${maxSizeKB} KB`}` : '不限'}
+                          </span>
+                        </div>
+                        <div className="flex gap-3">
+                          <input
+                            type="range"
+                            min={0}
+                            max={102400}
+                            step={10}
+                            value={minSizeKB}
+                            onChange={(e) => setMinSizeKB(Number(e.target.value))}
+                            className="flex-1 h-1.5 bg-surface rounded-full appearance-none cursor-pointer accent-[#534AB7]"
+                          />
+                          <input
+                            type="range"
+                            min={0}
+                            max={102400}
+                            step={100}
+                            value={maxSizeKB}
+                            onChange={(e) => setMaxSizeKB(Number(e.target.value))}
+                            className="flex-1 h-1.5 bg-surface rounded-full appearance-none cursor-pointer accent-[#534AB7]"
+                          />
+                        </div>
+                        <div className="flex justify-between text-[9px] text-muted/50 px-0.5">
+                          <span>最小</span>
+                          <span>最大 (最大 100 MB)</span>
+                        </div>
                       </div>
+
+                      {/* Duration filter (slider) */}
                       <div>
-                        <label className="block text-xs font-medium text-muted mb-1.5">最大大小 (KB)</label>
-                        <input
-                          type="number"
-                          value={maxSizeKB}
-                          onChange={(e) => setMaxSizeKB(e.target.value)}
-                          placeholder="不限"
-                          min="0"
-                          className="w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-xs text-fg-muted placeholder-muted-light focus:outline-none focus:border-accent/50"
-                        />
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-medium text-muted">音频时长</label>
+                          <span className="text-[10px] text-muted-light">
+                            {minDurationSec > 0 ? `≥ ${minDurationSec < 60 ? `${minDurationSec.toFixed(1)}s` : `${Math.floor(minDurationSec/60)}:${(Math.round(minDurationSec%60)).toString().padStart(2,'0')}`}` : '不限'}
+                            {' – '}
+                            {maxDurationSec > 0 ? `≤ ${maxDurationSec < 60 ? `${maxDurationSec.toFixed(1)}s` : `${Math.floor(maxDurationSec/60)}:${(Math.round(maxDurationSec%60)).toString().padStart(2,'0')}`}` : '不限'}
+                          </span>
+                        </div>
+                        <div className="flex gap-3">
+                          <input
+                            type="range"
+                            min={0}
+                            max={600}
+                            step={0.5}
+                            value={minDurationSec}
+                            onChange={(e) => setMinDurationSec(Number(e.target.value))}
+                            className="flex-1 h-1.5 bg-surface rounded-full appearance-none cursor-pointer accent-[#534AB7]"
+                          />
+                          <input
+                            type="range"
+                            min={0}
+                            max={3600}
+                            step={1}
+                            value={maxDurationSec}
+                            onChange={(e) => setMaxDurationSec(Number(e.target.value))}
+                            className="flex-1 h-1.5 bg-surface rounded-full appearance-none cursor-pointer accent-[#534AB7]"
+                          />
+                        </div>
+                        <div className="flex justify-between text-[9px] text-muted/50 px-0.5">
+                          <span>最短</span>
+                          <span>最长 (最大 60 分钟)</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -374,38 +601,119 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
                 </div>
               )}
 
+              {/* Client-side post-scan filter bar */}
+              <div className="bg-surface-card rounded-lg border border-surface-border p-3 space-y-2.5">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Filter size={12} className="text-accent-light" />
+                  <span className="text-[11px] font-medium text-muted">结果过滤</span>
+                  {filteredFiles.length !== scanResult.files.length && (
+                    <span className="text-[10px] text-accent-light ml-auto">
+                      显示 {filteredFiles.length} / {scanResult.files.length}
+                    </span>
+                  )}
+                </div>
+
+                {/* Size sliders */}
+                <div>
+                  <div className="flex justify-between text-[9px] text-muted mb-0.5">
+                    <span>大小: {filterMinSizeKB > 0 ? `${filterMinSizeKB >= 1024 ? `${(filterMinSizeKB/1024).toFixed(1)}MB` : `${filterMinSizeKB}KB`}+` : '不限'} — {filterMaxSizeKB > 0 ? `${filterMaxSizeKB >= 1024 ? `${(filterMaxSizeKB/1024).toFixed(1)}MB` : `${filterMaxSizeKB}KB`}-` : '不限'}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="range"
+                      min={0}
+                      max={102400}
+                      step={10}
+                      value={filterMinSizeKB}
+                      onChange={(e) => setFilterMinSizeKB(Number(e.target.value))}
+                      className="flex-1 h-1 bg-surface rounded-full appearance-none cursor-pointer accent-[#534AB7]"
+                    />
+                    <input
+                      type="range"
+                      min={0}
+                      max={102400}
+                      step={100}
+                      value={filterMaxSizeKB}
+                      onChange={(e) => setFilterMaxSizeKB(Number(e.target.value))}
+                      className="flex-1 h-1 bg-surface rounded-full appearance-none cursor-pointer accent-[#534AB7]"
+                    />
+                  </div>
+                </div>
+
+                {/* Duration sliders */}
+                <div>
+                  <div className="flex justify-between text-[9px] text-muted mb-0.5">
+                    <span>时长: {filterMinDurSec > 0 ? `${filterMinDurSec.toFixed(1)}s+` : '不限'} — {filterMaxDurSec > 0 ? (filterMaxDurSec < 60 ? `${filterMaxDurSec.toFixed(1)}s-` : `${Math.floor(filterMaxDurSec/60)}:${Math.round(filterMaxDurSec%60).toString().padStart(2,'0')}-`) : '不限'}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="range"
+                      min={0}
+                      max={600}
+                      step={0.5}
+                      value={filterMinDurSec}
+                      onChange={(e) => setFilterMinDurSec(Number(e.target.value))}
+                      className="flex-1 h-1 bg-surface rounded-full appearance-none cursor-pointer accent-[#534AB7]"
+                    />
+                    <input
+                      type="range"
+                      min={0}
+                      max={3600}
+                      step={1}
+                      value={filterMaxDurSec}
+                      onChange={(e) => setFilterMaxDurSec(Number(e.target.value))}
+                      className="flex-1 h-1 bg-surface rounded-full appearance-none cursor-pointer accent-[#534AB7]"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* File list */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-medium text-muted">
-                    文件列表 ({scanResult.files.length})
+                    文件列表 ({filteredFiles.length}{filteredFiles.length !== scanResult.files.length ? ` / ${scanResult.files.length}` : ''})
                   </h3>
                   <div className="flex gap-2">
-                    <button onClick={selectAll} className="text-xs text-accent-light hover:text-accent-light">全选</button>
+                    <button onClick={() => {
+                      // 只选中当前过滤后的文件（用原始索引）
+                      const originalIndices = filteredFiles.map(f => scanResult.files.indexOf(f))
+                      setSelectedFiles(new Set(originalIndices))
+                    }} className="text-xs text-accent-light hover:text-accent-light">全选</button>
                     <button onClick={deselectAll} className="text-xs text-muted hover:text-muted-light">取消</button>
                   </div>
                 </div>
                 <div className="max-h-[240px] overflow-y-auto border border-surface-border rounded-lg">
-                  {scanResult.files.map((file, i) => (
-                    <div
-                      key={i}
-                      onClick={() => toggleFile(i)}
-                      className={`flex items-center gap-3 px-3 py-2 border-b border-surface-panel last:border-b-0 cursor-pointer transition-colors ${
-                        selectedFiles.has(i) ? 'bg-accent/10' : 'hover:bg-surface-card'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedFiles.has(i)}
-                        onChange={() => toggleFile(i)}
-                        className="w-3.5 h-3.5 rounded border-surface-border bg-surface-card accent-[#534AB7]"
-                      />
-                      <AudioWaveform className="w-4 h-4 text-muted-light shrink-0" />
-                      <span className="flex-1 text-xs text-fg-muted truncate">{file.name}</span>
-                      <span className="text-xs text-muted-light uppercase">{file.ext.replace('.', '')}</span>
-                      <span className="text-xs text-muted-light">{formatSize(file.size)}</span>
-                    </div>
-                  ))}
+                  {filteredFiles.map((file) => {
+                    const origIdx = scanResult!.files.indexOf(file)
+                    return (
+                      <div
+                        key={origIdx}
+                        onClick={() => toggleFile(origIdx)}
+                        className={`flex items-center gap-3 px-3 py-2 border-b border-surface-panel last:border-b-0 cursor-pointer transition-colors ${
+                          selectedFiles.has(origIdx) ? 'bg-accent/10' : 'hover:bg-surface-card'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedFiles.has(origIdx)}
+                          onChange={() => toggleFile(origIdx)}
+                          className="w-3.5 h-3.5 rounded border-surface-border bg-surface-card accent-[#534AB7]"
+                        />
+                        <AudioWaveform className="w-4 h-4 text-muted-light shrink-0" />
+                        <span className="flex-1 text-xs text-fg-muted truncate">{file.name}</span>
+                        <span className="text-xs text-muted-light uppercase shrink-0">{file.ext.replace('.', '')}</span>
+                        <span className="text-xs text-muted-light w-16 text-right shrink-0">{formatSize(file.size)}</span>
+                        <span className="text-xs text-muted w-14 text-right shrink-0 flex items-center justify-end gap-0.5">
+                          <Clock size={10} />
+                          {formatDuration(file.durationMs)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  {filteredFiles.length === 0 && (
+                    <div className="py-8 text-center text-xs text-muted">没有符合当前过滤条件的文件</div>
+                  )}
                 </div>
               </div>
 
@@ -439,22 +747,36 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
           )}
 
           {/* Step 5: Done */}
-          {step === 'done' && (
-            <div className="flex flex-col items-center justify-center py-12 space-y-3">
-              <div className="w-16 h-16 rounded-full bg-[#1a3a1a] flex items-center justify-center">
-                <svg className="w-8 h-8 text-[#4ADE80]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          {step === 'done' && scanResult && (
+            <div className="flex flex-col items-center py-6 space-y-4">
+              <div className="w-12 h-12 rounded-full bg-[#1a3a1a] flex items-center justify-center">
+                <svg className="w-6 h-6 text-[#4ADE80]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <p className="text-sm font-medium text-fg">
-                成功导入 {scanResult?.newFiles || 0} 个文件
-              </p>
-              <button
-                onClick={handleClose}
-                className="px-6 py-2 bg-accent text-white text-xs rounded-lg hover:bg-accent transition-colors"
-              >
-                完成
-              </button>
+              <div className="text-center space-y-1">
+                <p className="text-sm font-medium text-fg">
+                  成功导入 {scanResult.newFiles} 个文件
+                </p>
+                <p className="text-xs text-muted">
+                  总大小 {formatSize(scanResult.totalSize)}
+                  {autoAnalyze && ' · 将自动进行 AI 分析'}
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setStep('config'); setScanResult(null); setSelectedFiles(new Set()) }}
+                  className="px-4 py-2 text-xs text-muted hover:text-fg border border-surface-border rounded-lg transition-colors"
+                >
+                  继续导入
+                </button>
+                <button
+                  onClick={handleClose}
+                  className="px-6 py-2 bg-accent text-white text-xs rounded-lg hover:bg-accent transition-colors"
+                >
+                  完成
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -479,20 +801,29 @@ export default function ScanDialog({ isOpen, onClose }: ScanDialogProps) {
         )}
 
         {step === 'preview' && (
-          <div className="px-6 py-4 border-t border-surface-panel flex justify-end gap-3">
+          <div className="px-6 py-4 border-t border-surface-panel flex justify-between gap-3">
             <button
-              onClick={handleClose}
-              className="px-4 py-2 text-xs text-muted hover:text-fg transition-colors"
+              onClick={() => setStep('config')}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs text-muted hover:text-fg transition-colors"
             >
-              取消
+              <ArrowLeft size={13} />
+              返回修改
             </button>
-            <button
-              onClick={handleImport}
-              disabled={selectedFiles.size === 0}
-              className="px-6 py-2 bg-accent text-white text-xs rounded-lg hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            >
-              导入选中 ({selectedFiles.size})
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 text-xs text-muted hover:text-fg transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={selectedFiles.size === 0}
+                className="px-6 py-2 bg-accent text-white text-xs rounded-lg hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                导入选中 ({selectedFiles.size})
+              </button>
+            </div>
           </div>
         )}
       </div>

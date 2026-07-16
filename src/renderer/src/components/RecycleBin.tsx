@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { SoundData } from '../../preload/index.d'
-import { Trash2, RotateCcw, AlertTriangle, X, HardDrive } from 'lucide-react'
+import { Trash2, RotateCcw, AlertTriangle, HardDrive } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useAppStore } from '../stores/appStore'
 
 interface ConfirmState {
   open: boolean
@@ -14,6 +15,12 @@ export function RecycleBin(): JSX.Element {
   const [loading, setLoading] = useState(false)
   const [confirm, setConfirm] = useState<ConfirmState>({ open: false, count: 0 })
   const [deleteLocalFile, setDeleteLocalFile] = useState(false)
+
+  // 跨组件回收站同步：Sidebar 的「清空/恢复全部」会 bump trashVersion，此处订阅后自动刷新
+  const trashVersion = useAppStore((s) => s.trashVersion)
+  const bumpTrashVersion = useAppStore((s) => s.bumpTrashVersion)
+  const refreshSounds = useAppStore((s) => s.refreshSounds)
+  const refreshStats = useAppStore((s) => s.refreshStats)
 
   const loadTrash = useCallback(async () => {
     try {
@@ -28,7 +35,7 @@ export function RecycleBin(): JSX.Element {
 
   useEffect(() => {
     loadTrash()
-  }, [loadTrash])
+  }, [loadTrash, trashVersion])
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -54,8 +61,11 @@ export function RecycleBin(): JSX.Element {
       await window.api.restoreSounds(Array.from(selected))
       toast.success(`已恢复 ${selected.size} 个音效`)
       await loadTrash()
+      // 通知 Sidebar 回收站计数刷新，并把恢复的音效同步回主库
+      bumpTrashVersion()
+      await Promise.all([refreshSounds(), refreshStats()])
     } catch {
-      toast.error('恢复失败')
+      toast.error('恢复失败，文件可能已被永久删除')
     } finally {
       setLoading(false)
     }
@@ -78,8 +88,10 @@ export function RecycleBin(): JSX.Element {
       )
       setSelected(new Set())
       await loadTrash()
+      // 通知 Sidebar 回收站计数刷新
+      bumpTrashVersion()
     } catch {
-      toast.error('删除失败')
+      toast.error('永久删除失败，文件可能被占用，请关闭占用后重试')
     } finally {
       setLoading(false)
     }

@@ -187,7 +187,7 @@ export function Spotlight(): JSX.Element {
             setRecError(res.error || '该快捷键无法使用')
           }
         })
-        .catch(() => setRecError('设置失败'))
+        .catch(() => setRecError('保存快捷键失败，请稍后重试'))
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)

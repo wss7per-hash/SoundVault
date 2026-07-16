@@ -48,6 +48,7 @@ interface ScanOptions {
   maxSizeKB: number
   skipHidden: boolean
   includeVideo: boolean
+  extFilters?: string[]   // 可选：仅扫描指定扩展名
 }
 
 interface ScanResult {
@@ -265,6 +266,11 @@ export function registerIpcHandlers(): void {
 
             if (!isAudio && !isVideo) continue
 
+            // 扩展名白名单过滤（用户在 UI 勾选的格式）
+            if (options.extFilters && options.extFilters.length > 0) {
+              if (!options.extFilters.includes(ext)) continue
+            }
+
             if (options.filenameIncludes.length > 0) {
               const name = entry.name.toLowerCase()
               const matches = options.filenameIncludes.some((k) => name.includes(k.toLowerCase()))
@@ -282,6 +288,25 @@ export function registerIpcHandlers(): void {
 
             if (options.minSizeKB > 0 && sizeKB < options.minSizeKB) continue
             if (options.maxSizeKB > 0 && sizeKB > options.maxSizeKB) continue
+
+            // 时长过滤（需要 ffprobe，仅在用户设置过滤条件时启用）
+            const needDurationFilter = (options.minDurationSec ?? 0) > 0 || (options.maxDurationSec ?? 0) > 0
+            let fileDurationMs: number | undefined
+            if (needDurationFilter || true) {
+              // 始终尝试获取时长（用于预览展示）；失败时仅在有过滤条件时跳过
+              try {
+                const dur = await getDurationFromFile(fullPath)
+                fileDurationMs = Math.round(dur * 1000)
+                if (needDurationFilter) {
+                  const durSec = dur
+                  if ((options.minDurationSec ?? 0) > 0 && durSec < options.minDurationSec!) continue
+                  if ((options.maxDurationSec ?? 0) > 0 && durSec > options.maxDurationSec!) continue
+                }
+              } catch {
+                // ffprobe 失败：有时长过滤条件时跳过该文件，否则忽略（durationMs 留 undefined）
+                if (needDurationFilter) continue
+              }
+            }
 
             result.total++
             result.totalSize += fileStat.size
@@ -302,7 +327,8 @@ export function registerIpcHandlers(): void {
               path: fullPath,
               name: entry.name,
               ext,
-              size: fileStat.size
+              size: fileStat.size,
+              durationMs: fileDurationMs
             })
           }
         }
@@ -1225,17 +1251,17 @@ function ensureParentCategory(category: string, now: string): string | null {
   ipcMain.handle('library:import', async (_event, bundleDir: string) => {
     const manifestPath = join(bundleDir, 'library.json')
     if (!existsSync(manifestPath)) {
-      return { success: false, error: '未找到 library.json，请选择 SoundVault 导出的资源库文件夹' }
+      return { success: false, error: '这不是有效的 SoundVault 资源库文件夹。请选择之前通过「导出音效库」功能导出的文件夹，或使用「导入」功能首次添加音效。' }
     }
 
     let data: any
     try {
       data = JSON.parse(await readFile(manifestPath, 'utf-8'))
     } catch {
-      return { success: false, error: 'library.json 解析失败，文件可能已损坏' }
+      return { success: false, error: '该资源库文件已损坏或格式不兼容，无法读取。请尝试重新导出一份资源库，或使用「导入」功能添加音效。' }
     }
     if (data?.format !== 'soundvault-library') {
-      return { success: false, error: '文件格式不正确，不是有效的 SoundVault 资源库' }
+      return { success: false, error: '该文件夹不是有效的 SoundVault 资源库。请确认选择的是通过「导出音效库」功能导出的文件夹。' }
     }
 
     const libraryRoot = join(app.getPath('userData'), 'library')
@@ -2662,6 +2688,17 @@ function ensureParentCategory(category: string, now: string): string | null {
   })
   ipcMain.handle('window:close', () => {
     BrowserWindow.getFocusedWindow()?.close()
+  })
+
+  // 获取常用目录路径（供扫描快捷入口使用）
+  ipcMain.handle('common:getPaths', () => {
+    return {
+      desktop: app.getPath('desktop'),
+      documents: app.getPath('documents'),
+      downloads: app.getPath('downloads'),
+      music: app.getPath('music'),
+      videos: app.getPath('videos'),
+    }
   })
 
   console.log('[IPC] All handlers registered')

@@ -30,7 +30,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="h-full w-full flex items-center justify-center bg-surface text-muted-light p-8">
           <div className="max-w-md text-center">
             <p className="text-sm font-medium mb-2">界面出现了一个错误</p>
-            <p className="text-xs text-muted-light mb-4 break-words">{this.state.error.message}</p>
+            <p className="text-xs text-muted-light mb-4">部分功能可能无法正常显示。点击下方按钮重新加载通常可以解决问题。</p>
             <button
               onClick={this.handleReload}
               className="px-4 py-2 bg-accent text-white text-xs rounded hover:bg-accent/80"

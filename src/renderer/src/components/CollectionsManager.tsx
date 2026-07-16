@@ -31,7 +31,7 @@ export function CollectionsManager(): JSX.Element {
       await refreshCollections()
       toast.success(`已创建收藏夹: ${newName}`)
     } catch {
-      toast.error('创建失败')
+      toast.error('创建收藏夹失败，请稍后重试')
     }
   }, [newName, refreshCollections])
 
@@ -41,7 +41,7 @@ export function CollectionsManager(): JSX.Element {
       toast.success(`已删除: ${col.name}`)
       await refreshCollections()
     } catch {
-      toast.error('删除失败')
+      toast.error('删除收藏夹失败，请稍后重试')
     }
   }, [refreshCollections])
 
@@ -52,7 +52,7 @@ export function CollectionsManager(): JSX.Element {
       setEditId(null)
       await refreshCollections()
     } catch {
-      toast.error('重命名失败')
+      toast.error('重命名失败，该名称可能已被使用')
     }
   }, [editName, refreshCollections])
 

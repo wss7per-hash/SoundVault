@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
-import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown } from 'lucide-react'
+import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, FolderSearch, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown } from 'lucide-react'
 import { ExportDialog } from './ExportDialog'
 
 const SORT_OPTIONS = [
@@ -38,6 +38,7 @@ function makeToken(): string {
 
 export function Toolbar(): JSX.Element {
   const { searchQuery, setSearchQuery } = useAppStore()
+  const toggleScanDialog = useAppStore((s) => s.toggleScanDialog)
   const [showFilter, setShowFilter] = useState(false)
   const [isMaximized, setIsMaximized] = useState(false)
   const [busy, setBusy] = useState<null | 'import'>(null)
@@ -211,10 +212,10 @@ export function Toolbar(): JSX.Element {
           </div>
         ), { duration: 8000 })
       } else {
-        toast.error('导出失败：' + (res.error || '未知错误'))
+        toast.error('导出未成功：' + (res.error || '请检查目标文件夹是否可写'))
       }
     } catch (err) {
-      toast.error('导出出错：' + (err as Error).message)
+      toast.error('导出时出错，请检查磁盘空间或文件权限后重试')
     } finally {
       unsub()
       setExportState(null)
@@ -253,10 +254,10 @@ export function Toolbar(): JSX.Element {
           }
         }
       } else {
-        toast.error(res.error || '导入失败')
+        toast.error(res.error || '导入资源库未成功，请确认选择的是有效的导出文件夹')
       }
     } catch (err) {
-      toast.error('导入出错：' + (err as Error).message)
+      toast.error('导入时出错，请稍后重试')
     } finally {
       setBusy(null)
     }
@@ -274,11 +275,11 @@ export function Toolbar(): JSX.Element {
       } else if (res.success) {
         toast('✅ 所有音效文件完整，无需清理')
       } else {
-        toast.error(res.message || '检测失败')
+        toast.error(res.message || '检测失败，请稍后重试')
       }
     } catch (err) {
       console.error('cleanupMissing scan error:', err)
-      toast.error('检测失败，请检查日志后重试')
+      toast.error('扫描时出错，请稍后重试')
     } finally {
       setCleanupScanning(false)
     }
@@ -293,10 +294,10 @@ export function Toolbar(): JSX.Element {
         await Promise.all([refreshSounds(), refreshStats()])
         setShowCleanupDlg(false)
       } else {
-        toast.error(res.message || '清理失败')
+        toast.error(res.message || '清理失败，部分文件可能被占用')
       }
     } catch {
-      toast.error('清理失败')
+      toast.error('清理时出错，请关闭可能占用文件的应用后重试')
     } finally {
       setCleanupBusy(false)
     }
@@ -398,7 +399,22 @@ export function Toolbar(): JSX.Element {
 
         {showLibMenu && (
           <div className="absolute left-0 top-full mt-2 w-64 bg-surface-panel border border-surface-border rounded-xl shadow-2xl py-3 z-50">
-            {/* Import */}
+            {/* Scan & import from local folders (enhanced ScanDialog) */}
+            <button
+              onClick={() => { setShowLibMenu(false); toggleScanDialog() }}
+              disabled={busy !== null || exportState !== null}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
+            >
+              <FolderSearch size={14} className="text-accent-light" />
+              <div className="text-left">
+                <div>扫描导入音效</div>
+                <div className="text-[10px] text-muted/60">扫描本机文件夹 · 可按格式过滤批量导入</div>
+              </div>
+            </button>
+
+            <div className="h-px bg-surface-border/50 my-1.5" />
+
+            {/* Import a SoundVault backup package */}
             <button
               onClick={() => { setShowLibMenu(false); handleImport() }}
               disabled={busy !== null || exportState !== null}
@@ -406,8 +422,8 @@ export function Toolbar(): JSX.Element {
             >
               <Upload size={14} className="text-accent-light" />
               <div className="text-left">
-                <div>导入音效库</div>
-                <div className="text-[10px] text-muted/60">选择文件夹导入（也可拖放文件）</div>
+                <div>导入资源库备份</div>
+                <div className="text-[10px] text-muted/60">导入 SoundVault 导出的备份文件夹</div>
               </div>
             </button>
 

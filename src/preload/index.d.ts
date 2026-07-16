@@ -132,6 +132,9 @@ export interface SoundVaultAPI {
   onSpotlightOpened: (cb: () => void) => () => void
   onSelectSound: (cb: (soundId: string) => void) => () => void
 
+  // 获取常用目录路径（扫描快捷入口用）
+  getCommonPaths: () => Promise<{ desktop: string; documents: string; downloads: string; music: string; videos: string }>
+
   // Window Controls (frameless mode)
   minimizeWindow: () => Promise<void>
   maximizeRestoreWindow: () => Promise<void>
@@ -168,8 +171,11 @@ export interface ScanOptions {
   filenameExcludes: string[]
   minSizeKB: number
   maxSizeKB: number
+  minDurationSec?: number   // 最小时长（秒），0 = 不限
+  maxDurationSec?: number   // 最大时长（秒），0 = 不限
   skipHidden: boolean
   includeVideo: boolean
+  extFilters?: string[]   // 可选：仅扫描指定扩展名（如 ['.wav', '.mp3']）
 }
 
 export interface ScanResult {
@@ -186,6 +192,7 @@ export interface ImportFile {
   name: string
   ext: string
   size: number
+  durationMs?: number   // 音频时长（毫秒），扫描时可选填充
 }
 
 export interface OnomatopoeiaItem {

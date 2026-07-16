@@ -46,7 +46,7 @@ export function FloatingQuickBar(): JSX.Element {
       clearSelection()
       await refreshSounds()
     } catch {
-      toast.error('删除失败')
+      toast.error('批量删除失败，请稍后重试')
     }
   }
 
@@ -74,7 +74,7 @@ export function FloatingQuickBar(): JSX.Element {
       setPicked(new Set())
       setQuery('')
     } catch {
-      toast.error('操作失败')
+      toast.error('批量标签操作未成功，请稍后重试')
     }
   }
 

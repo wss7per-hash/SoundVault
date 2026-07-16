@@ -76,7 +76,7 @@ export function SmartFolderList(): JSX.Element {
       toast.success(`已删除: ${name}`)
       await refreshSmartFolders()
     } catch {
-      toast.error('删除失败')
+      toast.error('删除智能文件夹失败，请稍后重试')
     }
   }, [refreshSmartFolders])
 
@@ -196,7 +196,7 @@ export function SmartClassifyPanel(): JSX.Element {
       await runOne(dim, label)
       await refreshSmartFolders()
     } catch {
-      toast.error('分类失败')
+      toast.error('智能分类失败，请检查规则或稍后重试')
     } finally {
       setBusy(null)
     }
@@ -211,7 +211,7 @@ export function SmartClassifyPanel(): JSX.Element {
       await refreshSmartFolders()
       toast.success(`智能整理完成，共生成 ${total} 个智能文件夹`)
     } catch {
-      toast.error('分类失败')
+      toast.error('智能分类失败，请检查规则或稍后重试')
     } finally {
       setBusy(null)
     }
@@ -368,7 +368,7 @@ function SmartFolderBuilderDialog({ folder, onClose }: SmartFolderBuilderDialogP
       await refreshSmartFolders()
       onClose()
     } catch {
-      toast.error('保存失败')
+      toast.error('保存失败，请稍后重试')
     }
   }, [name, groups, folder, refreshSmartFolders, onClose])
 

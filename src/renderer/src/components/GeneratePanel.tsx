@@ -99,7 +99,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
       await window.api.setSetting('gen:config', JSON.stringify(config))
       toast.success('生成配置已保存（Key 仅存本地）')
     } catch {
-      toast.error('保存失败')
+      toast.error('保存配置失败，请稍后重试')
     }
   }
 
@@ -165,11 +165,12 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
         setStats(res.stats || null)
         setResult(res)
       } else {
-        setError(res.error || '生成失败')
-        toast.error(res.error || '生成失败')
+        const errMsg = res.error || '音效生成未成功，请检查描述或稍后重试'
+        setError(errMsg)
+        toast.error(errMsg)
       }
     } catch (err) {
-      const msg = (err as Error).message || '生成失败'
+      const msg = '音效生成时出现异常，请检查网络连接或 API 配置后重试'
       setError(msg)
       toast.error(msg)
     } finally {
