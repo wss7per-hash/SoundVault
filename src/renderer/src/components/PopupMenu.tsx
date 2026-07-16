@@ -39,6 +39,8 @@ export function PopupMenu({ x, y, items, onClose }: PopupMenuProps): JSX.Element
   const ref = useRef<HTMLDivElement>(null)
   const mounted = useRef(true)
   const [portalReady, setPortalReady] = useState(false)
+  // 用 state 缓存最终坐标，允许渲染后微调
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
   // 确保 DOM body 已就绪再渲染 portal（防止 SSR/hydration 边界崩溃）
   useEffect(() => {
@@ -50,6 +52,25 @@ export function PopupMenu({ x, y, items, onClose }: PopupMenuProps): JSX.Element
     mounted.current = true
     return () => { mounted.current = false }
   }, [])
+
+  // 坐标计算：Portal 挂到 body 后用 clientX/clientY 直接定位 fixed 元素。
+  // 若检测到实际渲染位置与预期不符（Electron 缩放/DPI 边界情况），做一次校正。
+  useEffect(() => {
+    if (!portalReady) return
+    const left = Math.min(x, window.innerWidth - MENU_W - 8)
+    const top = Math.min(y, window.innerHeight - MENU_MAX_H - 8)
+    setPos({ left, top })
+    // Portal 首次挂载后一帧校验：如果菜单被裁剪或偏移，重新计算
+    const raf = requestAnimationFrame(() => {
+      if (!ref.current || !mounted.current) return
+      const rect = ref.current.getBoundingClientRect()
+      // 如果菜单右边缘超出窗口或有明显左偏移，强制修正
+      if (rect.right > window.innerWidth + 2 || rect.left < -2) {
+        setPos({ left: Math.max(8, Math.min(x, window.innerWidth - MENU_W - 8)), top: Math.max(0, top) })
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [portalReady, x, y])
 
   useEffect(() => {
     const onPointerDown = (e: MouseEvent) => {
@@ -73,14 +94,13 @@ export function PopupMenu({ x, y, items, onClose }: PopupMenuProps): JSX.Element
     }
   }, [onClose])
 
-  const left = Math.min(x, window.innerWidth - MENU_W - 8)
-  const top = Math.min(y, window.innerHeight - MENU_MAX_H - 8)
+  if (!portalReady || typeof document === 'undefined' || !document.body || !pos) return null
 
   const menu = (
     <div
       ref={ref}
       className="fixed z-[9999] w-[220px] max-h-[340px] overflow-y-auto py-1.5 rounded-xl border border-surface-border bg-surface-panel shadow-2xl"
-      style={{ left, top }}
+      style={{ left: pos.left, top: pos.top }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {items.map((it, i) => {
@@ -122,7 +142,6 @@ export function PopupMenu({ x, y, items, onClose }: PopupMenuProps): JSX.Element
   )
 
   // 用 Portal 挂到 body，彻底避免父容器 overflow/transform 对 fixed 定位的干扰
-  if (!portalReady || typeof document === 'undefined' || !document.body) return null
   return createPortal(menu, document.body)
 }
 
