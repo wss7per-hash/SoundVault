@@ -89,6 +89,8 @@ interface AppState {
   refreshStats: () => Promise<void>
   refreshCollections: () => Promise<void>
   refreshSmartFolders: () => Promise<void>
+  refreshOnoStats: () => Promise<void>
+  refreshDuplicates: () => Promise<void>
 
   // Actions
   analyzeSound: (soundId: string) => Promise<boolean>

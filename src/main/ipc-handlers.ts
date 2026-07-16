@@ -328,24 +328,24 @@ export function registerIpcHandlers(): void {
             if (options.minSizeKB > 0 && sizeKB < options.minSizeKB) continue
             if (options.maxSizeKB > 0 && sizeKB > options.maxSizeKB) continue
 
-            // 时长过滤（需要 ffprobe，仅在用户设置过滤条件时启用）
-            const needDurationFilter = (options.minDurationSec ?? 0) > 0 || (options.maxDurationSec ?? 0) > 0
+            // 始终获取时长（用于预览展示 + 可选的时间过滤）
             let fileDurationMs: number | undefined
-            if (needDurationFilter || true) {
-              // 始终尝试获取时长（用于预览展示）；失败时仅在有过滤条件时跳过
-              try {
+            try {
                 const dur = await getDurationFromFile(fullPath)
                 fileDurationMs = Math.round(dur * 1000)
-                if (needDurationFilter) {
+                const minSec = options.minDurationSec ?? 0
+                const maxSec = options.maxDurationSec ?? 0
+                if (minSec > 0 || maxSec > 0) {
                   const durSec = dur
-                  if ((options.minDurationSec ?? 0) > 0 && durSec < options.minDurationSec!) continue
-                  if ((options.maxDurationSec ?? 0) > 0 && durSec > options.maxDurationSec!) continue
+                  if (minSec > 0 && durSec < minSec) continue
+                  if (maxSec > 0 && durSec > maxSec) continue
                 }
               } catch {
                 // ffprobe 失败：有时长过滤条件时跳过该文件，否则忽略（durationMs 留 undefined）
-                if (needDurationFilter) continue
+                const minSec = options.minDurationSec ?? 0
+                const maxSec = options.maxDurationSec ?? 0
+                if (minSec > 0 || maxSec > 0) continue
               }
-            }
 
             result.total++
             result.totalSize += fileStat.size
@@ -1207,7 +1207,7 @@ function ensureParentCategory(category: string, now: string): string | null {
       const soundMeta = sounds.map((s) => ({
         file_hash: s.file_hash,
         file_name: s.file_name,
-        rel_path: s.file_path,
+        file_path: s.file_path,
         notes: s.notes || null,
         is_starred: s.is_starred ? 1 : 0,
         tags: (linksBySound.get(s.id) || [])

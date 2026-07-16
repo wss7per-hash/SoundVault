@@ -97,7 +97,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
   const saveConfig = async () => {
     try {
       await window.api.setSetting('gen:config', JSON.stringify(config))
-      toast.success('生成配置已保存（Key 仅存本地）')
+      toast.success('生成配置已保存（Key 仅存本地 AppData，不会上传至云端）')
     } catch {
       toast.error('保存配置失败，请稍后重试')
     }

@@ -272,6 +272,7 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
   }, [])
 
   // 移动单选焦点（并联动右侧详情面板），必要时滚动到可见区域。
+  // 虚拟化列表可能导致卡未渲染，先 try 精确选择再退而用 nearest
   const focusIndex = useCallback((idx: number) => {
     const list = stateRef.current.sounds
     if (list.length === 0) return
@@ -279,7 +280,16 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
     const sound = list[clamped]
     useAppStore.getState().selectSound(sound.id)
     const card = containerRef.current?.querySelectorAll('[data-sound-id]')[clamped] as HTMLElement | undefined
-    card?.scrollIntoView({ block: 'nearest' })
+    if (card) {
+      card.scrollIntoView({ block: 'nearest' })
+    } else {
+      // 虚拟化列表该索引未渲染：用百分比近似滚动到该位置
+      const grid = containerRef.current
+      if (grid) {
+        const ratio = clamped / Math.max(1, list.length)
+        grid.scrollTo({ top: ratio * grid.scrollHeight, behavior: 'smooth' })
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -652,7 +662,7 @@ function SoundCard({ sound, compact = false, isSelected, isHovered, isPlaying, i
             : 'border-transparent bg-surface-card/50'
       }`}
     >
-      {/* Waveform + Play area */}
+      {/* 装饰性波形（非真实音频波形） */}
       <div className={`${compact ? 'h-20' : 'h-24'} bg-surface-card flex items-center justify-center relative`}>
         <div className="w-full h-full px-4 flex items-center justify-center">
           <svg viewBox="0 0 200 48" className="w-full h-10" preserveAspectRatio="none" style={{ opacity: isPlaying ? 0.7 : 0.35 }}>

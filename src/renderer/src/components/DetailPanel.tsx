@@ -74,6 +74,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
       setDescValue(sound.description || '')
       setBestForValue(sound.best_for || '')
       setNotesValue(sound.notes || '')
+      // 切换音效时退出编辑状态，防止新音效自动进入编辑模式
+      setDescEditing(false)
+      setBestForEditing(false)
+      setNotesEditing(false)
       setTagsLoaded(true)
     }
   }, [sound.id, sound.description, sound.best_for, sound.notes])

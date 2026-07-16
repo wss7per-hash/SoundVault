@@ -293,7 +293,7 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
 
         {/* Extra insights */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mt-8">
-          <MiniStat label="平均质量分" value={stats.avgQuality !== null ? `${stats.avgQuality} / 100` : '—'} />
+          <MiniStat label="平均质量分" value={stats.avgQuality !== null ? `${stats.avgQuality} / 5` : '—'} />
           <MiniStat label="已打标签" value={`${taggedPct}%`} sub={`${stats.taggedSounds} 个音效`} />
           <MiniStat label="标签总数" value={String(stats.tagCount)} />
           <MiniStat label="含拟声词" value={String(stats.withOnomatopoeia)} sub={`占 ${onoPct}%`} />

@@ -49,7 +49,7 @@ const NUMERIC_FIELDS = new Set<ConditionField>(['duration_ms', 'quality_score', 
 function valuePlaceholder(field: ConditionField): string {
   if (field === 'imported_at') return '填天数，如 7'
   if (field === 'duration_ms') return '毫秒，如 1000'
-  if (field === 'quality_score') return '1-5，如 7'
+  if (field === 'quality_score') return '1-5，如 4'
   if (field === 'tags') return '标签或分类名，如 环境氛围'
   return '输入值...'
 }
