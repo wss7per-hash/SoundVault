@@ -376,7 +376,7 @@ export function TagTree(): JSX.Element {
         </div>
       )
     },
-    [expandedIds, editingTag, selectedTagId, selectedTagIds, editValue, handleTagClick, handleRename, handleDelete, toggleExpand]
+    [expandedIds, editingTag, selectedTagId, selectedTagIds, editValue, handleRename, handleDelete, toggleExpand]
   )
 
   return (
