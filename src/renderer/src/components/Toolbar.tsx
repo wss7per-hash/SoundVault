@@ -502,57 +502,57 @@ export function Toolbar(): JSX.Element {
             <button
               onClick={() => { setShowLibMenu(false); toggleScanDialog() }}
               disabled={busy !== null || exportState !== null}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
+              className="group w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
             >
               <FolderSearch size={14} className="text-accent-light" />
               <div className="text-left">
                 <div>扫描导入音效</div>
-                <div className="text-[10px] text-muted/60">扫描本机文件夹 · 可按格式过滤批量导入</div>
+                <div className="max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 transition-all duration-200 text-[10px] text-muted/60">扫描本机文件夹 · 可按格式过滤批量导入</div>
               </div>
             </button>
 
-            <div className="h-px bg-surface-border/50 my-1.5" />
+            <div className="h-px bg-surface-border/50 my-1" />
 
             {/* Import a SoundVault backup package */}
             <button
               onClick={() => { setShowLibMenu(false); handleImport() }}
               disabled={busy !== null || exportState !== null}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
+              className="group w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
             >
               <Upload size={14} className="text-accent-light" />
               <div className="text-left">
                 <div>导入资源库备份</div>
-                <div className="text-[10px] text-muted/60">导入 SoundVault 导出的备份文件夹</div>
+                <div className="max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 transition-all duration-200 text-[10px] text-muted/60">导入 SoundVault 导出的备份文件夹</div>
               </div>
             </button>
 
-            <div className="h-px bg-surface-border/50 my-1.5" />
+            <div className="h-px bg-surface-border/50 my-1" />
 
             {/* Export — single entry opens scope-choice dialog */}
             <button
               onClick={() => { setShowLibMenu(false); setShowExportDlg(true) }}
               disabled={busy !== null || exportState !== null}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
+              className="group w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
             >
               <Download size={14} className="text-accent-light" />
               <div className="text-left">
                 <div>导出音效库</div>
-                <div className="text-[10px] text-muted/60">{sounds.length} 个音效 · 选择范围导出</div>
+                <div className="max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 transition-all duration-200 text-[10px] text-muted/60">{sounds.length} 个音效 · 选择范围导出</div>
               </div>
             </button>
 
-            <div className="h-px bg-surface-border/50 my-1.5" />
+            <div className="h-px bg-surface-border/50 my-1" />
 
             {/* Metadata backup — lightweight JSON (tags/notes/starred/collections/smart folders) */}
             <button
               onClick={() => { setShowLibMenu(false); handleExportMetadata() }}
               disabled={busy !== null || exportState !== null || metaBusy !== null}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
+              className="group w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
             >
               <FileDown size={14} className="text-emerald-400" />
               <div className="text-left">
               <div>备份元数据</div>
-              <div className="text-[10px] text-muted/60">把标签、备注、收藏夹、智能文件夹导出为 JSON 文件，方便迁移或灾备（不含音频文件本身）</div>
+              <div className="max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 transition-all duration-200 text-[10px] text-muted/60">把标签、备注、收藏夹、智能文件夹导出为 JSON 文件，方便迁移或灾备（不含音频文件本身）</div>
               </div>
             </button>
 
@@ -560,22 +560,22 @@ export function Toolbar(): JSX.Element {
             <button
               onClick={() => { setShowLibMenu(false); handleImportMetadata() }}
               disabled={busy !== null || exportState !== null || metaBusy !== null}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
+              className="group w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
             >
               <FileUp size={14} className="text-emerald-400" />
               <div className="text-left">
               <div>恢复元数据</div>
-              <div className="text-[10px] text-muted/60">选择之前备份的 JSON 文件，自动按文件指纹匹配当前库中的音效，把标签、备注、收藏等数据合并回来（不会重复添加）</div>
+              <div className="max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 transition-all duration-200 text-[10px] text-muted/60">选择之前备份的 JSON 文件，自动按文件指纹匹配当前库中的音效，把标签、备注、收藏等数据合并回来（不会重复添加）</div>
               </div>
             </button>
 
-            <div className="h-px bg-surface-border/50 my-1.5" />
+            <div className="h-px bg-surface-border/50 my-1" />
 
             {/* Cleanup */}
             <button
               onClick={() => { setShowLibMenu(false); handleCleanupScan() }}
               disabled={busy !== null || exportState !== null || cleanupScanning}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
+              className="group w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
             >
               {cleanupScanning ? (
                 <Loader2 size={14} className="text-red-400 animate-spin" />
@@ -584,7 +584,7 @@ export function Toolbar(): JSX.Element {
               )}
               <div className="text-left">
                 <div>{cleanupScanning ? '正在检测…' : '清理无效文件'}</div>
-                <div className="text-[10px] text-muted/60">{cleanupScanning ? '扫描音效文件是否存在' : '移除本地音频已丢失的条目'}</div>
+                <div className="max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 transition-all duration-200 text-[10px] text-muted/60">{cleanupScanning ? '扫描音效文件是否存在' : '移除本地音频已丢失的条目'}</div>
               </div>
             </button>
           </div>
