@@ -7,6 +7,7 @@ import {
 import { useAppStore } from '../stores/appStore'
 import toast from 'react-hot-toast'
 import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
+import { useListSelection } from '../hooks/useListSelection'
 
 const TAG_COLORS = ['#534AB7', '#E85D75', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#06B6D4']
 
@@ -52,8 +53,6 @@ export function TagTree(): JSX.Element {
     { type: 'item', label: '刷新标签', icon: <RefreshCw size={14} />, onClick: () => { void refreshTags(); void refreshTagStats() } }
   ]
   // ---- 多选批量操作 ----
-  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
-  const [lastClickedId, setLastClickedId] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   // ---- 统计空标签数量 ----
@@ -112,6 +111,10 @@ export function TagTree(): JSX.Element {
     return arr
   }, [tree])
 
+  const orderedTagIds = useMemo(() => flatNodes.map((n) => n.id), [flatNodes])
+  const { selectedIds: selectedTagIds, setSelectedIds, onRowMouseDown, onRowMouseEnter, onRowClick, clear: clearSelection } =
+    useListSelection(orderedTagIds)
+
   const filteredTree = useMemo(() => {
     if (!searchTag.trim()) return tree
     const q = searchTag.toLowerCase()
@@ -131,44 +134,12 @@ export function TagTree(): JSX.Element {
     })
   }, [])
 
-  // ---- 多选逻辑 ----
-  const handleTagClick = useCallback((node: TagTreeNode, e: React.MouseEvent) => {
-    // 有多选时，点击行为改为多选；无多选时保持原筛选行为
-    if (selectedTagIds.size > 0 || e.ctrlKey || e.metaKey) {
-      // Ctrl/Cmd + 点击：切换单个
-      setSelectedTagIds((prev) => {
-        const next = new Set(prev)
-        if (next.has(node.id)) next.delete(node.id)
-        else next.add(node.id)
-        return next
-      })
-      setLastClickedId(node.id)
-      return
-    }
-    if (e.shiftKey && lastClickedId) {
-      // Shift + 点击：范围选择
-      const startIdx = flatNodes.findIndex((n) => n.id === lastClickedId)
-      const endIdx = flatNodes.findIndex((n) => n.id === node.id)
-      if (startIdx >= 0 && endIdx >= 0) {
-        const range = startIdx <= endIdx ? flatNodes.slice(startIdx, endIdx + 1) : flatNodes.slice(endIdx, startIdx + 1)
-        setSelectedTagIds(new Set(range.map((n) => n.id)))
-      }
-      return
-    }
-    // 普通点击：筛选
-    setSelectedTagIds(new Set())
-    setSelectedTag(selectedTagId === node.id ? null : node.id)
-    if (node.children.length > 0) toggleExpand(node.id)
-  }, [selectedTagId, selectedTagIds, lastClickedId, flatNodes, setSelectedTag, toggleExpand])
-
-  const clearSelection = useCallback(() => setSelectedTagIds(new Set()), [])
-
   // ---- 删除（单个/批量）----
   const handleDelete = useCallback(async (tag: TagTreeNode) => {
     try {
       await window.api.deleteTag(tag.id)
       toast.success(`已删除标签: ${tag.name}`)
-      setSelectedTagIds((prev) => { const n = new Set(prev); n.delete(tag.id); return n })
+      setSelectedIds((prev) => { const n = new Set(prev); n.delete(tag.id); return n })
       await Promise.all([refreshTags(), refreshTagStats(), refreshSounds()])
     } catch {
       toast.error('删除标签失败，请稍后重试')
@@ -320,11 +291,16 @@ export function TagTree(): JSX.Element {
               'text-muted-light hover:bg-surface-card'
             }`}
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
-            onClick={(e) => handleTagClick(node, e)}
+            onClick={(e) => onRowClick(node.id, e, () => {
+              setSelectedTag(selectedTagId === node.id ? null : node.id)
+              if (node.children.length > 0) toggleExpand(node.id)
+            })}
+            onMouseDown={(e) => onRowMouseDown(node.id, e)}
+            onMouseEnter={() => onRowMouseEnter(node.id)}
             onContextMenu={(e) => handleContextMenu(e, node)}
           >
             {/* 多选勾选框 */}
-            {(selectedTagIds.size > 0 || false) && (
+            {selectedTagIds.size > 0 && (
               <div className={`w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center ${
                 isChecked ? 'bg-accent border-accent' : 'border-muted hover:border-muted-light'
               }`}>

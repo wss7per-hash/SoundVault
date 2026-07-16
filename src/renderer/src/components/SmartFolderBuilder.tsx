@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { SmartFolderData, SoundData } from '../../preload/index.d'
-import { FolderCog, Plus, Trash2, Save, Play, Search, X, GripVertical, Wand2, RefreshCw } from 'lucide-react'
+import { FolderCog, Plus, Trash2, Save, Play, Search, X, GripVertical, Wand2, RefreshCw, Check } from 'lucide-react'
 import { useAppStore } from '../stores/appStore'
 import toast from 'react-hot-toast'
 import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
+import { useListSelection } from '../hooks/useListSelection'
 
 type ConditionField = 'file_name' | 'description' | 'emotion' | 'use_cases' | 'file_ext' | 'duration_ms' | 'quality_score' | 'is_starred' | 'is_missing' | 'ai_analyzed_at' | 'imported_at' | 'tags'
 type ConditionOp = 'contains' | 'not_contains' | 'equals' | 'starts_with' | 'gt' | 'lt' | 'is'
@@ -81,6 +82,37 @@ export function SmartFolderList(): JSX.Element {
     }
   }, [refreshSmartFolders])
 
+  // ── 多选 + 连选（拖拽框选等价）──
+  const orderedSmartIds = useMemo(() => smartFolders.map((s) => s.id), [smartFolders])
+  const { selectedIds: selectedSmartIds, onRowMouseDown, onRowMouseEnter, onRowClick, clear: clearSelection } =
+    useListSelection(orderedSmartIds)
+
+  const handleBatchDelete = useCallback(async () => {
+    if (selectedSmartIds.size === 0) return
+    const ids = [...selectedSmartIds]
+    const names: string[] = []
+    for (const id of ids) {
+      const s = smartFolders.find((s) => s.id === id)
+      if (s) names.push(s.name)
+    }
+    const confirmed = window.confirm(
+      `确定删除选中的 ${ids.length} 个智能文件夹吗？\n${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 等 ${names.length} 个` : ''}`
+    )
+    if (!confirmed) return
+    let ok = 0
+    for (const id of ids) {
+      try {
+        await window.api.deleteSmartFolder(id)
+        ok++
+      } catch {
+        /* skip */
+      }
+    }
+    toast.success(`已删除 ${ok}/${ids.length} 个智能文件夹`)
+    clearSelection()
+    await refreshSmartFolders()
+  }, [selectedSmartIds, smartFolders, clearSelection, refreshSmartFolders])
+
   // ── 智能文件夹空白处右键菜单 ──
   const smartMenu = useContextMenu()
   const smartMenuItems: MenuItem[] = [
@@ -89,7 +121,7 @@ export function SmartFolderList(): JSX.Element {
   ]
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       <div className="flex items-center justify-between px-3 py-2 border-b border-surface-panel">
         <div className="flex items-center gap-1.5">
           <FolderCog size={14} className="text-muted" />
@@ -107,7 +139,7 @@ export function SmartFolderList(): JSX.Element {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 py-1.5" onContextMenu={smartMenu.open}>
+      <div className="flex-1 overflow-y-auto px-2 py-1.5 select-none" onContextMenu={smartMenu.open}>
         {smartFolders.length === 0 ? (
           <p className="text-2xs text-muted text-center py-4">暂无智能文件夹</p>
         ) : (
@@ -116,13 +148,22 @@ export function SmartFolderList(): JSX.Element {
               key={sf.id}
               className={`group flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
                 activeSmartFolderId === sf.id ? 'bg-accent/20 text-accent-light' : 'text-muted-light hover:bg-surface-card'
-              }`}
-              onClick={() => {
+              } ${selectedSmartIds.has(sf.id) ? 'ring-1 ring-accent/40' : ''}`}
+              onMouseDown={(e) => onRowMouseDown(sf.id, e)}
+              onMouseEnter={() => onRowMouseEnter(sf.id)}
+              onClick={(e) => onRowClick(sf.id, e, () => {
                 const next = activeSmartFolderId === sf.id ? null : sf.id
                 setActiveSmartFolder(next)
                 if (next) useAppStore.getState().refreshSounds()
-              }}
+              })}
             >
+              {selectedSmartIds.size > 0 && (
+                <div className={`w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center ${
+                  selectedSmartIds.has(sf.id) ? 'bg-accent border-accent' : 'border-muted hover:border-muted-light'
+                }`}>
+                  {selectedSmartIds.has(sf.id) && <Check size={8} className="text-white" />}
+                </div>
+              )}
               <span className="flex-1 truncate">{sf.name}</span>
               <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
                 <button
@@ -151,6 +192,31 @@ export function SmartFolderList(): JSX.Element {
           ))
         )}
       </div>
+
+      {/* ====== 批量操作浮动栏 ====== */}
+      {selectedSmartIds.size > 0 && (
+        <div className="absolute bottom-2 left-2 right-2 z-20 flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-panel border border-surface-border shadow-xl">
+          <span className="text-xs text-muted-light font-medium whitespace-nowrap">
+            已选 {selectedSmartIds.size} 个智能文件夹
+          </span>
+          <div className="flex-1" />
+          <button
+            onClick={clearSelection}
+            className="p-1 text-muted hover:text-muted-light hover:bg-surface-hover rounded transition-colors"
+            title="取消选择"
+          >
+            <X size={14} />
+          </button>
+          <button
+            onClick={handleBatchDelete}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded transition-colors"
+            title="删除所选智能文件夹"
+          >
+            <Trash2 size={13} />
+            删除所选
+          </button>
+        </div>
+      )}
 
       {showBuilder && (
         <SmartFolderBuilderDialog

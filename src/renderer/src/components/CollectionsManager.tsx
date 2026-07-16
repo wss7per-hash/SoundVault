@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import type { CollectionData } from '../../preload/index.d'
 import { Folder, Plus, Trash2, Edit3, Check, X, Star, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../stores/appStore'
 import toast from 'react-hot-toast'
 import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
+import { useListSelection } from '../hooks/useListSelection'
 
 const COLLECTION_COLORS = ['#534AB7', '#E85D75', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899']
 
@@ -73,6 +74,40 @@ export function CollectionsManager(): JSX.Element {
     await refreshSounds()
   }, [activeCollectionId, setActiveCollection, refreshSounds])
 
+  // ── 多选 + 连选（拖拽框选等价）──
+  const orderedColIds = useMemo(
+    () => [STARRED_ID, ...collections.map((c) => c.id)],
+    [collections]
+  )
+  const { selectedIds: selectedColIds, setSelectedIds, onRowMouseDown, onRowMouseEnter, onRowClick, clear: clearSelection } =
+    useListSelection(orderedColIds)
+
+  const handleBatchDelete = useCallback(async () => {
+    const realIds = [...selectedColIds].filter((id) => id !== STARRED_ID)
+    if (realIds.length === 0) return
+    const names: string[] = []
+    for (const id of realIds) {
+      const c = collections.find((c) => c.id === id)
+      if (c) names.push(c.name)
+    }
+    const confirmed = window.confirm(
+      `确定删除选中的 ${realIds.length} 个收藏夹吗？\n${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 等 ${names.length} 个` : ''}`
+    )
+    if (!confirmed) return
+    let ok = 0
+    for (const id of realIds) {
+      try {
+        await window.api.deleteCollection(id)
+        ok++
+      } catch {
+        /* skip */
+      }
+    }
+    toast.success(`已删除 ${ok}/${realIds.length} 个收藏夹`)
+    clearSelection()
+    await refreshCollections()
+  }, [selectedColIds, collections, clearSelection, refreshCollections])
+
   // ── 收藏夹空白处右键菜单 ──
   const collMenu = useContextMenu()
   const collMenuItems: MenuItem[] = [
@@ -81,7 +116,7 @@ export function CollectionsManager(): JSX.Element {
   ]
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       <div className="flex items-center justify-between px-3 py-2 border-b border-surface-panel">
         <div className="flex items-center gap-1.5">
           <Folder size={14} className="text-muted" />
@@ -123,16 +158,25 @@ export function CollectionsManager(): JSX.Element {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-2 py-1.5" onContextMenu={collMenu.open}>
+      <div className="flex-1 overflow-y-auto px-2 py-1.5 select-none" onContextMenu={collMenu.open}>
         {/* 虚拟「收藏」项：所有已星标音效，不归属于任何收藏夹 */}
         <div
           className={`flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
             activeCollectionId === STARRED_ID
               ? 'bg-accent/20 text-accent-light'
               : 'text-amber-400/90 hover:bg-surface-card'
-          }`}
-          onClick={handleSelectStarred}
+          } ${selectedColIds.has(STARRED_ID) ? 'ring-1 ring-accent/40' : ''}`}
+          onMouseDown={(e) => onRowMouseDown(STARRED_ID, e)}
+          onMouseEnter={() => onRowMouseEnter(STARRED_ID)}
+          onClick={(e) => onRowClick(STARRED_ID, e, handleSelectStarred)}
         >
+          {selectedColIds.size > 0 && (
+            <div className={`w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center ${
+              selectedColIds.has(STARRED_ID) ? 'bg-accent border-accent' : 'border-muted hover:border-muted-light'
+            }`}>
+              {selectedColIds.has(STARRED_ID) && <Check size={8} className="text-white" />}
+            </div>
+          )}
           <Star size={14} className={activeCollectionId === STARRED_ID ? 'fill-amber-400' : ''} />
           <span className="flex-1 truncate">收藏</span>
         </div>
@@ -149,8 +193,10 @@ export function CollectionsManager(): JSX.Element {
                 activeCollectionId === col.id
                   ? 'bg-accent/20 text-accent-light'
                   : 'text-muted-light hover:bg-surface-card'
-              }`}
-              onClick={() => handleSelect(col)}
+              } ${selectedColIds.has(col.id) ? 'ring-1 ring-accent/40' : ''}`}
+              onMouseDown={(e) => { if (editId === col.id) return; onRowMouseDown(col.id, e) }}
+              onMouseEnter={() => { if (editId === col.id) return; onRowMouseEnter(col.id) }}
+              onClick={(e) => { if (editId === col.id) return; onRowClick(col.id, e, () => handleSelect(col)) }}
             >
               {editId === col.id ? (
                 <>
@@ -200,6 +246,31 @@ export function CollectionsManager(): JSX.Element {
           ))
         )}
       </div>
+
+      {/* ====== 批量操作浮动栏 ====== */}
+      {selectedColIds.size > 0 && (
+        <div className="absolute bottom-2 left-2 right-2 z-20 flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-panel border border-surface-border shadow-xl">
+          <span className="text-xs text-muted-light font-medium whitespace-nowrap">
+            已选 {selectedColIds.size} 个收藏夹
+          </span>
+          <div className="flex-1" />
+          <button
+            onClick={clearSelection}
+            className="p-1 text-muted hover:text-muted-light hover:bg-surface-hover rounded transition-colors"
+            title="取消选择"
+          >
+            <X size={14} />
+          </button>
+          <button
+            onClick={handleBatchDelete}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded transition-colors"
+            title="删除所选收藏夹"
+          >
+            <Trash2 size={13} />
+            删除所选
+          </button>
+        </div>
+      )}
 
       {collMenu.pos && (
         <PopupMenu x={collMenu.pos.x} y={collMenu.pos.y} items={collMenuItems} onClose={collMenu.close} />
