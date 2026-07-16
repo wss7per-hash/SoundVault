@@ -205,6 +205,9 @@ const api = {
     y: number
   ) => ipcRenderer.invoke('contextmenu:native', items, x, y) as Promise<string | null>,
 
+  // 渲染进程未捕获错误上报（落盘 userData/sv-error.log 供排查）
+  logRendererError: (msg: string) => ipcRenderer.invoke('log:rendererError', msg),
+
   // Window Controls (frameless mode)
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   maximizeRestoreWindow: () => ipcRenderer.invoke('window:maximizeRestore'),

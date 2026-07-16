@@ -172,6 +172,9 @@ export interface SoundVaultAPI {
     y: number
   ) => Promise<string | null>  // returns clicked item label, or null if dismissed
 
+  // 渲染进程未捕获错误上报（落盘 userData/sv-error.log 供排查）
+  logRendererError: (msg: string) => Promise<{ success: boolean }>
+
   // Window Controls (frameless mode)
   minimizeWindow: () => Promise<void>
   maximizeRestoreWindow: () => Promise<void>

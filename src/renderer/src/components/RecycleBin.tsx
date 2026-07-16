@@ -25,6 +25,18 @@ export function RecycleBin(): JSX.Element {
 
   // ── 空白处右键菜单 ──
   const rbMenu = useContextMenu()
+
+  const loadTrash = useCallback(async () => {
+    try {
+      const sounds = await window.api.getTrash()
+      setTrashSounds(sounds)
+      setSelected(new Set())
+    } catch {
+      // recycle bin may not be initialized yet
+      setTrashSounds([])
+    }
+  }, [])
+
   const handleRestoreAllInBin = useCallback(async () => {
     if (trashSounds.length === 0) return
     setLoading(true)
@@ -40,17 +52,6 @@ export function RecycleBin(): JSX.Element {
       setLoading(false)
     }
   }, [trashSounds, loadTrash, bumpTrashVersion, refreshSounds, refreshStats])
-
-  const loadTrash = useCallback(async () => {
-    try {
-      const sounds = await window.api.getTrash()
-      setTrashSounds(sounds)
-      setSelected(new Set())
-    } catch {
-      // recycle bin may not be initialized yet
-      setTrashSounds([])
-    }
-  }, [])
 
   useEffect(() => {
     loadTrash()
@@ -121,7 +122,8 @@ export function RecycleBin(): JSX.Element {
     setDeleteLocalFile(false)
   }
 
-  const formatSize = (bytes: number): string => {
+  const formatSize = (bytes: number | null | undefined): string => {
+    if (!bytes || bytes < 0) return '0 KB'
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
     return `${(bytes / 1024).toFixed(0)} KB`
   }
@@ -322,16 +324,16 @@ export function RecycleBin(): JSX.Element {
                 <td className="px-3 py-1.5">
                   <input type="checkbox" checked={selected.has(s.id)} onChange={() => {}} className="accent-accent" />
                 </td>
-                <td className="py-1.5 text-muted-light truncate max-w-[300px]">{s.file_name}</td>
-                <td className="py-1.5 text-muted">{s.file_ext.toUpperCase()}</td>
+                <td className="py-1.5 text-muted-light truncate max-w-[300px]">{s.file_name ?? '未命名'}</td>
+                <td className="py-1.5 text-muted">{(s.file_ext ?? '').toUpperCase()}</td>
                 <td className="py-1.5 text-muted">{formatSize(s.file_size)}</td>
                 <td className="py-1.5 text-muted">
-                  {new Date(s.updated_at).toLocaleDateString('zh-CN', {
+                  {s.updated_at ? new Date(s.updated_at).toLocaleDateString('zh-CN', {
                     month: 'short',
                     day: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit'
-                  })}
+                  }) : '—'}
                 </td>
               </tr>
             ))}

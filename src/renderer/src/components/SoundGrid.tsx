@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { SoundData, CollectionData, TagData } from '../../preload/index.d'
 import {
   Play, Pause, Star, Check, Music, FolderOpen, Folder, Copy, FileInput, Pencil, Tag, FolderPlus,
@@ -957,12 +958,13 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
 
   return (
     <>
-    <div
-      ref={menuRef}
-      className="fixed z-[100] w-52 py-1.5 rounded-xl border border-surface-border bg-surface-panel shadow-2xl"
-      style={{ left, top }}
-      onClick={(e) => e.stopPropagation()}
-    >
+    {createPortal(
+      <div
+        ref={menuRef}
+        className="fixed z-[100] w-52 py-1.5 rounded-xl border border-surface-border bg-surface-panel shadow-2xl"
+        style={{ left, top }}
+        onClick={(e) => e.stopPropagation()}
+      >
       {menuItems.map((item, idx) => (
         item.divider ? (
           <div key={idx} className="h-px bg-surface-border/60 my-1.5 mx-2" />
@@ -1007,9 +1009,11 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
         </div>
       )}
 
-    </div>
+    </div>,
+      document.body
+    )}
 
-      {collectionMenuVisible && (
+      {collectionMenuVisible && createPortal(
         <div
           className="fixed z-[101] w-48 rounded-xl border border-surface-border bg-surface-panel shadow-2xl py-2"
           style={{ left: flyoutLeft, top: flyoutTop }}
@@ -1054,7 +1058,8 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
           ) : (
             <p className="px-3 py-2 text-xs text-muted/50">暂无收藏夹</p>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )

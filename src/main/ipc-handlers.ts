@@ -3056,5 +3056,14 @@ function ensureParentCategory(category: string, now: string): string | null {
     })
   })
 
+  // 渲染进程未捕获错误写日志（崩溃精准排查用，落盘 userData/sv-error.log）
+  ipcMain.handle('log:rendererError', (_e, msg: string) => {
+    try {
+      const logPath = join(app.getPath('userData'), 'sv-error.log')
+      writeFileSync(logPath, `[${new Date().toISOString()}] ${msg}\n`, { flag: 'a' })
+    } catch { /* ignore */ }
+    return { success: true }
+  })
+
   console.log('[IPC] All handlers registered')
 }

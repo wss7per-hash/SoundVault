@@ -51,8 +51,6 @@ export function TagTree(): JSX.Element {
     { type: 'item', label: '新建标签', icon: <Plus size={14} />, onClick: () => setShowAddForm(true) },
     { type: 'item', label: '刷新标签', icon: <RefreshCw size={14} />, onClick: () => { void refreshTags(); void refreshTagStats() } }
   ]
-  const menuRef = useRef<HTMLDivElement>(null)
-
   // ---- 多选批量操作 ----
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
   const [lastClickedId, setLastClickedId] = useState<string | null>(null)
@@ -405,10 +403,6 @@ export function TagTree(): JSX.Element {
     [expandedIds, editingTag, selectedTagId, selectedTagIds, editValue, handleTagClick, handleRename, handleDelete, toggleExpand]
   )
 
-  // ---- 右键菜单位置修正（防溢出） ----
-  const ctxLeft = contextMenu ? Math.min(contextMenu.x, window.innerWidth - 200) : 0
-  const ctxTop = contextMenu ? Math.min(contextMenu.y, window.innerHeight - 220) : 0
-
   return (
     <div className="flex flex-col h-full relative select-none" onContextMenu={tagsMenu.open}>
       {/* 头部 */}
@@ -524,45 +518,20 @@ export function TagTree(): JSX.Element {
         </div>
       )}
 
-      {/* ====== 右键菜单 ====== */}
+      {/* ====== 标签项右键菜单（复用 Portal 版 PopupMenu，彻底规避父容器定位干扰） ====== */}
       {contextMenu && (
-        <div
-          ref={menuRef}
-          className="fixed z-[100] w-48 py-1.5 rounded-xl border border-surface-border bg-surface-panel shadow-2xl"
-          style={{ left: ctxLeft, top: ctxTop }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={() => handleCtxViewSounds(contextMenu.tag)}
-            className="w-full px-3 py-2 flex items-center gap-2.5 text-sm text-muted-light hover:bg-surface-card transition-colors"
-          >
-            <Eye size={14} className="text-muted" />
-            <span className="flex-1 text-left">查看关联音效</span>
-            <span className="text-[10px] text-muted">{contextMenu.tag.count ?? 0}</span>
-          </button>
-          <button
-            onClick={() => handleCtxRename(contextMenu.tag)}
-            className="w-full px-3 py-2 flex items-center gap-2.5 text-sm text-muted-light hover:bg-surface-card transition-colors"
-          >
-            <Edit3 size={14} className="text-muted" />
-            <span className="flex-1 text-left">重命名</span>
-          </button>
-          <button
-            onClick={() => handleCtxMerge(contextMenu.tag)}
-            className="w-full px-3 py-2 flex items-center gap-2.5 text-sm text-muted-light hover:bg-surface-card transition-colors"
-          >
-            <ArrowRightLeft size={14} className="text-muted" />
-            <span className="flex-1 text-left">合并到其他标签</span>
-          </button>
-          <div className="h-px bg-surface-border/60 my-1.5 mx-2" />
-          <button
-            onClick={() => { handleDelete(contextMenu.tag); closeContextMenu() }}
-            className="w-full px-3 py-2 flex items-center gap-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
-          >
-            <Trash2 size={14} className="text-red-400" />
-            <span className="flex-1 text-left">删除</span>
-          </button>
-        </div>
+        <PopupMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={closeContextMenu}
+          items={[
+            { type: 'item', label: '查看关联音效', icon: <Eye size={14} />, onClick: () => void handleCtxViewSounds(contextMenu.tag) },
+            { type: 'item', label: '重命名', icon: <Edit3 size={14} />, onClick: () => void handleCtxRename(contextMenu.tag) },
+            { type: 'item', label: '合并到其他标签', icon: <ArrowRightLeft size={14} />, onClick: () => void handleCtxMerge(contextMenu.tag) },
+            { type: 'separator' },
+            { type: 'item', label: '删除', icon: <Trash2 size={14} />, danger: true, onClick: () => void handleDelete(contextMenu.tag) }
+          ]}
+        />
       )}
 
       {/* ====== 合并选择器（内联浮层）===== */}
