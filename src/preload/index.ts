@@ -159,6 +159,10 @@ const api = {
   batchDelete: (ids: string[]) => ipcRenderer.invoke('sound:batchDelete', ids),
   batchTag: (soundIds: string[], tagNames: string[], action: 'add' | 'remove') =>
     ipcRenderer.invoke('sound:batchTag', soundIds, tagNames, action),
+  batchStar: (ids: string[]) => ipcRenderer.invoke('sound:batchStar', ids),
+  batchExport: (ids: string[], targetDir: string) => ipcRenderer.invoke('sound:batchExport', ids, targetDir),
+  exportNLE: (ids: string[], format: 'premiere' | 'fcpx' | 'resolve' | 'csv', targetDir: string) =>
+    ipcRenderer.invoke('sound:exportNLE', ids, format, targetDir),
 
   // Trash / Recycle Bin
   getTrash: () => ipcRenderer.invoke('sound:getTrash'),

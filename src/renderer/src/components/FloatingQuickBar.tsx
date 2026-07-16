@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { Trash2, Tags, Wand2, X, Loader2, Check, Plus, Search } from 'lucide-react'
+import { Trash2, Tags, Wand2, X, Loader2, Check, Plus, Search, Star, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function FloatingQuickBar(): JSX.Element {
@@ -47,6 +47,32 @@ export function FloatingQuickBar(): JSX.Element {
       await refreshSounds()
     } catch {
       toast.error('批量删除失败，请稍后重试')
+    }
+  }
+
+  const handleBatchStar = async () => {
+    try {
+      const res = await window.api.batchStar(selectedIds)
+      toast.success(`已收藏 ${res.affected ?? selectedIds.length} 个音效`)
+      await refreshSounds()
+    } catch {
+      toast.error('批量收藏失败，请稍后重试')
+    }
+  }
+
+  const handleBatchExport = async () => {
+    const result = await window.api.selectFolder()
+    if (!result || result.length === 0) return
+    const toastId = toast.loading('正在导出…')
+    const res = await window.api.batchExport(selectedIds, result[0])
+    toast.dismiss(toastId)
+    if (res.success) {
+      const parts = [`已复制 ${res.copied ?? 0} 个`]
+      if (res.missing) parts.push(`${res.missing} 个文件缺失`)
+      if (res.skipped) parts.push(`${res.skipped} 个失败`)
+      toast.success(parts.join('，'))
+    } else {
+      toast.error(res.message || '导出失败，请检查目标文件夹是否可写')
     }
   }
 
@@ -186,6 +212,24 @@ export function FloatingQuickBar(): JSX.Element {
         >
           <Tags size={12} />
           移除标签
+        </button>
+
+        <button
+          onClick={handleBatchStar}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-surface-card text-xs text-muted-light hover:text-amber-400 transition-colors"
+          title="批量收藏所选音效"
+        >
+          <Star size={12} />
+          收藏
+        </button>
+
+        <button
+          onClick={handleBatchExport}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-surface-card text-xs text-muted-light hover:text-accent-light transition-colors"
+          title="批量导出所选音效到文件夹"
+        >
+          <Download size={12} />
+          导出
         </button>
 
         <div className="w-px h-4 bg-surface-border" />

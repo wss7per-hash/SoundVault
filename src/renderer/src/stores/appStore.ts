@@ -39,6 +39,7 @@ interface AppState {
   // UI modals
   showScanDialog: boolean
   showGenerate: boolean
+  showExportNLE: boolean
   // 回收站跨组件同步：Sidebar 与 RecycleBin 各自持有独立状态，
   // 任一处发生恢复/清空后 bump 此计数，另一处订阅后自动刷新。
   trashVersion: number
@@ -75,9 +76,9 @@ interface AppState {
   setSortBy: (by: 'name' | 'duration' | 'size' | 'date') => void
   setSortOrder: (order: 'asc' | 'desc') => void
   setFormatFilter: (format: string | null) => void
-  getFilteredSounds: () => SoundData[]
   toggleScanDialog: () => void
   toggleGenerate: () => void
+  toggleExportNLE: () => void
   bumpTrashVersion: () => void
   handleAnalyzeError: (msg: string, code: string | undefined, fallback: string) => void
 
@@ -124,6 +125,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   formatFilter: null,
   showScanDialog: false,
   showGenerate: false,
+  showExportNLE: false,
   trashVersion: 0,
   analyzingIds: [],
   batchAnalyzing: false,
@@ -183,6 +185,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFormatFilter: (format) => set({ formatFilter: format }),
   toggleScanDialog: () => set((s) => ({ showScanDialog: !s.showScanDialog })),
   toggleGenerate: () => set((s) => ({ showGenerate: !s.showGenerate })),
+  toggleExportNLE: () => set((s) => ({ showExportNLE: !s.showExportNLE })),
   bumpTrashVersion: () => set((s) => ({ trashVersion: s.trashVersion + 1 })),
 
   handleAnalyzeError: (msg, code, fallback) => {
@@ -275,41 +278,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   refreshSmartFolders: async () => {
     const smartFolders = await window.api.getSmartFolders()
     set({ smartFolders })
-  },
-
-  getFilteredSounds: () => {
-    const { sounds, sortBy, sortOrder, formatFilter, selectedTagId, tags } = get()
-    let result = [...sounds]
-    if (formatFilter) {
-      result = result.filter((s) => s.file_ext.toLowerCase() === formatFilter.toLowerCase())
-    }
-    if (selectedTagId) {
-      const tagName = tags.find((t) => t.id === selectedTagId)?.name
-      if (tagName) {
-        result = result.filter(
-          (s) => !!s.tags && s.tags.split(',').some((n) => n.trim() === tagName)
-        )
-      }
-    }
-    result.sort((a, b) => {
-      let cmp = 0
-      switch (sortBy) {
-        case 'name':
-          cmp = a.file_name.localeCompare(b.file_name, undefined, { sensitivity: 'base' })
-          break
-        case 'duration':
-          cmp = (a.duration_ms || 0) - (b.duration_ms || 0)
-          break
-        case 'size':
-          cmp = a.file_size - b.file_size
-          break
-        case 'date':
-          cmp = new Date(a.imported_at).getTime() - new Date(b.imported_at).getTime()
-          break
-      }
-      return sortOrder === 'asc' ? cmp : -cmp
-    })
-    return result
   },
 
   analyzeSound: async (soundId: string) => {

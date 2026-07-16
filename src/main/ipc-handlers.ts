@@ -2274,6 +2274,180 @@ function ensureParentCategory(category: string, now: string): string | null {
     return { success: true, affected }
   })
 
+  // 批量收藏：将一组音效标记为 is_starred=1
+  ipcMain.handle('sound:batchStar', (_event, ids: string[]) => {
+    if (!ids || ids.length === 0) return { success: true, affected: 0 }
+    const placeholders = ids.map(() => '?').join(',')
+    const res = db.prepare(`UPDATE sounds SET is_starred = 1, updated_at = ? WHERE id IN (${placeholders})`)
+      .run(new Date().toISOString(), ...ids)
+    return { success: true, affected: res.changes }
+  })
+
+  // 批量导出：把一组音效复制到目标目录（自动处理文件名冲突）
+  ipcMain.handle('sound:batchExport', async (_event, ids: string[], targetDir: string) => {
+    try {
+      await access(targetDir)
+      const rows = db.prepare(`
+        SELECT id, file_path, file_name FROM sounds WHERE id IN (${ids.map(() => '?').join(',')})
+      `).all(...ids) as Array<{ id: string; file_path: string; file_name: string }>
+      let copied = 0
+      let skipped = 0
+      let missing = 0
+      const used = new Set<string>()
+      for (const r of rows) {
+        try {
+          await access(r.file_path)
+        } catch {
+          missing++
+          continue
+        }
+        let base = basename(r.file_path)
+        if (used.has(base)) {
+          base = `${r.id.slice(0, 8)}_${base}`
+        }
+        used.add(base)
+        try {
+          await copyFile(r.file_path, join(targetDir, base))
+          copied++
+        } catch {
+          skipped++
+        }
+      }
+      return { success: true, copied, skipped, missing }
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
+    }
+  })
+
+  // 多 NLE 格式导出：将一组音效导出为剪辑软件可识别的工程文件
+  // format: 'premiere'(FCP7 XMEML) | 'fcpx'(FCPXML) | 'resolve'(FCPXML) | 'csv'
+  ipcMain.handle('sound:exportNLE', async (_event, ids: string[], format: string, targetDir: string) => {
+    try {
+      await access(targetDir)
+      const rows = db.prepare(`
+        SELECT id, file_path, file_name, duration_ms, sample_rate, channels, bitrate_kbps, file_ext, file_size, tags
+        FROM sounds WHERE id IN (${ids.map(() => '?').join(',')})
+      `).all(...ids) as Array<{
+        id: string; file_path: string; file_name: string; duration_ms: number | null
+        sample_rate: number | null; channels: number | null; bitrate_kbps: number | null
+        file_ext: string; file_size: number; tags: string | null
+      }>
+
+      const durOf = (r: { duration_ms: number | null }) => Math.max(1, (r.duration_ms || 0) / 1000)
+      const framesOf = (sec: number) => Math.max(1, Math.round(sec * 30))
+      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+      const fileUrl = (p: string) => `file:///${p.replace(/\\/g, '/')}`
+      const ext = (p: string) => extname(p).replace('.', '').toLowerCase() || 'wav'
+
+      let content = ''
+      let outName = ''
+
+      if (format === 'csv') {
+        outName = 'SoundVault_Export.csv'
+        const header = ['id', 'file_name', 'file_path', 'duration_sec', 'format', 'sample_rate', 'channels', 'bitrate_kbps', 'size_bytes', 'tags']
+        const lines = [header.join(',')]
+        for (const r of rows) {
+          const cells = [
+            r.id, r.file_name, r.file_path, durOf(r).toFixed(2), ext(r.file_path),
+            r.sample_rate ?? '', r.channels ?? '', r.bitrate_kbps ?? '', r.file_size,
+            (r.tags || '')
+          ].map((c) => {
+            const s = String(c)
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+          })
+          lines.push(cells.join(','))
+        }
+        content = lines.join('\n')
+      } else if (format === 'premiere') {
+        outName = 'SoundVault_Premiere.xml'
+        let cursor = 0
+        const clips = rows.map((r) => {
+          const dur = durOf(r)
+          const fr = framesOf(dur)
+          const start = cursor
+          const end = cursor + fr
+          cursor = end
+          return `    <clipitem id="clip-${r.id}">
+      <name>${esc(r.file_name)}</name>
+      <duration>${fr}</duration>
+      <rate><timebase>30</timebase></rate>
+      <start>${start}</start>
+      <end>${end}</end>
+      <in>0</in>
+      <out>${fr}</out>
+      <file id="file-${r.id}">
+        <name>${esc(r.file_name)}</name>
+        <pathurl>${fileUrl(r.file_path)}</pathurl>
+        <media>
+          <audio>
+            <samplecharacteristics>
+              <samplerate>${r.sample_rate ?? 48000}</samplerate>
+              <channels>${r.channels ?? 2}</channels>
+            </samplecharacteristics>
+          </audio>
+        </media>
+      </file>
+    </clipitem>`
+        }).join('\n')
+        content = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE xmeml>
+<xmeml version="4">
+  <sequence id="SoundVault_Export">
+    <name>SoundVault Export</name>
+    <duration>${cursor}</duration>
+    <rate><timebase>30</timebase></rate>
+    <media>
+      <audio>
+        <track>
+${clips}
+        </track>
+      </audio>
+    </media>
+  </sequence>
+</xmeml>`
+      } else {
+        // FCPXML（Final Cut Pro X / DaVinci Resolve 通用）
+        outName = format === 'resolve' ? 'SoundVault_Resolve.fcpxml' : 'SoundVault_FCPXML.fcpxml'
+        const totalFrames = rows.reduce((acc, r) => acc + framesOf(durOf(r)), 0)
+        const assets = rows.map((r) => {
+          const fr = framesOf(durOf(r))
+          return `    <asset id="asset-${r.id}" name="${esc(r.file_name)}" src="${fileUrl(r.file_path)}" hasAudio="1" format="FFAudioFormat" duration="${fr}/30s"/>`
+        }).join('\n')
+        let cursor = 0
+        const clips = rows.map((r) => {
+          const fr = framesOf(durOf(r))
+          const offset = cursor
+          cursor += fr
+          return `        <asset-clip ref="asset-${r.id}" name="${esc(r.file_name)}" offset="${offset}/30s" duration="${fr}/30s" format="FFAudioFormat"/>`
+        }).join('\n')
+        content = `<?xml version="1.0" encoding="UTF-8"?>
+<fcpxml version="1.10">
+  <resources>
+    <format id="FFAudioFormat" name="FFAudioFormat"/>
+${assets}
+  </resources>
+  <library>
+    <event name="SoundVault Export">
+      <project name="SoundVault Export">
+        <sequence format="FFAudioFormat" duration="${totalFrames}/30s">
+          <spine>
+${clips}
+          </spine>
+        </sequence>
+      </project>
+    </event>
+  </library>
+</fcpxml>`
+      }
+
+      const outPath = join(targetDir, outName)
+      await writeFile(outPath, content, 'utf-8')
+      return { success: true, path: outPath, count: rows.length }
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
+    }
+  })
+
   // ---- Settings ----
 
   ipcMain.handle('settings:get', (_event, key: string) => {

@@ -15,6 +15,7 @@ import { RecycleBin } from './components/RecycleBin'
 import { OnboardingTour } from './components/OnboardingTour'
 import ScanDialog from './components/ScanDialog'
 import GeneratePanel from './components/GeneratePanel'
+import ExportNLEModal from './components/ExportNLEModal'
 import { Toaster, toast } from 'react-hot-toast'
 import { Star, Upload, FileInput, Tag, Search, RefreshCw, LayoutGrid, BarChart3, Undo2 } from 'lucide-react'
 import { SplashScreen } from './components/SplashScreen'
@@ -35,6 +36,7 @@ export default function App(): JSX.Element {
     selectedSoundId,
     showScanDialog,
     showGenerate,
+    showExportNLE,
     fontSize,
     theme,
     sortBy,
@@ -54,7 +56,8 @@ export default function App(): JSX.Element {
     refreshSmartFolders,
     selectSound,
     toggleScanDialog,
-    toggleGenerate
+    toggleGenerate,
+    toggleExportNLE
   } = useAppStore()
 
   const filteredSounds = useMemo(() => {
@@ -385,6 +388,7 @@ export default function App(): JSX.Element {
       {/* Modals */}
       <ScanDialog isOpen={showScanDialog} onClose={() => toggleScanDialog()} />
       <GeneratePanel isOpen={showGenerate} onClose={() => toggleGenerate()} />
+      <ExportNLEModal isOpen={showExportNLE} onClose={() => toggleExportNLE()} />
 
       {/* 音频库空白处右键菜单 */}
       {libraryMenu.pos && (

@@ -298,7 +298,8 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
       const curIdx = list.findIndex((s) => s.id === stateRef.current.selectedId)
 
       // 字符快速跳转（typeahead）：支持连续输入前缀，800ms 内有效
-      if (e.key.length === 1 && e.key !== ' ') {
+      // 排除 J/K/L（保留给播放 shuttle，避免与文件名首字母跳转冲突）
+      if (e.key.length === 1 && e.key !== ' ' && !['j', 'k', 'l'].includes(e.key.toLowerCase())) {
         e.preventDefault()
         typeaheadRef.current += e.key.toLowerCase()
         if (typeaheadTimerRef.current) clearTimeout(typeaheadTimerRef.current)
@@ -345,6 +346,29 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
           if (!sound) return
           if (playingIdRef.current === sound.id) stopPreview()
           else startPreview(sound)
+          break
+        }
+        // J/K/L 播放 shuttle：J 重头播放，K 暂停，L 播放
+        case 'j':
+        case 'J': {
+          e.preventDefault()
+          const idx = curIdx < 0 ? 0 : curIdx
+          const sound = list[idx]
+          if (sound) { stopPreview(); startPreview(sound) }
+          break
+        }
+        case 'k':
+        case 'K': {
+          e.preventDefault()
+          stopPreview()
+          break
+        }
+        case 'l':
+        case 'L': {
+          e.preventDefault()
+          const idx = curIdx < 0 ? 0 : curIdx
+          const sound = list[idx]
+          if (sound && playingIdRef.current !== sound.id) startPreview(sound)
           break
         }
         case 'Enter': {

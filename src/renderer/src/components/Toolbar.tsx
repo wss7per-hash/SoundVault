@@ -745,6 +745,13 @@ export function Toolbar(): JSX.Element {
           <Settings size={16} />
         </button>
         <button
+          onClick={() => useAppStore.getState().toggleExportNLE()}
+          className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light"
+          title="导出剪辑工程（Premiere / FCP / 达芬奇 / CSV）"
+        >
+          <FileDown size={16} />
+        </button>
+        <button
           onClick={() => setActiveView(activeView === 'stats' ? 'library' : 'stats')}
           className={`p-1.5 rounded-md transition-colors ${
             activeView === 'stats'

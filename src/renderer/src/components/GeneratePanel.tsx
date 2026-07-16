@@ -200,7 +200,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
   if (!isOpen) return null
 
   const meta = PROVIDER_META[config.provider]
-  const durMax = Math.min(meta.maxDur, 20) // UI 滑块上限统一 20s，Fal 长音频可在描述里说明
+  const durMax = meta.maxDur // 放开时长上限：Fal.ai 支持到 190s，ElevenLabs 20s
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -361,7 +361,7 @@ export default function GeneratePanel({ isOpen, onClose }: GeneratePanelProps): 
               />
               <div className="text-[11px] text-muted/60 mt-1">
                 {config.provider === 'fal'
-                  ? 'Fal.ai 最长支持 190s，滑块限制 20s；更长请在描述中说明'
+                  ? 'Fal.ai 最长支持 190s'
                   : 'ElevenLabs 单次最长 20s'}
               </div>
             </div>

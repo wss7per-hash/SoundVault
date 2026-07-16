@@ -117,6 +117,9 @@ export interface SoundVaultAPI {
   // Batch Operations
   batchDelete: (ids: string[]) => Promise<{ success: boolean }>
   batchTag: (soundIds: string[], tagNames: string[], action: 'add' | 'remove') => Promise<{ success: boolean; affected: number }>
+  batchStar: (ids: string[]) => Promise<{ success: boolean; affected: number }>
+  batchExport: (ids: string[], targetDir: string) => Promise<{ success: boolean; copied?: number; skipped?: number; missing?: number; message?: string }>
+  exportNLE: (ids: string[], format: 'premiere' | 'fcpx' | 'resolve' | 'csv', targetDir: string) => Promise<{ success: boolean; path?: string; count?: number; message?: string }>
 
   // Trash / Recycle Bin
   getTrash: () => Promise<SoundData[]>
