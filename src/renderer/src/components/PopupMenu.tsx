@@ -33,44 +33,19 @@ const MENU_MAX_H = 340
 /**
  * 通用右键菜单：通过 createPortal 挂到 document.body，
  * 固定定位、视口内夹紧，点击外部 / Esc / 滚动 / 缩放时自动关闭。
- * 菜单内部再次发生 contextmenu 时阻止浏览器原生菜单冒泡。
+ * 坐标直接用触发事件的 clientX/clientY（与 SoundGrid 项级菜单一致的可用模式）。
  */
 export function PopupMenu({ x, y, items, onClose }: PopupMenuProps): JSX.Element | null {
   const ref = useRef<HTMLDivElement>(null)
-  const mounted = useRef(true)
-  const [portalReady, setPortalReady] = useState(false)
-  // 用 state 缓存最终坐标，允许渲染后微调
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
-  // 确保 DOM body 已就绪再渲染 portal（防止 SSR/hydration 边界崩溃）
-  useEffect(() => {
-    setPortalReady(true)
-    return () => { setPortalReady(false) }
-  }, [])
+  // 坐标非有限值时直接不渲染，避免落到默认 (0,0) 造成"固定位置"假象
+  if (typeof x !== 'number' || typeof y !== 'number' || !isFinite(x) || !isFinite(y)) {
+    return null
+  }
 
-  useEffect(() => {
-    mounted.current = true
-    return () => { mounted.current = false }
-  }, [])
-
-  // 坐标计算：Portal 挂到 body 后用 clientX/clientY 直接定位 fixed 元素。
-  // 若检测到实际渲染位置与预期不符（Electron 缩放/DPI 边界情况），做一次校正。
-  useEffect(() => {
-    if (!portalReady) return
-    const left = Math.min(x, window.innerWidth - MENU_W - 8)
-    const top = Math.min(y, window.innerHeight - MENU_MAX_H - 8)
-    setPos({ left, top })
-    // Portal 首次挂载后一帧校验：如果菜单被裁剪或偏移，重新计算
-    const raf = requestAnimationFrame(() => {
-      if (!ref.current || !mounted.current) return
-      const rect = ref.current.getBoundingClientRect()
-      // 如果菜单右边缘超出窗口或有明显左偏移，强制修正
-      if (rect.right > window.innerWidth + 2 || rect.left < -2) {
-        setPos({ left: Math.max(8, Math.min(x, window.innerWidth - MENU_W - 8)), top: Math.max(0, top) })
-      }
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [portalReady, x, y])
+  const left = Math.max(8, Math.min(x, window.innerWidth - MENU_W - 8))
+  // 首帧 ref 尚未挂载，offsetHeight 为 undefined，回退到 MENU_MAX_H 足够夹紧
+  const top = Math.max(8, Math.min(y, window.innerHeight - (ref.current?.offsetHeight || MENU_MAX_H) - 8))
 
   useEffect(() => {
     const onPointerDown = (e: MouseEvent) => {
@@ -81,7 +56,7 @@ export function PopupMenu({ x, y, items, onClose }: PopupMenuProps): JSX.Element
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
-    const onScrollOrResize = () => { if (mounted.current) onClose() }
+    const onScrollOrResize = () => onClose()
     window.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('keydown', onKey)
     window.addEventListener('resize', onScrollOrResize)
@@ -94,13 +69,13 @@ export function PopupMenu({ x, y, items, onClose }: PopupMenuProps): JSX.Element
     }
   }, [onClose])
 
-  if (!portalReady || typeof document === 'undefined' || !document.body || !pos) return null
+  if (typeof document === 'undefined' || !document.body) return null
 
   const menu = (
     <div
       ref={ref}
       className="fixed z-[9999] w-[220px] max-h-[340px] overflow-y-auto py-1.5 rounded-xl border border-surface-border bg-surface-panel shadow-2xl"
-      style={{ left: pos.left, top: pos.top }}
+      style={{ left, top }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {items.map((it, i) => {
