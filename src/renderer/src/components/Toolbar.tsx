@@ -552,7 +552,7 @@ export function Toolbar(): JSX.Element {
               <FileDown size={14} className="text-emerald-400" />
               <div className="text-left">
               <div>备份元数据</div>
-              <div className="max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 transition-all duration-200 text-[10px] text-muted/60">把标签、备注、收藏夹、智能文件夹导出为 JSON 文件，方便迁移或灾备（不含音频文件本身）</div>
+              <div className="max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 transition-all duration-200 text-[10px] text-muted/60 whitespace-nowrap">导出标签/备注/收藏夹为 JSON（不含音频）</div>
               </div>
             </button>
 
@@ -565,7 +565,7 @@ export function Toolbar(): JSX.Element {
               <FileUp size={14} className="text-emerald-400" />
               <div className="text-left">
               <div>恢复元数据</div>
-              <div className="max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 transition-all duration-200 text-[10px] text-muted/60">选择之前备份的 JSON 文件，自动按文件指纹匹配当前库中的音效，把标签、备注、收藏等数据合并回来（不会重复添加）</div>
+              <div className="max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 transition-all duration-200 text-[10px] text-muted/60 whitespace-nowrap">从备份 JSON 恢复标签/备注/收藏（按指纹匹配）</div>
               </div>
             </button>
 
