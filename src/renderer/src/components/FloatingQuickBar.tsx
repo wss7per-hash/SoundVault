@@ -40,6 +40,7 @@ export function FloatingQuickBar(): JSX.Element {
   }
 
   const handleBatchDelete = async () => {
+    if (!confirm(`确定要删除选中的 ${selectedIds.length} 个音效吗？已删除项会进入回收站，可在回收站中恢复。`)) return
     try {
       await window.api.batchDelete(selectedIds)
       toast.success(`已删除 ${selectedIds.length} 个音效`)

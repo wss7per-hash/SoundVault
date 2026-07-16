@@ -138,15 +138,23 @@ export function Toolbar(): JSX.Element {
     }
   }, [])
 
+  // 搜索防抖：150ms 避免每次按键都触发 IPC+SQL
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleSearch = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      setSearchQuery(e.target.value)
-      // 统一走 store.refreshSounds：内部按 searchMode 决定 SQL 检索或全量加载，
-      // 并把排序/格式过滤下沉到 SQL。
-      await useAppStore.getState().refreshSounds()
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = e.target.value
+      setSearchQuery(v)
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+      searchTimerRef.current = setTimeout(() => {
+        searchTimerRef.current = null
+        void useAppStore.getState().refreshSounds()
+      }, 150)
     },
     [setSearchQuery]
   )
+  useEffect(() => {
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current) }
+  }, [])
 
   const viewMode = useAppStore((s) => s.viewMode)
   const setViewMode = useAppStore((s) => s.setViewMode)
@@ -636,7 +644,7 @@ export function Toolbar(): JSX.Element {
                   {SORT_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
-                      onClick={() => setSortBy(opt.value)}
+                      onClick={() => { setSortBy(opt.value); void refreshSounds() }}
                       className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
                         sortBy === opt.value
                           ? 'bg-accent/20 text-accent-light'
@@ -655,7 +663,7 @@ export function Toolbar(): JSX.Element {
                 <p className="text-xs text-muted mb-2">排序方向</p>
                 <div className="flex gap-1.5">
                   <button
-                    onClick={() => setSortOrder('asc')}
+                    onClick={() => { setSortOrder('asc'); void refreshSounds() }}
                     className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-colors ${
                       sortOrder === 'asc' ? 'bg-accent/20 text-accent-light' : 'text-muted-light hover:bg-surface-hover'
                     }`}
@@ -664,7 +672,7 @@ export function Toolbar(): JSX.Element {
                     升序
                   </button>
                   <button
-                    onClick={() => setSortOrder('desc')}
+                    onClick={() => { setSortOrder('desc'); void refreshSounds() }}
                     className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-colors ${
                       sortOrder === 'desc' ? 'bg-accent/20 text-accent-light' : 'text-muted-light hover:bg-surface-hover'
                     }`}
@@ -682,7 +690,7 @@ export function Toolbar(): JSX.Element {
                   {FORMAT_OPTIONS.map((opt) => (
                     <button
                       key={opt.value ?? 'all'}
-                      onClick={() => setFormatFilter(opt.value)}
+                      onClick={() => { setFormatFilter(opt.value); void refreshSounds() }}
                       className={`px-2 py-1.5 rounded-lg text-xs transition-colors ${
                         formatFilter === opt.value
                           ? 'bg-accent/20 text-accent-light'

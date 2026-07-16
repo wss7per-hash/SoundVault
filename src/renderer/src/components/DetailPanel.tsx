@@ -168,13 +168,12 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
 
   const handleOpenFolder = useCallback(async () => {
     try {
-      const dir = sound.file_path.substring(0, sound.file_path.lastIndexOf('\\'))
-      await navigator.clipboard.writeText(dir)
-      toast.success('文件夹路径已复制到剪贴板')
+      const res = await window.api.showItemInFolder(sound.id)
+      if (!res.success) toast.error(res.message || '打开失败')
     } catch {
       toast.error('操作未成功，请稍后重试')
     }
-  }, [sound.file_path])
+  }, [sound.id])
 
   // 首尾无缝循环
   const [loopMs, setLoopMs] = useState(30)

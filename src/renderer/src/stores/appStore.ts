@@ -204,7 +204,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   refreshSounds: async () => {
-    const { searchQuery, searchMode, sidebarTab, activeCollectionId, activeSmartFolderId } = get()
+    const { searchQuery, searchMode, sidebarTab, activeCollectionId, activeSmartFolderId, sortBy, sortOrder, formatFilter } = get()
     let sounds: SoundData[]
     if (sidebarTab === 'smart' && activeSmartFolderId) {
       // 智能文件夹：按规则过滤
@@ -216,20 +216,55 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         sounds = await window.api.getCollectionSounds(activeCollectionId)
       }
+    } else if (searchQuery && searchMode === 'normal') {
+      // 文本搜索
+      sounds = await window.api.searchSounds(searchQuery)
     } else {
-      // 普通模式 + 有查询：走 SQL LIKE（文本/名称精确匹配）
-      // 其余（语义模式 / 无查询）：取全量，排序与格式过滤下沉 SQL（规模化）
-      if (searchQuery && searchMode === 'normal') {
-        sounds = await window.api.searchSounds(searchQuery)
-      } else {
-        const { sortBy, sortOrder, formatFilter } = get()
-        sounds = await window.api.getSounds({
-          sortBy,
-          sortOrder,
-          format: formatFilter || undefined
-        })
-      }
+      // 普通模式：排序与格式过滤下沉 SQL
+      sounds = await window.api.getSounds({
+        sortBy,
+        sortOrder,
+        format: formatFilter || undefined
+      })
     }
+
+    // 对专用 handler（智能文件夹/收藏夹/搜索）结果做客户端排序与格式过滤
+    // 这些 handler 不接受 sort/filter 参数，但 UI 控件在特殊视图下仍可交互
+    const needsClientSort = sidebarTab === 'smart' || sidebarTab === 'collections' || (searchQuery && searchMode === 'normal')
+    if (needsClientSort) {
+      // 格式过滤
+      if (formatFilter) {
+        sounds = sounds.filter((s) => (s.file_ext || '').toLowerCase().replace(/^\./, '') === formatFilter.toLowerCase())
+      }
+      // 排序
+      sounds = [...sounds].sort((a, b) => {
+        let va: any, vb: any
+        switch (sortBy) {
+          case 'name':
+            va = (a.file_name || '').toLowerCase()
+            vb = (b.file_name || '').toLowerCase()
+            break
+          case 'duration':
+            va = a.duration_ms ?? 0
+            vb = b.duration_ms ?? 0
+            break
+          case 'size':
+            va = a.file_size ?? 0
+            vb = b.file_size ?? 0
+            break
+          case 'date':
+          default:
+            va = new Date(a.imported_at || a.created_at || 0).getTime()
+            vb = new Date(b.imported_at || b.created_at || 0).getTime()
+            break
+        }
+        if (typeof va === 'string') {
+          return sortOrder === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+        }
+        return sortOrder === 'asc' ? va - vb : vb - va
+      })
+    }
+
     set({ sounds })
   },
 

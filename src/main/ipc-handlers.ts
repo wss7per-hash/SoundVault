@@ -455,7 +455,7 @@ export function registerIpcHandlers(): void {
     const params: unknown[] = []
     let where = 'WHERE (s.is_trashed = 0 OR s.is_trashed IS NULL)'
     if (opts?.format) {
-      where += ' AND LOWER(s.file_ext) = LOWER(?)'
+      where += " AND LOWER(REPLACE(s.file_ext, '.', '')) = LOWER(REPLACE(?, '.', ''))"
       params.push(opts.format)
     }
     const sql = `
@@ -468,7 +468,10 @@ export function registerIpcHandlers(): void {
       ${where}
       ORDER BY ${orderBy} ${orderDir}
     `
-    return db.prepare(sql).all(...params)
+    console.log('[sound:getAll] opts=', opts, 'sql=', sql, 'params=', params)
+    const rows = db.prepare(sql).all(...params)
+    console.log('[sound:getAll] returned', rows.length, 'rows')
+    return rows
   })
 
   ipcMain.handle('sound:getById', (_event, id: string) => {
@@ -658,7 +661,7 @@ export function registerIpcHandlers(): void {
     const extRows = db.prepare(`SELECT file_ext as ext, COUNT(*) as c FROM sounds WHERE ${notTrashed} GROUP BY file_ext`).all() as Array<{ ext: string; c: number }>
     const byExt = { wav: 0, mp3: 0, flac: 0, other: 0 }
     for (const r of extRows) {
-      const e = (r.ext || '').toLowerCase()
+      const e = (r.ext || '').toLowerCase().replace(/^\./, '')
       if (e === 'wav' || e === 'wave') byExt.wav += r.c
       else if (e === 'mp3') byExt.mp3 += r.c
       else if (e === 'flac') byExt.flac += r.c
@@ -2241,11 +2244,13 @@ function ensureParentCategory(category: string, now: string): string | null {
         try { await rm(r.file_path, { force: true }) } catch { /* 文件可能已不存在 */ }
       }
     }
-    // 删除关联数据（标签关联 + 收藏夹关联）
-    db.prepare(`DELETE FROM sound_tags WHERE sound_id IN (${placeholders})`).run(...ids)
-    db.prepare(`DELETE FROM collection_sounds WHERE sound_id IN (${placeholders})`).run(...ids)
-    // 最后删主记录
-    db.prepare(`DELETE FROM sounds WHERE id IN (${placeholders})`).run(...ids)
+    // 事务包裹：关联删除 + 主记录删除原子执行，防止进程崩溃时数据不一致
+    const del = db.transaction(() => {
+      db.prepare(`DELETE FROM sound_tags WHERE sound_id IN (${placeholders})`).run(...ids)
+      db.prepare(`DELETE FROM collection_sounds WHERE sound_id IN (${placeholders})`).run(...ids)
+      db.prepare(`DELETE FROM sounds WHERE id IN (${placeholders})`).run(...ids)
+    })
+    del()
     return { success: true, deletedLocal: !!deleteLocalFile }
   })
 

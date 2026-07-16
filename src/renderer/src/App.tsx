@@ -63,7 +63,7 @@ export default function App(): JSX.Element {
   const filteredSounds = useMemo(() => {
     let result = [...sounds]
     if (formatFilter) {
-      result = result.filter((s) => s.file_ext.toLowerCase() === formatFilter.toLowerCase())
+      result = result.filter((s) => (s.file_ext || '').toLowerCase().replace(/^\./, '') === formatFilter.toLowerCase())
     }
     // Tag filter: resolve selected tag id -> name, then keep sounds whose
     // comma-joined `tags` string contains that name.
