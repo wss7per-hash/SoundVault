@@ -39,5 +39,9 @@ mac:
 linux:
   target: AppImage
   icon: resources/icon.png
+electronLanguages:
+  - en-US
+  - zh-CN
+  - zh-TW
 asarUnpack:
   - "**/*.node"
