@@ -106,6 +106,11 @@ const api = {
   deleteTag: (tagId: string) => ipcRenderer.invoke('tag:delete', tagId),
   updateTag: (tagId: string, updates: { name?: string; color?: string; parent_id?: string | null }) =>
     ipcRenderer.invoke('tag:update', tagId, updates),
+  // 合并标签前预览真实影响数（该标签关联的音效数）
+  getTagSoundCount: (tagId: string) => ipcRenderer.invoke('tag:getSoundCount', tagId) as Promise<number>,
+  // 合并标签：src→dst 单条 SQL 事务完成迁移+删除，返回真实迁移数，接入撤销栈
+  mergeTags: (srcId: string, dstId: string) =>
+    ipcRenderer.invoke('tag:merge', srcId, dstId) as Promise<{ success: boolean; migrated: number; error?: string }>,
   getTagStats: () => ipcRenderer.invoke('tag:getStats'),
   getOnomatopoeiaCloud: () => ipcRenderer.invoke('tag:getOnomatopoeiaCloud') as Promise<TagStatData[]>,
   setOnomatopoeia: (soundId: string, json: string) =>
@@ -159,6 +164,35 @@ const api = {
   getTrash: () => ipcRenderer.invoke('sound:getTrash'),
   restoreSounds: (ids: string[]) => ipcRenderer.invoke('sound:restore', ids),
   permanentDelete: (ids: string[], deleteLocalFile?: boolean) => ipcRenderer.invoke('sound:permanentDelete', ids, deleteLocalFile),
+
+  // Metadata backup / restore (lightweight JSON, no audio copy)
+  exportMetadata: () =>
+    ipcRenderer.invoke('metadata:export') as Promise<{
+      success: boolean
+      cancelled?: boolean
+      filePath?: string
+      counts?: { sounds: number; tags: number; collections: number; smartFolders: number }
+      error?: string
+    }>,
+  importMetadata: () =>
+    ipcRenderer.invoke('metadata:import') as Promise<{
+      success: boolean
+      cancelled?: boolean
+      matched?: number
+      total?: number
+      tagsApplied?: number
+      notesApplied?: number
+      starredApplied?: number
+      colsTouched?: number
+      sfCreated?: number
+      error?: string
+    }>,
+
+  // Undo stack (in-memory session stack, multi-step Ctrl+Z)
+  undoPeek: () => ipcRenderer.invoke('undo:peek') as Promise<{ label: string; count: number } | null>,
+  undoPerform: () =>
+    ipcRenderer.invoke('undo:perform') as Promise<{ success: boolean; label: string | null; count: number; error?: string }>,
+  undoClear: () => ipcRenderer.invoke('undo:clear') as Promise<{ success: boolean }>,
 
   // Settings
   getSetting: (key: string) => ipcRenderer.invoke('settings:get', key),

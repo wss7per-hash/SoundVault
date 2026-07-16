@@ -197,6 +197,45 @@ async function importToAE(filePath: string): Promise<{ success: boolean; name?: 
 export function registerIpcHandlers(): void {
   const db = getDatabase()
 
+  // ---- Undo stack (in-memory, per session) ----
+  // 每个可撤销操作 push 一个 { label, undo() } 快照；Ctrl+Z 弹栈顶执行。
+  // 覆盖：合并标签 / 删标签 / 删音效（软删）。关闭软件即清空。
+  interface UndoEntry {
+    label: string
+    timestamp: number
+    undo: () => void
+  }
+  const undoStack: UndoEntry[] = []
+  const MAX_UNDO = 50
+  const pushUndo = (label: string, undo: () => void): void => {
+    undoStack.push({ label, timestamp: Date.now(), undo })
+    if (undoStack.length > MAX_UNDO) undoStack.shift()
+  }
+
+  // 栈顶描述 + 剩余可撤销数，供工具栏按钮/快捷键提示显示
+  ipcMain.handle('undo:peek', () => {
+    if (undoStack.length === 0) return null
+    const top = undoStack[undoStack.length - 1]
+    return { label: top.label, count: undoStack.length }
+  })
+
+  // 执行一次撤销：弹栈顶并回滚
+  ipcMain.handle('undo:perform', () => {
+    const entry = undoStack.pop()
+    if (!entry) return { success: false, label: null, count: 0 }
+    try {
+      entry.undo()
+      return { success: true, label: entry.label, count: undoStack.length }
+    } catch (err) {
+      return { success: false, label: entry.label, count: undoStack.length, error: (err as Error).message }
+    }
+  })
+
+  ipcMain.handle('undo:clear', () => {
+    undoStack.length = 0
+    return { success: true }
+  })
+
   ipcMain.handle('app:getVersion', () => app.getVersion())
 
   // 从渲染进程发起系统级文件拖拽：把音频作为真实文件拖出，
@@ -1066,6 +1105,241 @@ function ensureParentCategory(category: string, now: string): string | null {
     return { success: true }
   })
 
+  // 某标签下的音效数（供合并前显示"将迁移 N 个音效"真实计数）
+  ipcMain.handle('tag:getSoundCount', (_event, tagId: string) => {
+    const r = db.prepare('SELECT COUNT(*) AS c FROM sound_tags WHERE tag_id = ?').get(tagId) as { c: number }
+    return r?.c || 0
+  })
+
+  // 合并标签：把 src 的所有音效关联迁移到 dst，再删除 src 标签。单条事务完成。
+  // 返回真实迁移数；操作接入撤销栈（可完整回滚：重建 src 标签 + 恢复关联 + 撤掉新增到 dst 的关联）。
+  ipcMain.handle('tag:merge', (_event, srcId: string, dstId: string) => {
+    if (srcId === dstId) return { success: false, migrated: 0, error: '源标签与目标标签相同' }
+    const srcTag = db.prepare('SELECT * FROM tags WHERE id = ?').get(srcId) as
+      | { id: string; name: string; parent_id: string | null; color: string | null; icon: string | null; sort_order: number; created_at: string }
+      | undefined
+    const dstTag = db.prepare('SELECT id, name FROM tags WHERE id = ?').get(dstId) as { id: string; name: string } | undefined
+    if (!srcTag || !dstTag) return { success: false, migrated: 0, error: '标签不存在' }
+
+    // 回滚快照
+    const srcLinks = db.prepare('SELECT sound_id, confidence, is_manual FROM sound_tags WHERE tag_id = ?').all(srcId) as
+      Array<{ sound_id: string; confidence: number | null; is_manual: number }>
+    const srcAliases = db.prepare('SELECT alias FROM tag_aliases WHERE tag_id = ?').all(srcId) as Array<{ alias: string }>
+    const dstExisting = new Set(
+      (db.prepare('SELECT sound_id FROM sound_tags WHERE tag_id = ?').all(dstId) as Array<{ sound_id: string }>).map((r) => r.sound_id)
+    )
+    // 迁移后"新加到 dst"的音效（原本没有 dst 的那些）——撤销时需从 dst 移除
+    const newlyAddedToDst = srcLinks.map((l) => l.sound_id).filter((sid) => !dstExisting.has(sid))
+    const migrated = srcLinks.length
+
+    const tx = db.transaction(() => {
+      // 能迁的迁到 dst（音效已有 dst 的会被 IGNORE 跳过，留下残留 src 行）
+      db.prepare('UPDATE OR IGNORE sound_tags SET tag_id = ? WHERE tag_id = ?').run(dstId, srcId)
+      // 清残留 src 关联 + 别名 + 标签本身
+      db.prepare('DELETE FROM sound_tags WHERE tag_id = ?').run(srcId)
+      db.prepare('DELETE FROM tag_aliases WHERE tag_id = ?').run(srcId)
+      db.prepare('DELETE FROM tags WHERE id = ?').run(srcId)
+    })
+    tx()
+
+    pushUndo(`合并标签「${srcTag.name}」→「${dstTag.name}」`, () => {
+      const rtx = db.transaction(() => {
+        db.prepare(
+          'INSERT OR IGNORE INTO tags (id, name, parent_id, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(srcTag.id, srcTag.name, srcTag.parent_id, srcTag.color, srcTag.icon, srcTag.sort_order, srcTag.created_at)
+        const insLink = db.prepare('INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)')
+        for (const l of srcLinks) insLink.run(l.sound_id, srcTag.id, l.confidence, l.is_manual)
+        const insAlias = db.prepare('INSERT OR IGNORE INTO tag_aliases (tag_id, alias) VALUES (?, ?)')
+        for (const a of srcAliases) insAlias.run(srcTag.id, a.alias)
+        const delNew = db.prepare('DELETE FROM sound_tags WHERE sound_id = ? AND tag_id = ?')
+        for (const sid of newlyAddedToDst) delNew.run(sid, dstId)
+      })
+      rtx()
+    })
+
+    return { success: true, migrated }
+  })
+
+  // ---- Metadata backup / restore (lightweight JSON, no audio copy) ----
+  // 导出全库标签体系 + 每个音效的标签/备注/星标 + 收藏(collections) + 智能文件夹为 JSON。
+  // 音效以 file_hash 为锚点，导入时按 hash 匹配当前库、合并叠加，不动实际音频文件。
+  ipcMain.handle('metadata:export', async () => {
+    try {
+      const sounds = db.prepare(
+        'SELECT id, file_hash, file_path, file_name, notes, is_starred FROM sounds WHERE is_trashed = 0 OR is_trashed IS NULL'
+      ).all() as Array<{ id: string; file_hash: string; file_path: string; file_name: string; notes: string | null; is_starred: number }>
+      const idToHash = new Map(sounds.map((s) => [s.id, s.file_hash]))
+      const tags = db.prepare('SELECT * FROM tags').all() as Array<{ id: string; name: string; parent_id: string | null; color: string | null; icon: string | null }>
+      const tagIdToName = new Map(tags.map((t) => [t.id, t.name]))
+      const soundTags = db.prepare('SELECT sound_id, tag_id, confidence, is_manual FROM sound_tags').all() as
+        Array<{ sound_id: string; tag_id: string; confidence: number | null; is_manual: number }>
+      const linksBySound = new Map<string, Array<{ tag_id: string; confidence: number | null; is_manual: number }>>()
+      for (const st of soundTags) {
+        if (!linksBySound.has(st.sound_id)) linksBySound.set(st.sound_id, [])
+        linksBySound.get(st.sound_id)!.push(st)
+      }
+      const collections = db.prepare('SELECT * FROM collections').all() as Array<{ id: string; name: string; description: string | null; color: string | null }>
+      const collectionSounds = db.prepare('SELECT collection_id, sound_id, sort_order FROM collection_sounds').all() as
+        Array<{ collection_id: string; sound_id: string; sort_order: number }>
+      const smartFolders = db.prepare('SELECT name, conditions FROM smart_folders').all() as Array<{ name: string; conditions: string }>
+
+      const soundMeta = sounds.map((s) => ({
+        file_hash: s.file_hash,
+        file_name: s.file_name,
+        rel_path: s.file_path,
+        notes: s.notes || null,
+        is_starred: s.is_starred ? 1 : 0,
+        tags: (linksBySound.get(s.id) || [])
+          .map((l) => ({ name: tagIdToName.get(l.tag_id), confidence: l.confidence, is_manual: l.is_manual }))
+          .filter((t) => !!t.name)
+      }))
+      const cols = collections.map((c) => ({
+        name: c.name,
+        description: c.description,
+        color: c.color,
+        sounds: collectionSounds
+          .filter((cs) => cs.collection_id === c.id)
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((cs) => idToHash.get(cs.sound_id))
+          .filter((h): h is string => !!h)
+      }))
+      const tagList = tags.map((t) => ({
+        name: t.name,
+        parent_name: t.parent_id ? tagIdToName.get(t.parent_id) || null : null,
+        color: t.color,
+        icon: t.icon
+      }))
+
+      const payload = {
+        app: 'SoundVault',
+        type: 'metadata-backup',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        counts: { sounds: soundMeta.length, tags: tagList.length, collections: cols.length, smartFolders: smartFolders.length },
+        tags: tagList,
+        sounds: soundMeta,
+        collections: cols,
+        smartFolders
+      }
+
+      const defaultName = `SoundVault-Metadata-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`
+      const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+      const { canceled, filePath } = await dialog.showSaveDialog(win!, {
+        title: '备份元数据',
+        defaultPath: defaultName,
+        filters: [{ name: 'JSON 备份', extensions: ['json'] }]
+      })
+      if (canceled || !filePath) return { success: false, cancelled: true }
+      await writeFile(filePath, JSON.stringify(payload, null, 2), 'utf-8')
+      return { success: true, filePath, counts: payload.counts }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
+  })
+
+  ipcMain.handle('metadata:import', async () => {
+    try {
+      const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+      const { canceled, filePaths } = await dialog.showOpenDialog(win!, {
+        title: '恢复元数据',
+        filters: [{ name: 'JSON 备份', extensions: ['json'] }],
+        properties: ['openFile']
+      })
+      if (canceled || !filePaths[0]) return { success: false, cancelled: true }
+
+      const raw = await readFile(filePaths[0], 'utf-8')
+      let data: any
+      try {
+        data = JSON.parse(raw)
+      } catch {
+        return { success: false, error: 'JSON 解析失败，文件可能已损坏' }
+      }
+      if (!data || data.app !== 'SoundVault' || data.type !== 'metadata-backup') {
+        return { success: false, error: '这不是有效的 SoundVault 元数据备份文件' }
+      }
+
+      const hashToId = new Map(
+        (db.prepare('SELECT id, file_hash FROM sounds').all() as Array<{ id: string; file_hash: string }>).map((s) => [s.file_hash, s.id])
+      )
+      const now = new Date().toISOString()
+      let matched = 0
+      let tagsApplied = 0
+      let notesApplied = 0
+      let starredApplied = 0
+      let colsTouched = 0
+      let sfCreated = 0
+
+      const tx = db.transaction(() => {
+        // 1. 先确保所有标签存在（按 name）
+        const ensureTag = db.prepare('INSERT OR IGNORE INTO tags (id, name, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, 0, ?)')
+        for (const t of (data.tags || []) as Array<any>) ensureTag.run(uuidv4(), t.name, t.color || null, t.icon || null, now)
+        const nameToTagId = new Map(
+          (db.prepare('SELECT id, name FROM tags').all() as Array<{ id: string; name: string }>).map((t) => [t.name, t.id])
+        )
+        // 2. 补父子关系（仅当当前无父时）
+        for (const t of (data.tags || []) as Array<any>) {
+          if (t.parent_name && nameToTagId.has(t.name) && nameToTagId.has(t.parent_name)) {
+            db.prepare('UPDATE tags SET parent_id = ? WHERE id = ? AND parent_id IS NULL')
+              .run(nameToTagId.get(t.parent_name), nameToTagId.get(t.name))
+          }
+        }
+        // 3. 每个音效：合并叠加 标签 / 备注(仅当前空时填) / 星标
+        const insLink = db.prepare('INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)')
+        const fillNote = db.prepare("UPDATE sounds SET notes = ?, updated_at = ? WHERE id = ? AND (notes IS NULL OR notes = '')")
+        const setStar = db.prepare('UPDATE sounds SET is_starred = 1 WHERE id = ?')
+        for (const sm of (data.sounds || []) as Array<any>) {
+          const sid = hashToId.get(sm.file_hash)
+          if (!sid) continue
+          matched++
+          if (sm.notes) { const r = fillNote.run(sm.notes, now, sid); if (r.changes > 0) notesApplied++ }
+          if (sm.is_starred) { setStar.run(sid); starredApplied++ }
+          for (const tg of (sm.tags || []) as Array<any>) {
+            const tid = nameToTagId.get(tg.name)
+            if (tid) { const r = insLink.run(sid, tid, tg.confidence ?? 1, tg.is_manual ?? 1); if (r.changes > 0) tagsApplied++ }
+          }
+        }
+        // 4. collections 按 name 合并（不存在则建），成员按 hash 叠加
+        for (const c of (data.collections || []) as Array<any>) {
+          let cid = (db.prepare('SELECT id FROM collections WHERE name = ?').get(c.name) as { id: string } | undefined)?.id
+          if (!cid) {
+            cid = uuidv4()
+            db.prepare('INSERT INTO collections (id, name, description, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+              .run(cid, c.name, c.description || null, c.color || null, now, now)
+          }
+          colsTouched++
+          const insCS = db.prepare('INSERT OR IGNORE INTO collection_sounds (collection_id, sound_id, sort_order, added_at) VALUES (?, ?, 0, ?)')
+          for (const h of (c.sounds || []) as Array<string>) {
+            const sid = hashToId.get(h)
+            if (sid) insCS.run(cid, sid, now)
+          }
+        }
+        // 5. smart_folders 按 name 合并（仅新建缺失的）
+        for (const sf of (data.smartFolders || []) as Array<any>) {
+          const ex = db.prepare('SELECT id FROM smart_folders WHERE name = ?').get(sf.name)
+          if (!ex) {
+            db.prepare('INSERT INTO smart_folders (id, name, conditions, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+              .run(uuidv4(), sf.name, sf.conditions, now, now)
+            sfCreated++
+          }
+        }
+      })
+      tx()
+
+      return {
+        success: true,
+        matched,
+        total: (data.sounds || []).length,
+        tagsApplied,
+        notesApplied,
+        starredApplied,
+        colsTouched,
+        sfCreated
+      }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
+  })
+
   // ---- Library Export / Import (portable bundle, like Eagle) ----
 
   // Cancellation registry for in-flight exports, keyed by a token passed from the renderer.
@@ -1796,9 +2070,34 @@ function ensureParentCategory(category: string, now: string): string | null {
   // ---- Tag Management ----
 
   ipcMain.handle('tag:delete', (_event, tagId: string) => {
-    db.prepare('DELETE FROM sound_tags WHERE tag_id = ?').run(tagId)
-    db.prepare('DELETE FROM tag_aliases WHERE tag_id = ?').run(tagId)
-    db.prepare('DELETE FROM tags WHERE id = ?').run(tagId)
+    const tagRow = db.prepare('SELECT * FROM tags WHERE id = ?').get(tagId) as
+      | { id: string; name: string; parent_id: string | null; color: string | null; icon: string | null; sort_order: number; created_at: string }
+      | undefined
+    if (!tagRow) return { success: true }
+    const links = db.prepare('SELECT sound_id, confidence, is_manual FROM sound_tags WHERE tag_id = ?').all(tagId) as
+      Array<{ sound_id: string; confidence: number | null; is_manual: number }>
+    const aliases = db.prepare('SELECT alias FROM tag_aliases WHERE tag_id = ?').all(tagId) as Array<{ alias: string }>
+
+    const tx = db.transaction(() => {
+      db.prepare('DELETE FROM sound_tags WHERE tag_id = ?').run(tagId)
+      db.prepare('DELETE FROM tag_aliases WHERE tag_id = ?').run(tagId)
+      db.prepare('DELETE FROM tags WHERE id = ?').run(tagId)
+    })
+    tx()
+
+    pushUndo(`删除标签「${tagRow.name}」`, () => {
+      const rtx = db.transaction(() => {
+        db.prepare(
+          'INSERT OR IGNORE INTO tags (id, name, parent_id, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(tagRow.id, tagRow.name, tagRow.parent_id, tagRow.color, tagRow.icon, tagRow.sort_order, tagRow.created_at)
+        const insLink = db.prepare('INSERT OR IGNORE INTO sound_tags (sound_id, tag_id, confidence, is_manual) VALUES (?, ?, ?, ?)')
+        for (const l of links) insLink.run(l.sound_id, tagRow.id, l.confidence, l.is_manual)
+        const insAlias = db.prepare('INSERT OR IGNORE INTO tag_aliases (tag_id, alias) VALUES (?, ?)')
+        for (const a of aliases) insAlias.run(tagRow.id, a.alias)
+      })
+      rtx()
+    })
+
     return { success: true }
   })
 
@@ -1887,6 +2186,14 @@ function ensureParentCategory(category: string, now: string): string | null {
     db.prepare(`
       UPDATE sounds SET is_trashed = 1, updated_at = ? WHERE id IN (${placeholders})
     `).run(new Date().toISOString(), ...ids)
+
+    // 撤销：把这批音效从回收站恢复
+    const snapshotIds = [...ids]
+    pushUndo(`删除 ${snapshotIds.length} 个音效`, () => {
+      const ph = snapshotIds.map(() => '?').join(',')
+      db.prepare(`UPDATE sounds SET is_trashed = 0, updated_at = ? WHERE id IN (${ph})`)
+        .run(new Date().toISOString(), ...snapshotIds)
+    })
     return { success: true }
   })
 
@@ -2019,7 +2326,12 @@ function ensureParentCategory(category: string, now: string): string | null {
       if (exists) {
         await shell.trashItem(row.file_path)
       }
+      const nameRow = db.prepare('SELECT file_name FROM sounds WHERE id = ?').get(soundId) as { file_name: string } | undefined
       db.prepare('UPDATE sounds SET is_trashed = 1, updated_at = ? WHERE id = ?').run(new Date().toISOString(), soundId)
+      // 撤销：把该音效从回收站恢复（与 RecycleBin 恢复语义一致，仅还原库记录）
+      pushUndo(`删除音效「${nameRow?.file_name || soundId}」`, () => {
+        db.prepare('UPDATE sounds SET is_trashed = 0, updated_at = ? WHERE id = ?').run(new Date().toISOString(), soundId)
+      })
       return { success: true }
     } catch (err) {
       return { success: false, message: (err as Error).message }

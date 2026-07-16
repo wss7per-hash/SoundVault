@@ -74,6 +74,10 @@ export interface SoundVaultAPI {
   removeTagFromSound: (soundId: string, tagId: string) => Promise<{ success: boolean }>
   deleteTag: (tagId: string) => Promise<{ success: boolean }>
   updateTag: (tagId: string, updates: { name?: string; color?: string; parent_id?: string | null }) => Promise<{ success: boolean }>
+  // 合并标签前预览真实影响数（该标签关联的音效数）
+  getTagSoundCount: (tagId: string) => Promise<number>
+  // 合并标签：src→dst 单条 SQL 事务完成迁移+删除，返回真实迁移数，接入撤销栈
+  mergeTags: (srcId: string, dstId: string) => Promise<{ success: boolean; migrated: number; error?: string }>
   getTagStats: () => Promise<TagStatData[]>
 
   // Collections
@@ -118,6 +122,32 @@ export interface SoundVaultAPI {
   getTrash: () => Promise<SoundData[]>
   restoreSounds: (ids: string[]) => Promise<{ success: boolean }>
   permanentDelete: (ids: string[], deleteLocalFile?: boolean) => Promise<{ success: boolean; deletedLocal?: boolean }>
+
+  // Metadata backup / restore (lightweight JSON, no audio copy)
+  exportMetadata: () => Promise<{
+    success: boolean
+    cancelled?: boolean
+    filePath?: string
+    counts?: { sounds: number; tags: number; collections: number; smartFolders: number }
+    error?: string
+  }>
+  importMetadata: () => Promise<{
+    success: boolean
+    cancelled?: boolean
+    matched?: number
+    total?: number
+    tagsApplied?: number
+    notesApplied?: number
+    starredApplied?: number
+    colsTouched?: number
+    sfCreated?: number
+    error?: string
+  }>
+
+  // Undo stack (in-memory session stack, multi-step Ctrl+Z)
+  undoPeek: () => Promise<{ label: string; count: number } | null>
+  undoPerform: () => Promise<{ success: boolean; label: string | null; count: number; error?: string }>
+  undoClear: () => Promise<{ success: boolean }>
 
   // Settings
   getSetting: (key: string) => Promise<string | null>

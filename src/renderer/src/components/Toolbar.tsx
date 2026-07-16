@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
-import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, FolderSearch, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown } from 'lucide-react'
+import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, FolderSearch, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown, FileDown, FileUp, Undo2 } from 'lucide-react'
 import { ExportDialog } from './ExportDialog'
 
 const SORT_OPTIONS = [
@@ -263,6 +263,89 @@ export function Toolbar(): JSX.Element {
     }
   }, [])
 
+  // 元数据备份 / 恢复（轻量 JSON，不含音频文件）
+  const [metaBusy, setMetaBusy] = useState<null | 'export' | 'import'>(null)
+  const handleExportMetadata = useCallback(async () => {
+    setMetaBusy('export')
+    try {
+      const res = await window.api.exportMetadata()
+      if (res.cancelled) return
+      if (res.success && res.counts) {
+        const c = res.counts
+        toast.success(`已备份元数据：${c.sounds} 音效 · ${c.tags} 标签 · ${c.collections} 收藏 · ${c.smartFolders} 智能夹`)
+      } else {
+        toast.error(res.error || '备份元数据失败')
+      }
+    } catch {
+      toast.error('备份元数据时出错，请稍后重试')
+    } finally {
+      setMetaBusy(null)
+    }
+  }, [])
+
+  const handleImportMetadata = useCallback(async () => {
+    setMetaBusy('import')
+    try {
+      const res = await window.api.importMetadata()
+      if (res.cancelled) return
+      if (res.success) {
+        const store = useAppStore.getState()
+        await Promise.all([
+          store.refreshSounds(),
+          store.refreshTags(),
+          store.refreshTagStats(),
+          store.refreshStats(),
+          store.refreshCollections(),
+          store.refreshSmartFolders()
+        ])
+        toast.success(
+          `已恢复元数据：匹配 ${res.matched}/${res.total} 个音效 · 补标签 ${res.tagsApplied} · 备注 ${res.notesApplied} · 星标 ${res.starredApplied} · 收藏 ${res.colsTouched} · 新建智能夹 ${res.sfCreated}`,
+          { duration: 6000 }
+        )
+      } else {
+        toast.error(res.error || '恢复元数据失败')
+      }
+    } catch {
+      toast.error('恢复元数据时出错，请稍后重试')
+    } finally {
+      setMetaBusy(null)
+    }
+  }, [])
+
+  // 撤销栈状态（工具栏按钮显示栈顶描述 + 可撤销数），轻量轮询刷新
+  const [undoInfo, setUndoInfo] = useState<{ label: string; count: number } | null>(null)
+  useEffect(() => {
+    let alive = true
+    const tick = async () => {
+      try {
+        const info = await window.api.undoPeek()
+        if (alive) setUndoInfo(info)
+      } catch { /* ignore */ }
+    }
+    tick()
+    const t = setInterval(tick, 1500)
+    return () => { alive = false; clearInterval(t) }
+  }, [])
+
+  const handleUndo = useCallback(async () => {
+    const res = await window.api.undoPerform()
+    if (res.success) {
+      toast.success(`已撤销：${res.label}`)
+      const store = useAppStore.getState()
+      await Promise.all([
+        store.refreshSounds(),
+        store.refreshTags(),
+        store.refreshTagStats(),
+        store.refreshStats(),
+        store.refreshCollections(),
+        store.refreshSmartFolders()
+      ])
+      setUndoInfo(await window.api.undoPeek())
+    } else if (res.label !== null) {
+      toast.error(`撤销失败${res.error ? '：' + res.error : ''}`)
+    }
+  }, [])
+
   // 清理无效文件：先扫描统计，再确认永久删除缺失条目
   const [cleanupScanning, setCleanupScanning] = useState(false)
   const handleCleanupScan = useCallback(async () => {
@@ -444,6 +527,34 @@ export function Toolbar(): JSX.Element {
 
             <div className="h-px bg-surface-border/50 my-1.5" />
 
+            {/* Metadata backup — lightweight JSON (tags/notes/starred/collections/smart folders) */}
+            <button
+              onClick={() => { setShowLibMenu(false); handleExportMetadata() }}
+              disabled={busy !== null || exportState !== null || metaBusy !== null}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
+            >
+              <FileDown size={14} className="text-emerald-400" />
+              <div className="text-left">
+                <div>备份元数据</div>
+                <div className="text-[10px] text-muted/60">导出标签/备注/收藏/智能夹为 JSON（不含音频）</div>
+              </div>
+            </button>
+
+            {/* Metadata restore — re-import JSON, match by file_hash + merge overlay */}
+            <button
+              onClick={() => { setShowLibMenu(false); handleImportMetadata() }}
+              disabled={busy !== null || exportState !== null || metaBusy !== null}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-light hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
+            >
+              <FileUp size={14} className="text-emerald-400" />
+              <div className="text-left">
+                <div>恢复元数据</div>
+                <div className="text-[10px] text-muted/60">按文件指纹匹配当前库，合并叠加标签/备注/收藏</div>
+              </div>
+            </button>
+
+            <div className="h-px bg-surface-border/50 my-1.5" />
+
             {/* Cleanup */}
             <button
               onClick={() => { setShowLibMenu(false); handleCleanupScan() }}
@@ -465,6 +576,24 @@ export function Toolbar(): JSX.Element {
       </div>
 
       <div className="flex items-center gap-1 no-drag ml-auto">
+        {/* Undo — 显示栈顶操作描述，Ctrl+Z 亦可 */}
+        {undoInfo && (
+          <>
+            <button
+              onClick={handleUndo}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-amber-300 hover:bg-amber-500/15 transition-colors max-w-[220px]"
+              title={`撤销：${undoInfo.label}（Ctrl+Z）· 还可撤销 ${undoInfo.count} 步`}
+            >
+              <Undo2 size={15} className="shrink-0" />
+              <span className="truncate">撤销「{undoInfo.label}」</span>
+              {undoInfo.count > 1 && (
+                <span className="shrink-0 text-[10px] text-amber-400/70 tabular-nums">×{undoInfo.count}</span>
+              )}
+            </button>
+            <div className="w-px h-5 bg-surface-border mx-1" />
+          </>
+        )}
+
         {/* Filter / Sort */}
         <div className="relative" ref={filterRef}>
           <button

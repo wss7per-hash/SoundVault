@@ -207,7 +207,31 @@ export default function App(): JSX.Element {
     return unsub
   }, [])
 
-  // Ctrl+A / Ctrl+D select all
+  // 执行一次撤销：调后端弹栈回滚，成功后刷新全部数据视图
+  const performUndo = useCallback(async () => {
+    const peek = await window.api.undoPeek()
+    if (!peek) {
+      toast('没有可撤销的操作', { icon: '↩️' })
+      return
+    }
+    const res = await window.api.undoPerform()
+    if (res.success) {
+      toast.success(`已撤销：${res.label}`)
+      const store = useAppStore.getState()
+      await Promise.all([
+        store.refreshSounds(),
+        store.refreshTags(),
+        store.refreshTagStats(),
+        store.refreshStats(),
+        store.refreshCollections(),
+        store.refreshSmartFolders()
+      ])
+    } else {
+      toast.error(`撤销失败${res.error ? '：' + res.error : ''}`)
+    }
+  }, [])
+
+  // Ctrl+A / Ctrl+D select all；Ctrl+Z 撤销
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't capture when in input/textarea
@@ -217,6 +241,10 @@ export default function App(): JSX.Element {
       if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
         e.preventDefault()
         useAppStore.getState().selectAll(filteredSounds.map((s) => s.id))
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+        e.preventDefault()
+        void performUndo()
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
         e.preventDefault()
@@ -229,7 +257,7 @@ export default function App(): JSX.Element {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [filteredSounds])
+  }, [filteredSounds, performUndo])
 
   const handleSelectSound = useCallback(
     (id: string) => { selectSound(selectedSoundId === id ? null : id) },

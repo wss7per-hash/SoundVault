@@ -263,37 +263,35 @@ export function TagTree(): JSX.Element {
     const dstTag = tags.find((t) => t.id === targetId)
     if (!srcTag || !dstTag) return
 
-    const confirmed = window.confirm(`将「${srcTag.name}」的所有音效合并到「${dstTag.name}」，然后删除「${srcTag.name}」？\n\n（使用该标签的音效将改标为「${dstTag.name}」）`)
+    // 合并前查询真实影响数（后端精确计数，而非前端粗略字符串匹配）
+    let affected = 0
+    try {
+      affected = await window.api.getTagSoundCount(srcTag.id)
+    } catch { /* 计数失败时退回 0，仍允许合并 */ }
+
+    const confirmed = window.confirm(
+      `将标签「${srcTag.name}」合并到「${dstTag.name}」并删除「${srcTag.name}」？\n\n` +
+      `将迁移 ${affected} 个音效到「${dstTag.name}」。\n` +
+      `此操作可通过 Ctrl+Z 撤销。`
+    )
     if (!confirmed) { setMergeMode(null); return }
 
     const toastId = toast.loading('正在合并标签...')
     try {
-      // 1. 获取所有使用了源标签的音效 ID（通过 store 的 sounds 数据）
-      const allSounds = useAppStore.getState().sounds
-      const affectedSoundIds = allSounds
-        .filter((s) => s.tags?.includes(srcTag.name))
-        .map((s) => s.id)
-
-      // 2. 对每个受影响音效：移除源标签 + 添加目标标签
-      let migrated = 0
-      for (const sid of affectedSoundIds) {
-        try {
-          await window.api.removeTagFromSound(sid, mergeMode!)
-          await window.api.addTagToSound(sid, dstTag.name, 1)
-          migrated++
-        } catch { /* skip single failure */ }
-      }
-
-      // 3. 删除源标签
-      await window.api.deleteTag(mergeMode!)
-
+      // 后端单条 SQL 事务完成迁移+删除，返回真实迁移数，并接入撤销栈
+      const res = await window.api.mergeTags(srcTag.id, dstTag.id)
       toast.dismiss(toastId)
-      toast.success(`合并完成：${migrated} 个音效从「${srcTag.name}」迁移到「${dstTag.name}」`)
+      if (!res.success) {
+        toast.error(res.error || '合并标签失败')
+        setMergeMode(null)
+        return
+      }
+      toast.success(`合并完成：${res.migrated} 个音效从「${srcTag.name}」迁移到「${dstTag.name}」（Ctrl+Z 可撤销）`)
       setMergeMode(null)
       await Promise.all([refreshTags(), refreshTagStats(), refreshSounds()])
     } catch {
       toast.dismiss(toastId)
-      toast.error('合并标签时出错，部分音效可能未迁移成功，请稍后重试')
+      toast.error('合并标签时出错，请稍后重试')
       setMergeMode(null)
     }
   }, [mergeMode, tags, refreshTags, refreshTagStats, refreshSounds])
