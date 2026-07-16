@@ -18,6 +18,8 @@ const files = [
   'src/renderer/src/components/SmartFolderBuilder.tsx',
   'src/renderer/src/components/RecycleBin.tsx',
   'src/renderer/src/components/SoundTools.tsx',
+  'src/renderer/src/components/StatisticsPanel.tsx',
+  'src/renderer/src/components/ToolsPanel.tsx',
 ]
 
 // hex (lowercased key handled in code) -> semantic token
@@ -36,6 +38,7 @@ const map = {
   '#1e1e1c': 'surface-panel', '#b8b8b4': 'muted-light', '#9c92f6': 'accent-light',
   '#141412': 'surface', '#2f2f2c': 'surface-hover', '#6b5ed4': 'accent-light',
   '#4a4a48': 'surface-border', '#151513': 'surface', '#555': 'muted', '#6258c9': 'accent',
+  '#131311': 'surface', '#161615': 'surface', '#2a2a26': 'surface-panel', '#34342f': 'surface-hover',
 }
 const accentHexes = new Set(['#534ab7', '#6358d0', '#9c92f6'])
 

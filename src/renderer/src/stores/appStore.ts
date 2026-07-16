@@ -22,6 +22,7 @@ interface AppState {
   activeCollectionId: string | null
   activeSmartFolderId: string | null
   searchQuery: string
+  searchMode: 'normal' | 'semantic'
   viewMode: 'grid' | 'list'
   gridDensity: 'comfortable' | 'compact'
   activeView: 'library' | 'stats' | 'tools' | 'settings'
@@ -61,6 +62,7 @@ interface AppState {
   setActiveCollection: (id: string | null) => void
   setActiveSmartFolder: (id: string | null) => void
   setSearchQuery: (query: string) => void
+  setSearchMode: (mode: 'normal' | 'semantic') => void
   setViewMode: (mode: 'grid' | 'list') => void
   setGridDensity: (density: 'comfortable' | 'compact') => void
   setActiveView: (view: 'library' | 'stats' | 'tools' | 'settings') => void
@@ -107,6 +109,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeCollectionId: null,
   activeSmartFolderId: null,
   searchQuery: '',
+  searchMode: 'semantic',
   viewMode: 'grid',
   gridDensity: (typeof localStorage !== 'undefined' ? (localStorage.getItem('sv-grid-density') as 'comfortable' | 'compact') : null) || 'comfortable',
   activeView: 'library',
@@ -153,6 +156,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setActiveCollection: (id) => set({ activeCollectionId: id }),
   setActiveSmartFolder: (id) => set({ activeSmartFolderId: id }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+  setSearchMode: (mode) => set({ searchMode: mode }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setGridDensity: (density) => {
     try { if (typeof localStorage !== 'undefined') localStorage.setItem('sv-grid-density', density) } catch { /* ignore */ }
@@ -197,7 +201,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   refreshSounds: async () => {
-    const { searchQuery, sidebarTab, activeCollectionId, activeSmartFolderId } = get()
+    const { searchQuery, searchMode, sidebarTab, activeCollectionId, activeSmartFolderId } = get()
     let sounds: SoundData[]
     if (sidebarTab === 'smart' && activeSmartFolderId) {
       // 智能文件夹：按规则过滤
@@ -210,9 +214,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         sounds = await window.api.getCollectionSounds(activeCollectionId)
       }
     } else {
-      sounds = searchQuery
-        ? await window.api.searchSounds(searchQuery)
-        : await window.api.getSounds()
+      // 普通模式 + 有查询：走 SQL LIKE（文本/名称精确匹配）
+      // 其余（语义模式 / 无查询）：取全量，排序与格式过滤下沉 SQL（规模化）
+      if (searchQuery && searchMode === 'normal') {
+        sounds = await window.api.searchSounds(searchQuery)
+      } else {
+        const { sortBy, sortOrder, formatFilter } = get()
+        sounds = await window.api.getSounds({
+          sortBy,
+          sortOrder,
+          format: formatFilter || undefined
+        })
+      }
     }
     set({ sounds })
   },

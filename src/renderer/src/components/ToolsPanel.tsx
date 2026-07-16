@@ -37,17 +37,17 @@ export function ToolsPanel({ onClose }: ToolsPanelProps): JSX.Element {
   )
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-[#161615]" onContextMenu={toolsMenu.open}>
+    <div className="flex-1 flex flex-col min-h-0 bg-surface" onContextMenu={toolsMenu.open}>
       {/* Header */}
-      <div className="h-11 border-b border-[#2a2a28] flex items-center gap-3 px-4 shrink-0">
+      <div className="h-11 border-b border-surface-panel flex items-center gap-3 px-4 shrink-0">
         <Wrench size={16} className="text-accent-light" />
-        <span className="text-sm font-medium text-[#e8e6df]">工具</span>
-        <span className="text-xs text-[#6a6a64]">本地 DSP 处理 · 零外部依赖</span>
+        <span className="text-sm font-medium text-fg">工具</span>
+        <span className="text-xs text-muted-light">本地 DSP 处理 · 零外部依赖</span>
         <div className="ml-auto flex items-center gap-2">
           <select
             value={toolId ?? ''}
             onChange={(e) => setToolId(e.target.value || null)}
-            className="bg-[#1f1f1d] border border-[#2a2a28] rounded-md text-xs text-[#b8b8b4] px-2 py-1.5 max-w-[320px] outline-none focus:border-accent/50"
+            className="bg-surface-panel border border-surface-panel rounded-md text-xs text-muted-light px-2 py-1.5 max-w-[320px] outline-none focus:border-accent/50"
           >
             {sounds.length === 0 && <option value="">（库为空）</option>}
             {sounds.map((s) => (
@@ -58,7 +58,7 @@ export function ToolsPanel({ onClose }: ToolsPanelProps): JSX.Element {
           </select>
           <button
             onClick={onClose}
-            className="p-1.5 rounded hover:bg-[#252524] text-[#6a6a64] hover:text-[#b8b8b4] transition-colors"
+            className="p-1.5 rounded hover:bg-surface-card text-muted-light hover:text-muted-light transition-colors"
             title="关闭"
           >
             <X size={16} />
@@ -74,9 +74,9 @@ export function ToolsPanel({ onClose }: ToolsPanelProps): JSX.Element {
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center px-6 h-full">
-            <Wrench size={40} className="text-[#3a3a38] mb-3" />
-            <p className="text-sm text-[#8a8a82] mb-1">请先导入音效</p>
-            <p className="text-xs text-[#6a6a64]">工具需要对库中的音频进行处理，导入音频后即可使用。</p>
+            <Wrench size={40} className="text-surface-border mb-3" />
+            <p className="text-sm text-muted mb-1">请先导入音效</p>
+            <p className="text-xs text-muted-light">工具需要对库中的音频进行处理，导入音频后即可使用。</p>
           </div>
         )}
       </div>

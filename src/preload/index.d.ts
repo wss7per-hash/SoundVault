@@ -23,7 +23,7 @@ export interface SoundVaultAPI {
   importPaths: (paths: string[]) => Promise<{ imported: number; total: number }>
 
   // Sound CRUD
-  getSounds: () => Promise<SoundData[]>
+  getSounds: (opts?: { sortBy?: 'name' | 'duration' | 'size' | 'date'; sortOrder?: 'asc' | 'desc'; format?: string }) => Promise<SoundData[]>
   getSoundById: (id: string) => Promise<SoundData | undefined>
   deleteSound: (id: string) => Promise<{ success: boolean }>
   toggleStar: (id: string) => Promise<{ success: boolean; is_starred: boolean }>

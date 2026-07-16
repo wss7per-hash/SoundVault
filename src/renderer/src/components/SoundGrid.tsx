@@ -48,6 +48,28 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
   const gridDensity = useAppStore((s) => s.gridDensity)
   const isMultiSelecting = selectedIds.length > 0
 
+  // ── 窗口化渲染（虚拟化）：只挂载可视区附近的卡片，避免万级 DOM 卡死 ──
+  const VIRTUAL_CHUNK = 300
+  const [visibleCount, setVisibleCount] = useState(VIRTUAL_CHUNK)
+  const soundsRef = useRef(sounds)
+  soundsRef.current = sounds
+  // 数据集变化（新搜索/筛选/刷新）时重置窗口并回到顶部
+  useEffect(() => {
+    setVisibleCount(VIRTUAL_CHUNK)
+    containerRef.current?.scrollTo({ top: 0 })
+  }, [sounds])
+  const visibleSounds = useMemo(
+    () => sounds.slice(0, visibleCount),
+    [sounds, visibleCount]
+  )
+  const handleGridScroll = useCallback(() => {
+    const el = containerRef.current
+    if (!el) return
+    if (el.scrollTop + el.clientHeight > el.scrollHeight - 400) {
+      setVisibleCount((c) => Math.min(soundsRef.current.length, c + VIRTUAL_CHUNK))
+    }
+  }, [])
+
   // 键盘导航所需的实时引用（避免 window 监听器反复重绑）
   const stateRef = useRef({ sounds, selectedId })
   stateRef.current = { sounds, selectedId }
@@ -360,6 +382,7 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
     <div
       ref={containerRef}
       className="flex-1 overflow-y-auto p-4 relative select-none"
+      onScroll={handleGridScroll}
       onMouseDown={handleContainerMouseDown}
       onMouseMove={(e) => {
         handleContainerMouseMove(e)
@@ -379,7 +402,7 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
           className={gridDensity === 'compact' ? 'grid gap-2' : 'grid gap-3'}
           style={{ gridTemplateColumns: gridDensity === 'compact' ? 'repeat(auto-fill, minmax(150px, 1fr))' : 'repeat(auto-fill, minmax(200px, 1fr))' }}
         >
-          {sounds.map((sound, idx) => (
+          {visibleSounds.map((sound, idx) => (
             <SoundCard
               key={sound.id}
               sound={sound}
@@ -409,7 +432,7 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
             <div className="col-span-1">大小</div>
             <div className="col-span-2">操作</div>
           </div>
-          {sounds.map((sound, idx) => (
+          {visibleSounds.map((sound, idx) => (
             <SoundListRow
               key={sound.id}
               sound={sound}
@@ -425,6 +448,12 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
               onDragFile={() => window.api.startDragFile(sound.file_path)}
             />
           ))}
+        </div>
+      )}
+
+      {sounds.length > visibleCount && (
+        <div className="text-center text-xs text-muted py-3 pointer-events-none">
+          已显示 {visibleCount} / {sounds.length} · 向下滚动自动加载更多
         </div>
       )}
 

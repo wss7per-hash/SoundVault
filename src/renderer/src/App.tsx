@@ -20,6 +20,7 @@ import { Star, Upload, FileInput, Tag, Search, RefreshCw, LayoutGrid, BarChart3,
 import { SplashScreen } from './components/SplashScreen'
 import { PopupMenu, useContextMenu, type MenuItem } from './components/PopupMenu'
 import { performUndo } from './utils/undo'
+import { rankSoundsBySemantic } from './utils/semanticSearch'
 
 export default function App(): JSX.Element {
   const [showSplash, setShowSplash] = useState(true)
@@ -43,6 +44,8 @@ export default function App(): JSX.Element {
     tags,
     viewMode,
     setViewMode,
+    searchQuery,
+    searchMode,
     refreshSounds,
     refreshTags,
     refreshTagStats,
@@ -69,6 +72,10 @@ export default function App(): JSX.Element {
         )
       }
     }
+    // 语义搜索：按 AI 字段加权相关度排序（覆盖普通排序，相关度降序）
+    if (searchMode === 'semantic' && searchQuery.trim()) {
+      return rankSoundsBySemantic(result, searchQuery)
+    }
     result.sort((a, b) => {
       let cmp = 0
       switch (sortBy) {
@@ -88,7 +95,7 @@ export default function App(): JSX.Element {
       return sortOrder === 'asc' ? cmp : -cmp
     })
     return result
-  }, [sounds, sortBy, sortOrder, formatFilter, selectedTagId, tags])
+  }, [sounds, sortBy, sortOrder, formatFilter, selectedTagId, tags, searchQuery, searchMode])
 
   const selectedSound = filteredSounds.find((s) => s.id === selectedSoundId) ?? sounds.find((s) => s.id === selectedSoundId) ?? null
 
@@ -122,6 +129,17 @@ export default function App(): JSX.Element {
     // Always refresh to show the correct dataset for the new tab
     loadData()
   }, [sidebarTab, loadData])
+
+  // 切换搜索模式（普通/语义）时，若已有查询需重新拉取正确数据集
+  // （语义模式取全量由渲染端排序；普通模式走 SQL LIKE）
+  const prevSearchModeRef = useRef(searchMode)
+  useEffect(() => {
+    if (prevSearchModeRef.current === searchMode) return
+    prevSearchModeRef.current = searchMode
+    if (searchQuery.trim()) {
+      void useAppStore.getState().refreshSounds()
+    }
+  }, [searchMode, searchQuery])
 
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontSize}px`

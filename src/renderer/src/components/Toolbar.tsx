@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
-import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, FolderSearch, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown, FileDown, FileUp, Undo2 } from 'lucide-react'
+import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, FolderSearch, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown, FileDown, FileUp, Undo2, Sparkles } from 'lucide-react'
 import { ExportDialog } from './ExportDialog'
 
 const SORT_OPTIONS = [
@@ -37,7 +37,7 @@ function makeToken(): string {
 }
 
 export function Toolbar(): JSX.Element {
-  const { searchQuery, setSearchQuery } = useAppStore()
+  const { searchQuery, setSearchQuery, searchMode, setSearchMode } = useAppStore()
   const toggleScanDialog = useAppStore((s) => s.toggleScanDialog)
   const [showFilter, setShowFilter] = useState(false)
   const [isMaximized, setIsMaximized] = useState(false)
@@ -140,10 +140,10 @@ export function Toolbar(): JSX.Element {
 
   const handleSearch = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value
-      setSearchQuery(value)
-      const sounds = value ? await window.api.searchSounds(value) : await window.api.getSounds()
-      useAppStore.getState().setSounds(sounds)
+      setSearchQuery(e.target.value)
+      // 统一走 store.refreshSounds：内部按 searchMode 决定 SQL 检索或全量加载，
+      // 并把排序/格式过滤下沉到 SQL。
+      await useAppStore.getState().refreshSounds()
     },
     [setSearchQuery]
   )
@@ -419,21 +419,36 @@ export function Toolbar(): JSX.Element {
         className="flex items-center gap-2 min-w-0 no-drag relative"
         style={{ width: searchWidth }}
       >
+        <button
+          type="button"
+          onClick={() => {
+            const next = searchMode === 'semantic' ? 'normal' : 'semantic'
+            setSearchMode(next)
+            if (searchQuery.trim()) void useAppStore.getState().refreshSounds()
+          }}
+          title={searchMode === 'semantic' ? '语义搜索：按 AI 描述/场景/拟声词相关度排序（点击切回普通搜索）' : '普通搜索：仅按名称/文本精确匹配（点击启用 AI 语义搜索）'}
+          className={`flex items-center gap-1 px-1.5 py-1 rounded-md shrink-0 transition-colors ${
+            searchMode === 'semantic'
+              ? 'text-accent-light bg-accent/10 hover:bg-accent/20'
+              : 'text-muted hover:text-muted-light hover:bg-surface-hover'
+          }`}
+        >
+          <Sparkles size={15} />
+        </button>
         <Search size={16} className="text-muted shrink-0" />
         <input
           id="global-search-input"
           type="text"
           value={searchQuery}
           onChange={handleSearch}
-          placeholder="搜索音效、场景、情绪..."
+          placeholder={searchMode === 'semantic' ? '语义搜索：描述一句话找音效…' : '搜索音效、场景、情绪...'}
           className="flex-1 bg-transparent text-sm text-muted-light placeholder:text-muted outline-none min-w-0"
         />
         {searchQuery && (
           <button
             onClick={async () => {
               setSearchQuery('')
-              const sounds = await window.api.getSounds()
-              useAppStore.getState().setSounds(sounds)
+              await useAppStore.getState().refreshSounds()
             }}
             className="text-muted hover:text-muted-light text-sm no-drag shrink-0"
           >

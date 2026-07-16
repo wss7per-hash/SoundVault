@@ -68,8 +68,10 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
 
   const handleOnoClick = (t: TagStatData): void => {
     const store = useAppStore.getState()
+    store.setSearchMode('semantic')
     store.setSearchQuery(t.name)
     store.setActiveView('library')
+    void store.refreshSounds()
   }
 
   const handleScan = async (): Promise<void> => {
@@ -116,7 +118,7 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
   ].filter((r) => r.value > 0)
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-[#131311]" onContextMenu={statsMenu.open}>
+    <div className="flex-1 flex flex-col min-h-0 bg-surface" onContextMenu={statsMenu.open}>
       {/* Header */}
       <div className="h-11 border-b border-surface-border flex items-center gap-3 px-4 shrink-0">
         <button
@@ -128,7 +130,7 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
         </button>
         <div className="flex items-center gap-2">
           <Layers size={16} className="text-accent-light" />
-          <h2 className="text-sm font-semibold text-[#e8e8e4]">库洞察 · Insights</h2>
+          <h2 className="text-sm font-semibold text-fg">库洞察 · Insights</h2>
         </div>
         <span className="ml-auto text-xs text-muted">
           共 {total} 个音效 · {tagStats.length} 个标签
@@ -154,7 +156,7 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
                 return (
                   <div key={r.key} className="flex items-center gap-3">
                     <span className="w-12 shrink-0 text-xs text-muted-light tabular-nums">{r.label}</span>
-                    <div className="flex-1 h-2.5 rounded-full bg-[#232321] overflow-hidden">
+                    <div className="flex-1 h-2.5 rounded-full bg-surface-panel overflow-hidden">
                       <div
                         className="h-full rounded-full bg-accent/70"
                         style={{ width: `${pct}%` }}
@@ -227,7 +229,7 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
             <button
               onClick={handleScan}
               disabled={scanning}
-              className="px-3 py-1.5 rounded-md text-xs bg-[#2a2a26] hover:bg-[#34342f] border border-surface-border disabled:opacity-50"
+              className="px-3 py-1.5 rounded-md text-xs bg-surface-panel hover:bg-surface-hover border border-surface-border disabled:opacity-50"
             >
               {scanning ? '扫描中…' : '查找重复文件'}
             </button>
@@ -235,7 +237,7 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
               <p className="text-xs text-muted mt-2">未发现重复文件。点击上方按钮可扫描整个音效库（按文件内容精确比对）。</p>
             ) : (
               <div className="mt-3 space-y-3">
-                <p className="text-xs text-[#5a5a54]">
+                <p className="text-xs text-muted-light">
                   发现 {duplicates.length} 组重复 · 共 {duplicates.reduce((s, g) => s + g.count, 0)} 个文件 · 可清理 {duplicates.reduce((s, g) => s + g.count - 1, 0)} 个。
                   每组默认保留最早导入的，可点选其他项保留。
                 </p>
@@ -249,7 +251,7 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
                         <button
                           onClick={() => handleRemoveGroup(g)}
                           disabled={toRemove.length === 0}
-                          className="px-2 py-1 rounded text-[11px] bg-[#3a2a2a] hover:bg-[#4a3333] border border-[#5a3a3a] text-red-200 disabled:opacity-40"
+                          className="px-2 py-1 rounded text-[11px] bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 disabled:opacity-40"
                         >
                           删除其余 {toRemove.length} 个
                         </button>
@@ -260,7 +262,7 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
                           return (
                             <label
                               key={item.id}
-                              className={`flex items-center gap-2 rounded px-2 py-1 text-xs cursor-pointer ${isKeep ? 'bg-[#1d2a1d] text-green-300' : 'hover:bg-surface-2'}`}
+                              className={`flex items-center gap-2 rounded px-2 py-1 text-xs cursor-pointer ${isKeep ? 'bg-emerald-500/10 text-emerald-400' : 'hover:bg-surface-2'}`}
                             >
                               <input
                                 type="radio"
@@ -280,7 +282,7 @@ export function StatisticsPanel({ onClose }: { onClose: () => void }): JSX.Eleme
                 })}
                 <button
                   onClick={handleRemoveAll}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-[#3a2a2a] hover:bg-[#4a3333] border border-[#5a3a3a] text-red-200"
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400"
                 >
                   <Trash2 size={13} /> 一键清理全部重复
                 </button>
@@ -319,7 +321,7 @@ function KpiCard({ icon, label, value, sub, accent }: {
   accent?: boolean
 }): JSX.Element {
   return (
-    <div className="bg-[#1f1f1d] border border-surface-border rounded-xl p-4 flex flex-col gap-2">
+    <div className="bg-surface-panel border border-surface-border rounded-xl p-4 flex flex-col gap-2">
       <div className="flex items-center gap-2">{icon}</div>
       <div className={`text-2xl font-semibold tabular-nums ${accent ? 'text-amber-400' : 'text-muted-light'}`}>
         {value}
@@ -337,7 +339,7 @@ function MiniStat({ label, value, sub, warn }: {
   warn?: boolean
 }): JSX.Element {
   return (
-    <div className="bg-[#1a1a18] border border-surface-border rounded-lg px-3.5 py-3">
+    <div className="bg-surface border border-surface-border rounded-lg px-3.5 py-3">
       <div className={`text-lg font-semibold tabular-nums ${warn ? 'text-amber-400' : 'text-muted-light'}`}>
         {value}
       </div>

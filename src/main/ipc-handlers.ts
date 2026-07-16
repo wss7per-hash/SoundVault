@@ -442,17 +442,33 @@ export function registerIpcHandlers(): void {
     return { imported, total: uniq.length }
   })
 
-  ipcMain.handle('sound:getAll', () => {
-    return db.prepare(`
+  ipcMain.handle('sound:getAll', (_event, opts?: { sortBy?: string; sortOrder?: 'asc' | 'desc'; format?: string }) => {
+    // 排序/过滤下沉到 SQL，避免渲染端对全量数组 JS 排序（规模化关键）
+    const sortCol: Record<string, string> = {
+      name: 's.file_name COLLATE NOCASE',
+      duration: 's.duration_ms',
+      size: 's.file_size',
+      date: 's.imported_at'
+    }
+    const orderBy = opts?.sortBy && sortCol[opts.sortBy] ? sortCol[opts.sortBy] : 's.imported_at'
+    const orderDir = opts?.sortOrder === 'asc' ? 'ASC' : 'DESC'
+    const params: unknown[] = []
+    let where = 'WHERE (s.is_trashed = 0 OR s.is_trashed IS NULL)'
+    if (opts?.format) {
+      where += ' AND LOWER(s.file_ext) = LOWER(?)'
+      params.push(opts.format)
+    }
+    const sql = `
       SELECT s.*,
         (SELECT GROUP_CONCAT(t.name, ',')
          FROM tags t
          JOIN sound_tags st ON t.id = st.tag_id
          WHERE st.sound_id = s.id) AS tags
       FROM sounds s
-      WHERE s.is_trashed = 0 OR s.is_trashed IS NULL
-      ORDER BY s.imported_at DESC
-    `).all()
+      ${where}
+      ORDER BY ${orderBy} ${orderDir}
+    `
+    return db.prepare(sql).all(...params)
   })
 
   ipcMain.handle('sound:getById', (_event, id: string) => {
