@@ -59,8 +59,10 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps): JSX.El
           <Row label="版本" value={version ? `v${version}` : '—'} />
           <Row label="作者" value="VV" />
           <p className="text-xs leading-relaxed text-muted pt-1">
-            本地音效库管理工具 —— AI 语义分析、智能检索、DSP 工具与批量编辑，
-            让音效素材的整理、标注与复用变得简单。
+            本地音效库管理工具 —— AI 语义分析自动打标、AI 文本生成音效（云端），
+            支持波形可视化与裁剪、格式转换、变速不变调等 DSP 工具；
+            标签树筛选、智能分类、相似推荐、重复文件清理、库洞察统计，
+            以及批量标签编辑、备注笔记、全局快捷搜索等功能。
           </p>
         </div>
 
