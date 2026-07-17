@@ -39,9 +39,9 @@ mac:
 linux:
   target: AppImage
   icon: resources/icon.png
-electronLanguages:
-  - en-US
-  - zh-CN
-  - zh-TW
+# 注意：不要写 electronLanguages 来裁剪语言包。
+# 该字段一旦指定，electron-builder 会在打包时批量删除其余所有 locales/*.pak，
+# 本机安全删除防护对"单次≥50个文件"的批量删除会拦截，导致打包失败。
+# 留空则 electron-builder 不删任何语言包（全部保留），打包可正常完成。
 asarUnpack:
   - "**/*.node"
