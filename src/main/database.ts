@@ -19,7 +19,8 @@ export function initDatabase(): void {
   createTables()
   migrateSoundsNotesColumn()
   migrateOnomatopoeiaColumn()
-  seedDefaultCategories()
+  // 不再预置八大分类标签 — 让 AI/本地分析时通过 getOrCreateTagId 按需创建
+  cleanupLegacyDefaultCategories()
   cleanupLegacyQualityNotes()
 
   console.log('[Database] Initialized at', dbPath)
@@ -49,18 +50,30 @@ function cleanupLegacyQualityNotes(): void {
   }
 }
 
-// 预置 PRD §3.3.1 八大分类，让标签树一开始就展示标准分类体系
-const DEFAULT_CATEGORIES = ['人声', '动物', '环境氛围', '动作物品', 'UI交互', '乐器音乐', '机械科技', '特殊效果']
+// 旧版预置的八大分类（用于一次性清理旧库里的空分类）
+const LEGACY_DEFAULT_CATEGORIES = ['人声', '动物', '环境氛围', '动作物品', 'UI交互', '乐器音乐', '机械科技', '特殊效果']
 
-function seedDefaultCategories(): void {
+/**
+ * 一次性清理旧库里预置的八大分类（仅当它们未被任何音效引用时）。
+ * 这样升级用户能立刻看到干净的标签树，新库则不需要此迁移。
+ */
+function cleanupLegacyDefaultCategories(): void {
   if (!db) return
-  const now = new Date().toISOString()
-  const stmt = db.prepare(
-    'INSERT OR IGNORE INTO tags (id, name, parent_id, sort_order, created_at) VALUES (?, ?, NULL, ?, ?)'
-  )
-  DEFAULT_CATEGORIES.forEach((name, i) => {
-    stmt.run(uuidv4(), name, i, now)
-  })
+  try {
+    // 只删：(a) 名字命中预置列表 且 (b) parent_id IS NULL（顶层分类）且 (c) 没有音效引用
+    const placeholders = LEGACY_DEFAULT_CATEGORIES.map(() => '?').join(',')
+    const info = db.prepare(`
+      DELETE FROM tags
+      WHERE name IN (${placeholders})
+        AND parent_id IS NULL
+        AND id NOT IN (SELECT DISTINCT tag_id FROM sound_tags)
+    `).run(...LEGACY_DEFAULT_CATEGORIES)
+    if (info.changes > 0) {
+      console.log(`[Database] Cleaned ${info.changes} unused legacy default categories`)
+    }
+  } catch (err) {
+    console.warn('[Database] Legacy category cleanup skipped:', (err as Error).message)
+  }
 }
 
 function createTables(): void {
