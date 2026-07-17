@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
-import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, FolderSearch, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown, FileDown, FileUp, Undo2, Sparkles, MoreHorizontal, HelpCircle } from 'lucide-react'
+import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, FolderSearch, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown, FileDown, FileUp, Undo2, Sparkles, HelpCircle } from 'lucide-react'
 import { ExportDialog } from './ExportDialog'
 
 const SORT_OPTIONS = [
@@ -41,7 +41,6 @@ export function Toolbar(): JSX.Element {
   const toggleScanDialog = useAppStore((s) => s.toggleScanDialog)
   const [showFilter, setShowFilter] = useState(false)
   const [showViewMenu, setShowViewMenu] = useState(false)
-  const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [isMaximized, setIsMaximized] = useState(false)
   const [busy, setBusy] = useState<null | 'import'>(null)
   const [showLibMenu, setShowLibMenu] = useState(false)
@@ -599,6 +598,15 @@ export function Toolbar(): JSX.Element {
         )}
       </div>
 
+      {/* AI 生成音效 — 左侧独立入口 */}
+      <button
+        onClick={() => useAppStore.getState().toggleGenerate()}
+        className="p-1.5 rounded-md transition-colors text-purple-400 hover:bg-purple-500/10 hover:text-purple-300 no-drag"
+        title="AI 生成音效（云端文本→音效）"
+      >
+        <Wand2 size={16} />
+      </button>
+
       <div className="flex items-center gap-1 no-drag ml-auto">
         {/* Undo — 显示栈顶操作描述，Ctrl+Z 亦可 */}
         {undoInfo && (
@@ -786,37 +794,14 @@ export function Toolbar(): JSX.Element {
         >
           <BarChart3 size={16} />
         </button>
-        {/* 更多菜单：AI 生成 + 关于 */}
-        <div className="relative">
-          <button
-            onClick={() => setShowMoreMenu((v) => !v)}
-            onBlur={() => setTimeout(() => setShowMoreMenu(false), 150)}
-            className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light"
-            title="更多（AI 生成 / 关于）"
-          >
-            <MoreHorizontal size={16} />
-          </button>
-          {showMoreMenu && (
-            <div className="absolute right-0 top-full mt-1 w-44 rounded-lg bg-surface border border-surface-border shadow-xl z-50 py-1 overflow-hidden">
-              <button
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { setShowMoreMenu(false); useAppStore.getState().toggleGenerate() }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-purple-300 hover:bg-surface-hover transition-colors"
-              >
-                <Wand2 size={14} />
-                AI 生成音效
-              </button>
-              <button
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { setShowMoreMenu(false); useAppStore.getState().toggleAbout() }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-light hover:bg-surface-hover transition-colors"
-              >
-                <HelpCircle size={14} />
-                关于 SoundVault
-              </button>
-            </div>
-          )}
-        </div>
+        {/* 关于 */}
+        <button
+          onClick={() => useAppStore.getState().toggleAbout()}
+          className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light"
+          title="关于 SoundVault"
+        >
+          <HelpCircle size={16} />
+        </button>
         <div className="w-px h-5 bg-surface-border/50 mx-0.5" />
       </div>
 
