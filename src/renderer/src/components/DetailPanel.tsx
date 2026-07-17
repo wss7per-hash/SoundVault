@@ -527,7 +527,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
   // RENDER
   // ================================================================
   return (
-    <div className="w-80 h-full border-l border-surface-panel flex flex-col shrink-0 bg-surface-panel">
+    <div className="w-full h-full flex flex-col bg-surface">
       {/* Hidden audio element */}
       <audio ref={audioRef} src={`sv://${sound.id}`} preload="auto" />
 
@@ -871,11 +871,10 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
             {sound.quality_score !== null && sound.quality_score !== undefined && (
               <div>
                 <p className="text-xs text-muted-light uppercase tracking-wider mb-1.5">质量评分</p>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5">
                   {Array.from({ length: 5 }, (_, i) => (
-                    <div key={i} className={`w-5 h-5 rounded-sm ${i < sound.quality_score! ? 'bg-accent' : 'bg-surface-panel'}`} />
+                    <Star key={i} size={14} className={i < sound.quality_score! ? 'text-amber-400 fill-amber-400' : 'text-muted/30'} />
                   ))}
-                  <span className="text-xs text-muted-light ml-1.5">{sound.quality_score}/5</span>
                 </div>
               </div>
             )}

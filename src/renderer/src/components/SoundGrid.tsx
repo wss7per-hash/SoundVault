@@ -680,7 +680,7 @@ function SoundCard({ sound, compact = false, isSelected, isHovered, isPlaying, i
 
         {isPlaying && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-            <div className="w-10 h-10 rounded-full bg-accent/90 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-accent/90 flex items-center justify-center animate-pulse ring-2 ring-accent/60 ring-offset-2 ring-offset-transparent">
               <Volume2 size={18} className="text-white" />
             </div>
           </div>
@@ -724,7 +724,16 @@ function SoundCard({ sound, compact = false, isSelected, isHovered, isPlaying, i
             <span>{formatDuration(sound.duration_ms)}</span>
             <span className="px-1.5 py-0.5 rounded bg-surface-panel text-xs">{sound.file_ext.toUpperCase()}</span>
           </div>
-          <span>{formatSize(sound.file_size)}</span>
+          <div className="flex items-center gap-2">
+            {sound.quality_score != null ? (
+              <span className="flex items-center gap-0.5" title={`质量评分 ${sound.quality_score}/5`}>
+                {Array.from({ length: 5 }, (_, i) => (
+                  <Star key={i} size={10} className={i < sound.quality_score! ? 'text-amber-400 fill-amber-400' : 'text-muted/20'} />
+                ))}
+              </span>
+            ) : null}
+            <span>{formatSize(sound.file_size)}</span>
+          </div>
         </div>
       </div>
     </div>

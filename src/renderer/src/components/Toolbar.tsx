@@ -505,7 +505,8 @@ export function Toolbar(): JSX.Element {
         </button>
 
         {showLibMenu && (
-          <div className="absolute left-0 top-full mt-2 w-64 bg-surface-panel border border-surface-border rounded-xl shadow-2xl py-3 z-50">
+          <div className="absolute left-0 top-full mt-2 w-64 bg-surface-panel border border-surface-border rounded-xl shadow-2xl py-2 z-50">
+            <div className="text-2xs text-muted/50 px-3 py-0.5 uppercase tracking-wider">导入导出</div>
             {/* Scan & import from local folders (enhanced ScanDialog) */}
             <button
               onClick={() => { setShowLibMenu(false); toggleScanDialog() }}
@@ -519,8 +520,6 @@ export function Toolbar(): JSX.Element {
               </div>
             </button>
 
-            <div className="h-px bg-surface-border/50 my-1" />
-
             {/* Import a SoundVault backup package */}
             <button
               onClick={() => { setShowLibMenu(false); handleImport() }}
@@ -533,8 +532,6 @@ export function Toolbar(): JSX.Element {
                 <div className="max-h-0 opacity-0 overflow-hidden group-hover:max-h-8 group-hover:opacity-100 transition-all duration-200 text-[10px] text-muted/60">导入 SoundVault 导出的备份文件夹</div>
               </div>
             </button>
-
-            <div className="h-px bg-surface-border/50 my-1" />
 
             {/* Export — single entry opens scope-choice dialog */}
             <button
@@ -550,6 +547,7 @@ export function Toolbar(): JSX.Element {
             </button>
 
             <div className="h-px bg-surface-border/50 my-1" />
+            <div className="text-2xs text-muted/50 px-3 py-0.5 uppercase tracking-wider">元数据管理</div>
 
             {/* Metadata backup — lightweight JSON (tags/notes/starred/collections/smart folders) */}
             <button

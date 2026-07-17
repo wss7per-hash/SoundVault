@@ -56,8 +56,9 @@ export function EmptyState({ onImport }: EmptyStateProps): JSX.Element {
         />
 
         <h2 className="text-xl font-medium text-muted-light mb-2">欢迎使用 SoundVault</h2>
+        <p className="text-sm text-accent-light leading-relaxed mb-1.5 font-medium">AI 自动标注 + 语义搜索，告别手动整理音效</p>
         <p className="text-sm text-muted leading-relaxed mb-6">
-          你的 AI 驱动的音效资产管理器。导入音效文件夹，AI 会帮你自动识别、描述、打标签。
+          导入音效文件夹，AI 会帮你自动识别、描述、打标签。
         </p>
 
         <div className="flex flex-col gap-2.5 mb-5">

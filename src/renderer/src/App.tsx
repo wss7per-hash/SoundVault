@@ -153,6 +153,17 @@ export default function App(): JSX.Element {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
+  // ── Esc 关闭详情面板 ──
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && useAppStore.getState().selectedSoundId) {
+        useAppStore.getState().selectSound(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // ── 拖放导入：接收从系统拖入窗口的音频文件 / 文件夹 ──
   const hasFilesInDrag = (e: React.DragEvent): boolean =>
     Array.from(e.dataTransfer.types || []).includes('Files')
@@ -342,7 +353,7 @@ export default function App(): JSX.Element {
       <div className="flex-1 flex flex-col min-w-0">
         <Toolbar />
 
-        <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex min-h-0 relative">
           {sidebarTab === 'trash' ? (
             <RecycleBin />
           ) : activeView === 'settings' ? (
@@ -373,7 +384,17 @@ export default function App(): JSX.Element {
               </div>
 
               {selectedSound && (
-                <DetailPanel sound={selectedSound} onClose={() => selectSound(null)} onUpdate={loadData} />
+                <>
+                  {/* 半透明遮罩 — 点击关闭 */}
+                  <div
+                    className="absolute inset-0 bg-black/40 z-30"
+                    onClick={() => selectSound(null)}
+                  />
+                  {/* 详情面板浮层 — 右侧滑出 */}
+                  <div className="absolute right-0 top-0 bottom-0 w-[420px] max-w-[85vw] z-40 bg-surface border-l border-surface-border shadow-2xl overflow-y-auto">
+                    <DetailPanel sound={selectedSound} onClose={() => selectSound(null)} onUpdate={loadData} />
+                  </div>
+                </>
               )}
             </>
           )}
@@ -451,6 +472,14 @@ function StatusBar(): JSX.Element {
         <span className="ml-auto text-amber-400 animate-pulse">
           AI 分析中（{analyzingIds.length}{batchAnalyzing ? ' · 批量' : ''}）…
         </span>
+      )}
+      {analyzingIds.length === 0 && (
+        <div className="ml-auto flex items-center gap-3 text-muted/50">
+          <span title="重播当前音效"><kbd className="px-1 py-0.25 rounded bg-surface-panel text-2xs">J</kbd> 重播</span>
+          <span title="暂停"><kbd className="px-1 py-0.25 rounded bg-surface-panel text-2xs">K</kbd> 暂停</span>
+          <span title="播放/继续"><kbd className="px-1 py-0.25 rounded bg-surface-panel text-2xs">L</kbd> 播放</span>
+          <span title="关闭面板"><kbd className="px-1 py-0.25 rounded bg-surface-panel text-2xs">Esc</kbd> 关闭</span>
+        </div>
       )}
     </div>
   )
