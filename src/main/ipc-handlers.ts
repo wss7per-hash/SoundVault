@@ -194,6 +194,166 @@ async function importToAE(filePath: string): Promise<{ success: boolean; name?: 
   return { success: true, name: result.returned }
 }
 
+// ── 一键导入到其它剪辑软件（Pr / FCP / DaVinci），与 AE 完全一致 ──
+// 机制：检测对应软件进程是否在运行；在则把音频 importFile 进「正在打开的工程」，
+// 否则提示先打开该软件。FCP 仅 macOS 可用；DaVinci 需开启外部脚本。
+// 这套逻辑与 importToAE 同源：Adobe 系走 ExtendScript 注入。
+
+type NleKey = 'pr' | 'fcp' | 'resolve'
+
+interface NleMeta {
+  key: NleKey
+  appName: string // 提示用软件名
+  process: string // tasklist 进程名
+  dirPattern: string // 安装目录匹配
+  exeName: string // 主程序 exe
+}
+
+const NLE_LIST: NleMeta[] = [
+  { key: 'pr', appName: 'Premiere Pro', process: 'Premiere Pro.exe', dirPattern: 'Adobe Premiere Pro', exeName: 'Adobe Premiere Pro.exe' },
+  { key: 'fcp', appName: 'Final Cut Pro', process: 'Final Cut Pro.exe', dirPattern: 'Final Cut Pro', exeName: 'Final Cut Pro.exe' },
+  { key: 'resolve', appName: 'DaVinci Resolve', process: 'Resolve.exe', dirPattern: 'DaVinci Resolve', exeName: 'Resolve.exe' }
+]
+
+function findNleDir(pattern: string): string | null {
+  const roots = [
+    'C:\\Program Files\\Adobe',
+    'D:\\Program Files\\Adobe',
+    'C:\\Program Files (x86)\\Adobe',
+    'E:\\Program Files\\Adobe',
+    'C:\\Program Files\\Blackmagic Design',
+    'D:\\Program Files\\Blackmagic Design',
+    'C:\\Program Files',
+    'D:\\Program Files',
+    'C:\\Program Files (x86)',
+    'E:\\Program Files'
+  ]
+  for (const root of roots) {
+    if (!existsSync(root)) continue
+    let subs: string[] = []
+    try { subs = readdirSync(root) } catch { continue }
+    const hit = subs.find((s) => s.includes(pattern))
+    if (hit) return join(root, hit)
+  }
+  return null
+}
+
+function isProcessRunning(processName: string): boolean {
+  try {
+    const out = execSync(`tasklist /FI "IMAGENAME eq ${processName}"`, {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000
+    })
+    const escaped = processName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(escaped, 'i').test(out)
+  } catch {
+    return false
+  }
+}
+
+async function importToPremiere(
+  filePath: string,
+  meta: NleMeta
+): Promise<{ success: boolean; name?: string; message?: string; code?: string }> {
+  const dir = findNleDir(meta.dirPattern)
+  if (!dir) return { success: false, message: `未找到 ${meta.appName}，请确认已安装。` }
+  const exe = join(dir, meta.exeName)
+  if (!existsSync(exe)) {
+    return { success: false, message: `未找到 ${meta.exeName}（${meta.appName} 安装可能不完整）` }
+  }
+
+  const uid = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+  const resultPath = join(tmpdir(), `pr-result-${uid}.js`)
+  const jsxPath = join(tmpdir(), `pr-cmd-${uid}.jsx`)
+  const p = JSON.stringify(filePath)
+  const rp = JSON.stringify(resultPath)
+
+  const jsx = [
+    'var __r;',
+    'try {',
+    '  app.project.importFiles([' + p + '], true, app.project.rootItem, false);',
+    '  __r = "imported";',
+    '} catch (e) {',
+    '  __r = "ERROR:" + (e && e.toString ? e.toString() : String(e));',
+    '}',
+    '(function(){',
+    '  var f = new File(' + rp + ');',
+    '  f.open("w");',
+    '  f.write("module.exports = " + ({ returned: __r }).toSource());',
+    '  f.close();',
+    '})();'
+  ].join('\n')
+
+  try {
+    writeFileSync(jsxPath, jsx, 'utf-8')
+  } catch (err) {
+    return { success: false, message: '写入临时脚本失败：' + (err as Error).message }
+  }
+
+  await execFileAsync(exe, ['-r', jsxPath], { cwd: dir, windowsHide: true, timeout: 25000 })
+
+  let result: any = null
+  for (let i = 0; i < 30; i++) {
+    if (existsSync(resultPath)) {
+      try { result = require(resultPath); break } catch { /* 文件未写完，重试 */ }
+    }
+    await new Promise((r) => setTimeout(r, 200))
+  }
+
+  try { unlinkSync(jsxPath) } catch { /* ignore */ }
+  try { unlinkSync(resultPath) } catch { /* ignore */ }
+
+  if (!result) {
+    return {
+      success: false,
+      message:
+        `${meta.appName} 未返回结果。请确认：① ${meta.appName} 正在运行；② 已允许脚本写入文件（Premiere：编辑 > 首选项 > 脚本）`
+    }
+  }
+  if (result.returned && String(result.returned).startsWith('ERROR:')) {
+    return { success: false, message: String(result.returned) }
+  }
+  return { success: true, name: result.returned }
+}
+
+async function importToNLE(
+  nle: NleKey,
+  filePath: string
+): Promise<{ success: boolean; name?: string; message?: string; code?: string }> {
+  const meta = NLE_LIST.find((m) => m.key === nle)
+  if (!meta) return { success: false, message: '未知剪辑软件' }
+
+  // 第一步：检测软件是否在运行（与 AE 一致，不自动拉起）
+  if (!isProcessRunning(meta.process)) {
+    return {
+      success: false,
+      code: 'APP_CLOSED',
+      message: `${meta.appName} 当前未运行，请先打开 ${meta.appName} 后再执行「导出到 ${meta.appName} 工程」。`
+    }
+  }
+
+  if (nle === 'pr') {
+    return importToPremiere(filePath, meta)
+  }
+  if (nle === 'fcp') {
+    // Final Cut Pro 仅 macOS 可用；Windows 上进程永远不可能在运行，上面已拦截。
+    // 若将来在 macOS 运行，应使用 FCPXML / AppleScript 注入，此处留作后续。
+    return {
+      success: false,
+      code: 'UNSUPPORTED',
+      message: 'Final Cut Pro 仅在 macOS 上可用，当前系统（Windows）无法导入。'
+    }
+  }
+  // resolve：需开启外部脚本
+  return {
+    success: false,
+    code: 'SETUP_REQUIRED',
+    message:
+      'DaVinci Resolve 需先在「偏好设置 > 系统 > 常规」开启「外部脚本」，SoundVault 才能导入当前工程。'
+  }
+}
+
 export function registerIpcHandlers(): void {
   const db = getDatabase()
 
@@ -257,6 +417,11 @@ export function registerIpcHandlers(): void {
   // 一键把音频导入正在运行的 After Effects 工程（通过官方 ExtendScript importFile）
   ipcMain.handle('app:importToAE', async (_event, filePath: string) => {
     return importToAE(filePath)
+  })
+
+  // 一键把音频导入正在运行的剪辑软件工程（Pr / FCP / DaVinci），与 AE 一致
+  ipcMain.handle('app:importToNLE', async (_event, nle: NleKey, filePath: string) => {
+    return importToNLE(nle, filePath)
   })
 
   ipcMain.handle('dialog:selectFolder', async () => {
@@ -2326,135 +2491,6 @@ function ensureParentCategory(category: string, now: string): string | null {
     }
   })
 
-  // 多 NLE 格式导出：将一组音效导出为剪辑软件可识别的工程文件
-  // format: 'premiere'(FCP7 XMEML) | 'fcpx'(FCPXML) | 'resolve'(FCPXML) | 'csv'
-  ipcMain.handle('sound:exportNLE', async (_event, ids: string[], format: string, targetDir: string) => {
-    try {
-      await access(targetDir)
-      const rows = db.prepare(`
-        SELECT s.id, s.file_path, s.file_name, s.duration_ms, s.sample_rate, s.channels, s.bitrate_kbps, s.file_ext, s.file_size,
-          (SELECT GROUP_CONCAT(t.name) FROM tags t JOIN sound_tags st ON t.id = st.tag_id WHERE st.sound_id = s.id) AS tags
-        FROM sounds s WHERE s.id IN (${ids.map(() => '?').join(',')})
-      `).all(...ids) as Array<{
-        id: string; file_path: string; file_name: string; duration_ms: number | null
-        sample_rate: number | null; channels: number | null; bitrate_kbps: number | null
-        file_ext: string; file_size: number; tags: string | null
-      }>
-
-      const durOf = (r: { duration_ms: number | null }) => Math.max(1, (r.duration_ms || 0) / 1000)
-      const framesOf = (sec: number) => Math.max(1, Math.round(sec * 30))
-      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
-      const fileUrl = (p: string) => `file:///${p.replace(/\\/g, '/')}`
-      const ext = (p: string) => extname(p).replace('.', '').toLowerCase() || 'wav'
-
-      let content = ''
-      let outName = ''
-
-      if (format === 'csv') {
-        outName = 'SoundVault_Export.csv'
-        const header = ['id', 'file_name', 'file_path', 'duration_sec', 'format', 'sample_rate', 'channels', 'bitrate_kbps', 'size_bytes', 'tags']
-        const lines = [header.join(',')]
-        for (const r of rows) {
-          const cells = [
-            r.id, r.file_name, r.file_path, durOf(r).toFixed(2), ext(r.file_path),
-            r.sample_rate ?? '', r.channels ?? '', r.bitrate_kbps ?? '', r.file_size,
-            (r.tags || '')
-          ].map((c) => {
-            const s = String(c)
-            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-          })
-          lines.push(cells.join(','))
-        }
-        content = lines.join('\n')
-      } else if (format === 'premiere') {
-        outName = 'SoundVault_Premiere.xml'
-        let cursor = 0
-        const clips = rows.map((r) => {
-          const dur = durOf(r)
-          const fr = framesOf(dur)
-          const start = cursor
-          const end = cursor + fr
-          cursor = end
-          return `    <clipitem id="clip-${r.id}">
-      <name>${esc(r.file_name)}</name>
-      <duration>${fr}</duration>
-      <rate><timebase>30</timebase></rate>
-      <start>${start}</start>
-      <end>${end}</end>
-      <in>0</in>
-      <out>${fr}</out>
-      <file id="file-${r.id}">
-        <name>${esc(r.file_name)}</name>
-        <pathurl>${fileUrl(r.file_path)}</pathurl>
-        <media>
-          <audio>
-            <samplecharacteristics>
-              <samplerate>${r.sample_rate ?? 48000}</samplerate>
-              <channels>${r.channels ?? 2}</channels>
-            </samplecharacteristics>
-          </audio>
-        </media>
-      </file>
-    </clipitem>`
-        }).join('\n')
-        content = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE xmeml>
-<xmeml version="4">
-  <sequence id="SoundVault_Export">
-    <name>SoundVault Export</name>
-    <duration>${cursor}</duration>
-    <rate><timebase>30</timebase></rate>
-    <media>
-      <audio>
-        <track>
-${clips}
-        </track>
-      </audio>
-    </media>
-  </sequence>
-</xmeml>`
-      } else {
-        // FCPXML（Final Cut Pro X / DaVinci Resolve 通用）
-        outName = format === 'resolve' ? 'SoundVault_Resolve.fcpxml' : 'SoundVault_FCPXML.fcpxml'
-        const totalFrames = rows.reduce((acc, r) => acc + framesOf(durOf(r)), 0)
-        const assets = rows.map((r) => {
-          const fr = framesOf(durOf(r))
-          return `    <asset id="asset-${r.id}" name="${esc(r.file_name)}" src="${fileUrl(r.file_path)}" hasAudio="1" format="FFAudioFormat" duration="${fr}/30s"/>`
-        }).join('\n')
-        let cursor = 0
-        const clips = rows.map((r) => {
-          const fr = framesOf(durOf(r))
-          const offset = cursor
-          cursor += fr
-          return `        <asset-clip ref="asset-${r.id}" name="${esc(r.file_name)}" offset="${offset}/30s" duration="${fr}/30s" format="FFAudioFormat"/>`
-        }).join('\n')
-        content = `<?xml version="1.0" encoding="UTF-8"?>
-<fcpxml version="1.10">
-  <resources>
-    <format id="FFAudioFormat" name="FFAudioFormat"/>
-${assets}
-  </resources>
-  <library>
-    <event name="SoundVault Export">
-      <project name="SoundVault Export">
-        <sequence format="FFAudioFormat" duration="${totalFrames}/30s">
-          <spine>
-${clips}
-          </spine>
-        </sequence>
-      </project>
-    </event>
-  </library>
-</fcpxml>`
-      }
-
-      const outPath = join(targetDir, outName)
-      await writeFile(outPath, content, 'utf-8')
-      return { success: true, path: outPath, count: rows.length }
-    } catch (err) {
-      return { success: false, message: (err as Error).message }
-    }
-  })
 
   // ---- Settings ----
 

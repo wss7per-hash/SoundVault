@@ -39,7 +39,6 @@ interface AppState {
   // UI modals
   showScanDialog: boolean
   showGenerate: boolean
-  showExportNLE: boolean
   showAbout: boolean
   // 回收站跨组件同步：Sidebar 与 RecycleBin 各自持有独立状态，
   // 任一处发生恢复/清空后 bump 此计数，另一处订阅后自动刷新。
@@ -79,7 +78,6 @@ interface AppState {
   setFormatFilter: (format: string | null) => void
   toggleScanDialog: () => void
   toggleGenerate: () => void
-  toggleExportNLE: () => void
   bumpTrashVersion: () => void
   handleAnalyzeError: (msg: string, code: string | undefined, fallback: string) => void
 
@@ -128,7 +126,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   formatFilter: null,
   showScanDialog: false,
   showGenerate: false,
-  showExportNLE: false,
   showAbout: false,
   trashVersion: 0,
   analyzingIds: [],
@@ -190,7 +187,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleScanDialog: () => set((s) => ({ showScanDialog: !s.showScanDialog })),
   toggleGenerate: () => set((s) => ({ showGenerate: !s.showGenerate })),
   toggleAbout: () => set((s) => ({ showAbout: !s.showAbout })),
-  toggleExportNLE: () => set((s) => ({ showExportNLE: !s.showExportNLE })),
   bumpTrashVersion: () => set((s) => ({ trashVersion: s.trashVersion + 1 })),
 
   handleAnalyzeError: (msg, code, fallback) => {

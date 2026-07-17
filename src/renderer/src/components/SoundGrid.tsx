@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import type { SoundData, CollectionData, TagData } from '../../preload/index.d'
 import {
   Play, Pause, Star, Check, Music, FolderOpen, Folder, Copy, FileInput, Pencil, Tag, FolderPlus,
-  Sparkles, Trash2, X, Volume2, Heart, MoreHorizontal, Film, Wrench, Download, FileVideo
+  Sparkles, Trash2, X, Volume2, Heart, MoreHorizontal, Film, Wrench, Download, Clapperboard, Scissors, SlidersHorizontal
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
@@ -958,10 +958,25 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     }
   }
 
-  const handleExportNLE = () => {
-    onClose()
-    useAppStore.getState().toggleExportNLE()
+  const importToNle = async (nle: 'pr' | 'fcp' | 'resolve', appLabel: string) => {
+    try {
+      onClose()
+      const res = await window.api.importToNLE(nle, sound.file_path)
+      if (res.success) {
+        toast.success(`已导入到 ${appLabel} 工程`)
+      } else if (res.code === 'APP_CLOSED') {
+        toast(`${appLabel} 未运行，请先打开 ${appLabel} 后再导出到工程`, { icon: '💡', duration: 5000 })
+      } else {
+        toast.error(res.message || `导入 ${appLabel} 失败，请确认 ${appLabel} 正在运行`)
+      }
+    } catch {
+      toast.error(`导入 ${appLabel} 时出错，请稍后重试`)
+    }
   }
+
+  const handleExportPr = () => importToNle('pr', 'Premiere Pro')
+  const handleExportFcp = () => importToNle('fcp', 'Final Cut Pro')
+  const handleExportResolve = () => importToNle('resolve', 'DaVinci Resolve')
 
   const handleExportSingle = async () => {
     onClose()
@@ -1033,7 +1048,9 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     { icon: Wrench, label: '工具（裁剪/转换/变速…）', action: handleOpenTools },
     { icon: Download, label: '导出此音效…', action: handleExportSingle },
     { icon: Film, label: '导出到 AE 工程', action: handleImportToAE },
-    { icon: FileVideo, label: '导出到剪辑工程（Pr/FCP/达芬奇）', action: handleExportNLE },
+    { icon: Clapperboard, label: '导出到 Premiere Pro 工程', action: handleExportPr },
+    { icon: Scissors, label: '导出到 Final Cut Pro 工程', action: handleExportFcp },
+    { icon: SlidersHorizontal, label: '导出到 DaVinci Resolve 工程', action: handleExportResolve },
     { divider: true },
     { icon: Trash2, label: '删除', action: handleTrash, danger: true },
   ]
