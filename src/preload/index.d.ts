@@ -43,6 +43,7 @@ export interface SoundVaultAPI {
   // File Operations (Context Menu)
   showItemInFolder: (soundId: string) => Promise<{ success: boolean; message?: string }>
   copyFileTo: (soundId: string, targetDir: string) => Promise<{ success: boolean; path?: string; message?: string }>
+  copyFilesTo: (filePaths: string[], targetDir: string) => Promise<{ success: boolean; copied?: number; failed?: number; errors?: string[] }>
   moveFileTo: (soundId: string, targetDir: string) => Promise<{ success: boolean; path?: string; message?: string }>
   trashFile: (soundId: string) => Promise<{ success: boolean; message?: string }>
   findDuplicates: () => Promise<DuplicateGroup[]>

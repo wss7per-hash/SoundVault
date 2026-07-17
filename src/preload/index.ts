@@ -58,6 +58,7 @@ const api = {
   // File Operations (Context Menu)
   showItemInFolder: (soundId: string) => ipcRenderer.invoke('file:showItemInFolder', soundId),
   copyFileTo: (soundId: string, targetDir: string) => ipcRenderer.invoke('file:copyTo', soundId, targetDir),
+  copyFilesTo: (filePaths: string[], targetDir: string) => ipcRenderer.invoke('file:copyFilesTo', filePaths, targetDir),
   moveFileTo: (soundId: string, targetDir: string) => ipcRenderer.invoke('file:moveTo', soundId, targetDir),
   trashFile: (soundId: string) => ipcRenderer.invoke('file:trash', soundId),
   findDuplicates: () => ipcRenderer.invoke('library:findDuplicates'),

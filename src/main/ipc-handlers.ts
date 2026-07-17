@@ -2551,6 +2551,28 @@ function ensureParentCategory(category: string, now: string): string | null {
     }
   })
 
+  // 批量复制多个音频文件到目标文件夹（右键「导出所选的音效到文件夹」使用）
+  ipcMain.handle('file:copyFilesTo', async (_event, filePaths: string[], targetDir: string) => {
+    try {
+      await access(targetDir)
+      const results: string[] = []
+      const errors: string[] = []
+      for (const fp of filePaths) {
+        try {
+          const fileName = basename(fp)
+          const dest = join(targetDir, fileName)
+          await copyFile(fp, dest)
+          results.push(dest)
+        } catch (e) {
+          errors.push(`${basename(fp)}: ${(e as Error).message}`)
+        }
+      }
+      return { success: errors.length === 0, copied: results.length, failed: errors.length, errors }
+    } catch (err) {
+      return { success: false, copied: 0, failed: filePaths.length, errors: [(err as Error).message] }
+    }
+  })
+
   ipcMain.handle('file:moveTo', async (_event, soundId: string, targetDir: string) => {
     try {
       const row = db.prepare('SELECT file_path FROM sounds WHERE id = ?').get(soundId) as { file_path: string } | undefined

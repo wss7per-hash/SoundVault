@@ -894,10 +894,13 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
   const [tagValue, setTagValue] = useState('')
   const [newCollectionName, setNewCollectionName] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
-  const left = Math.min(x, window.innerWidth - 220)
-  const top = Math.min(y, window.innerHeight - (menuRef.current?.offsetHeight || 360))
+  const MENU_WIDTH = 208
+  const MENU_HEIGHT_ESTIMATE = 360
+  // 约束菜单不超出视口四边，避免与左侧边栏/右侧详情面板重叠
+  const left = Math.max(8, Math.min(x, window.innerWidth - MENU_WIDTH - 8))
+  const top = Math.max(8, Math.min(y, window.innerHeight - (menuRef.current?.offsetHeight || MENU_HEIGHT_ESTIMATE) - 8))
   // 右侧飞出面板位置：紧贴主菜单右边缘
-  const flyoutLeft = left + 208 // 主菜单宽 ~208px + 小间距
+  const flyoutLeft = left + MENU_WIDTH + 4 // 主菜单宽 + 小间距
   const flyoutTop = Math.min(top + 168, window.innerHeight - 280) // 对齐「加入收藏夹」行附近
 
   const handleShowInFolder = async () => {
@@ -992,15 +995,24 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
   const handleExportFcp = () => importToNle('fcp', 'Final Cut Pro')
   const handleExportResolve = () => importToNle('resolve', 'DaVinci Resolve')
 
-  const handleExportSingle = async () => {
+  const handleExportSelected = async () => {
     onClose()
     const result = await window.api.selectFolder()
     if (!result || result.length === 0) return
-    const toastId = toast.loading('正在导出…')
-    const res = await window.api.copyFileTo(sound.id, result[0])
+    const targetDir = result[0]
+    const n = exportFilePaths.length
+    const toastId = toast.loading(`正在导出 ${n} 个音效…`)
+    const res = await window.api.copyFilesTo(exportFilePaths, targetDir)
     toast.dismiss(toastId)
-    if (res.success) toast.success('已导出此音效到所选文件夹')
-    else toast.error(res.message || '导出失败，请检查目标文件夹是否可写')
+    if (res.success) {
+      toast.success(`已导出 ${res.copied} 个音效到所选文件夹`)
+    } else {
+      if (res.copied && res.copied > 0) {
+        toast.success(`已导出 ${res.copied} 个音效（${res.failed} 个失败）`)
+      } else {
+        toast.error(res.errors?.join('; ') || '导出失败，请检查目标文件夹是否可写')
+      }
+    }
   }
 
   const handleOpenTools = () => {
@@ -1063,7 +1075,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     { icon: Heart, label: sound.is_starred ? '取消收藏' : '收藏', action: handleStar },
     { icon: Sparkles, label: 'AI 分析', action: handleAnalyze },
     { icon: Wrench, label: '工具（裁剪/转换/变速…）', action: handleOpenTools },
-    { icon: Download, label: '导出此音效…', action: handleExportSingle },
+    { icon: Download, label: `导出所选的音效到文件夹${batchSuffix}`, action: handleExportSelected },
     { icon: Film, label: `导出到 AE 工程${batchSuffix}`, action: handleImportToAE },
     { icon: Clapperboard, label: `导出到 Premiere Pro 工程${batchSuffix}`, action: handleExportPr },
     { icon: Scissors, label: `导出到 Final Cut Pro 工程${batchSuffix}`, action: handleExportFcp },
@@ -1077,8 +1089,8 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     {createPortal(
       <div
         ref={menuRef}
-        className="fixed z-[100] w-52 py-1.5 rounded-xl border border-surface-border bg-surface-panel shadow-2xl"
-        style={{ left, top }}
+        className={`fixed z-[100] py-1.5 rounded-xl border border-surface-border bg-surface-panel shadow-2xl`}
+        style={{ left, top, width: MENU_WIDTH }}
         onClick={(e) => e.stopPropagation()}
       >
       {menuItems.map((item, idx) => (
