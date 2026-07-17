@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
-import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, FolderSearch, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown, FileDown, FileUp, Undo2, Sparkles } from 'lucide-react'
+import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, FolderSearch, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown, FileDown, FileUp, Undo2, Sparkles, HelpCircle } from 'lucide-react'
 import { ExportDialog } from './ExportDialog'
 
 const SORT_OPTIONS = [
@@ -774,6 +774,13 @@ export function Toolbar(): JSX.Element {
           title="AI 生成音效（云端文本→音效）"
         >
           <Wand2 size={16} />
+        </button>
+        <button
+          onClick={() => useAppStore.getState().toggleAbout()}
+          className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light"
+          title="关于 SoundVault"
+        >
+          <HelpCircle size={16} />
         </button>
         <div className="w-px h-5 bg-surface-border/50 mx-0.5" />
       </div>
