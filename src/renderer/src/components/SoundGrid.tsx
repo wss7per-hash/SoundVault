@@ -19,7 +19,7 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sound: SoundData } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sound: SoundData; exportFilePaths: string[] } | null>(null)
   const [tagInputVisible, setTagInputVisible] = useState(false)
   const [collectionMenuVisible, setCollectionMenuVisible] = useState(false)
   const [renameSound, setRenameSound] = useState<SoundData | null>(null)
@@ -510,6 +510,7 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
           refreshSounds={refreshSounds}
           clearSelection={clearSelection}
           setRenameSound={setRenameSound}
+          exportFilePaths={ctx.exportFilePaths}
         />
       )}
 
@@ -539,7 +540,17 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
   function handleContextMenu(e: React.MouseEvent, sound: SoundData) {
     e.preventDefault()
     e.stopPropagation()
-    setContextMenu({ x: e.clientX, y: e.clientY, sound })
+    // 右键导出范围：若当前处于多选状态且该卡片在选中集合内，则导出全部选中音效；
+    // 否则只导出右键的这一条（含点中未选中卡片、或单选/无选择的情况）。
+    const selIds = useAppStore.getState().selectedSoundIds
+    let exportFilePaths: string[]
+    if (selIds.length > 1 && selIds.includes(sound.id)) {
+      const selSet = new Set(selIds)
+      exportFilePaths = sounds.filter((s) => selSet.has(s.id)).map((s) => s.file_path)
+    } else {
+      exportFilePaths = [sound.file_path]
+    }
+    setContextMenu({ x: e.clientX, y: e.clientY, sound, exportFilePaths })
   }
 }
 
@@ -876,9 +887,10 @@ interface ContextMenuProps {
   refreshSounds: () => Promise<void>
   clearSelection: () => void
   setRenameSound: (s: SoundData | null) => void
+  exportFilePaths: string[]
 }
 
-function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagInputVisible, collectionMenuVisible, setCollectionMenuVisible, onClose, refreshSounds, clearSelection, setRenameSound }: ContextMenuProps): JSX.Element {
+function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagInputVisible, collectionMenuVisible, setCollectionMenuVisible, onClose, refreshSounds, clearSelection, setRenameSound, exportFilePaths }: ContextMenuProps): JSX.Element {
   const [tagValue, setTagValue] = useState('')
   const [newCollectionName, setNewCollectionName] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
@@ -945,9 +957,10 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
   const handleImportToAE = async () => {
     try {
       onClose()
-      const res = await window.api.importToAE(sound.file_path)
+      const n = exportFilePaths.length
+      const res = await window.api.importToAE(exportFilePaths)
       if (res.success) {
-        toast.success('已导入到 After Effects 工程')
+        toast.success(n > 1 ? `已导入 ${n} 个音效到 After Effects 工程` : '已导入到 After Effects 工程')
       } else if (res.code === 'AE_CLOSED') {
         toast('After Effects 未运行，请先打开 AE 后再导出到工程', { icon: '💡', duration: 5000 })
       } else {
@@ -961,9 +974,10 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
   const importToNle = async (nle: 'pr' | 'fcp' | 'resolve', appLabel: string) => {
     try {
       onClose()
-      const res = await window.api.importToNLE(nle, sound.file_path)
+      const n = exportFilePaths.length
+      const res = await window.api.importToNLE(nle, exportFilePaths)
       if (res.success) {
-        toast.success(`已导入到 ${appLabel} 工程`)
+        toast.success(n > 1 ? `已导入 ${n} 个音效到 ${appLabel} 工程` : `已导入到 ${appLabel} 工程`)
       } else if (res.code === 'APP_CLOSED') {
         toast(`${appLabel} 未运行，请先打开 ${appLabel} 后再导出到工程`, { icon: '💡', duration: 5000 })
       } else {
@@ -1035,6 +1049,9 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     }
   }
 
+  const isBatch = exportFilePaths.length > 1
+  const batchSuffix = isBatch ? ` (${exportFilePaths.length} 个)` : ''
+
   const menuItems = [
     { icon: FolderOpen, label: '打开文件位置', action: handleShowInFolder },
     { icon: Copy, label: '复制到...', action: handleCopyTo },
@@ -1047,10 +1064,10 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     { icon: Sparkles, label: 'AI 分析', action: handleAnalyze },
     { icon: Wrench, label: '工具（裁剪/转换/变速…）', action: handleOpenTools },
     { icon: Download, label: '导出此音效…', action: handleExportSingle },
-    { icon: Film, label: '导出到 AE 工程', action: handleImportToAE },
-    { icon: Clapperboard, label: '导出到 Premiere Pro 工程', action: handleExportPr },
-    { icon: Scissors, label: '导出到 Final Cut Pro 工程', action: handleExportFcp },
-    { icon: SlidersHorizontal, label: '导出到 DaVinci Resolve 工程', action: handleExportResolve },
+    { icon: Film, label: `导出到 AE 工程${batchSuffix}`, action: handleImportToAE },
+    { icon: Clapperboard, label: `导出到 Premiere Pro 工程${batchSuffix}`, action: handleExportPr },
+    { icon: Scissors, label: `导出到 Final Cut Pro 工程${batchSuffix}`, action: handleExportFcp },
+    { icon: SlidersHorizontal, label: `导出到 DaVinci Resolve 工程${batchSuffix}`, action: handleExportResolve },
     { divider: true },
     { icon: Trash2, label: '删除', action: handleTrash, danger: true },
   ]

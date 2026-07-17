@@ -11,8 +11,8 @@ export interface SoundVaultAPI {
   getPathForFile: (file: File) => string
   // 系统级文件拖拽（拖到 AE 等外部应用直接导入）
   startDragFile: (filePath: string) => void
-  // 一键导入正在运行的 After Effects（官方 ExtendScript importFile）
-  importToAE: (filePath: string) => Promise<{ success: boolean; name?: string; message?: string; code?: string }>
+  // 一键导入正在运行的 After Effects（官方 ExtendScript importFile），支持批量（传入路径数组）
+  importToAE: (filePaths: string[]) => Promise<{ success: boolean; name?: string; message?: string; code?: string; count?: number }>
 
   // Dialog
   selectFolder: () => Promise<string[]>
@@ -121,7 +121,7 @@ export interface SoundVaultAPI {
   batchTag: (soundIds: string[], tagNames: string[], action: 'add' | 'remove') => Promise<{ success: boolean; affected: number }>
   batchStar: (ids: string[]) => Promise<{ success: boolean; affected: number }>
   batchExport: (ids: string[], targetDir: string) => Promise<{ success: boolean; copied?: number; skipped?: number; missing?: number; message?: string }>
-  importToNLE: (nle: 'pr' | 'fcp' | 'resolve', filePath: string) => Promise<{ success: boolean; name?: string; message?: string; code?: string }>
+  importToNLE: (nle: 'pr' | 'fcp' | 'resolve', filePaths: string[]) => Promise<{ success: boolean; name?: string; message?: string; code?: string; count?: number }>
 
   // Trash / Recycle Bin
   getTrash: () => Promise<SoundData[]>

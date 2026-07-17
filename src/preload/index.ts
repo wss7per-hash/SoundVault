@@ -14,9 +14,9 @@ const api = {
   },
   // 系统级文件拖拽（拖到 AE 等外部应用直接导入）
   startDragFile: (filePath: string) => ipcRenderer.send('app:dragFile', filePath),
-  // 一键导入正在运行的 After Effects（官方 ExtendScript importFile）
-  importToAE: (filePath: string) =>
-    ipcRenderer.invoke('app:importToAE', filePath) as Promise<{ success: boolean; name?: string; message?: string }>,
+  // 一键导入正在运行的 After Effects（官方 ExtendScript importFile），支持批量（传入路径数组）
+  importToAE: (filePaths: string[]) =>
+    ipcRenderer.invoke('app:importToAE', filePaths) as Promise<{ success: boolean; name?: string; message?: string; code?: string; count?: number }>,
 
   // Dialog
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
@@ -163,8 +163,8 @@ const api = {
     ipcRenderer.invoke('sound:batchTag', soundIds, tagNames, action),
   batchStar: (ids: string[]) => ipcRenderer.invoke('sound:batchStar', ids),
   batchExport: (ids: string[], targetDir: string) => ipcRenderer.invoke('sound:batchExport', ids, targetDir),
-  importToNLE: (nle: 'pr' | 'fcp' | 'resolve', filePath: string) =>
-    ipcRenderer.invoke('app:importToNLE', nle, filePath),
+  importToNLE: (nle: 'pr' | 'fcp' | 'resolve', filePaths: string[]) =>
+    ipcRenderer.invoke('app:importToNLE', nle, filePaths),
 
   // Trash / Recycle Bin
   getTrash: () => ipcRenderer.invoke('sound:getTrash'),

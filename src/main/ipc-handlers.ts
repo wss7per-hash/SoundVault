@@ -109,7 +109,8 @@ function isAeRunning(): boolean {
   }
 }
 
-async function importToAE(filePath: string): Promise<{ success: boolean; name?: string; message?: string; code?: string }> {
+// filePaths 支持一次传入多个音效（右键多选批量导入）。
+async function importToAE(filePaths: string[]): Promise<{ success: boolean; name?: string; message?: string; code?: string; count?: number }> {
   const aeDir = findAEDir()
   if (!aeDir) {
     return { success: false, message: '未找到 After Effects，请确认已安装（默认位于 C:\\Program Files\\Adobe）' }
@@ -133,20 +134,26 @@ async function importToAE(filePath: string): Promise<{ success: boolean; name?: 
   const resultPath = join(tmpdir(), `ae-result-${uid}.js`)
   const jsxPath = join(tmpdir(), `ae-cmd-${uid}.jsx`)
 
-  // filePath / resultPath 经 JSON.stringify 正确转义反斜杠，作为 JS 字符串字面量嵌入脚本
-  const p = JSON.stringify(filePath)
+  // filePaths 经 JSON.stringify 正确转义为 JS 数组字面量，支持一次导入多个音效
+  const arr = JSON.stringify(filePaths)
   const rp = JSON.stringify(resultPath)
 
   const jsx = [
     'app.beginSuppressDialogs();',
-    'var __r;',
-    'try {',
-    '  var __io = new ImportOptions(File(' + p + '));',
-    '  var __it = app.project.importFile(__io);',
-    '  __r = __it ? __it.name : "imported";',
-    '} catch (e) {',
-    '  __r = "ERROR:" + (e && e.toString ? e.toString() : String(e));',
+    'var __files = ' + arr + ';',
+    'var __ok = 0;',
+    'var __names = [];',
+    'for (var __i = 0; __i < __files.length; __i++) {',
+    '  try {',
+    '    var __io = new ImportOptions(File(__files[__i]));',
+    '    var __it = app.project.importFile(__io);',
+    '    __ok++;',
+    '    if (__it) __names.push(__it.name);',
+    '  } catch (e) {',
+    '    if (!__names.length) __names.push("ERROR:" + (e && e.toString ? e.toString() : String(e)));',
+    '  }',
     '}',
+    'var __r = __ok + "|" + (__names[0] || "");',
     'app.endSuppressDialogs(false);',
     '(function(){',
     '  var f = new File(' + rp + ');',
@@ -188,10 +195,13 @@ async function importToAE(filePath: string): Promise<{ success: boolean; name?: 
         'AE 未返回结果。请确认：① AE 正在运行；② 已勾选「编辑 > 首选项 > 脚本和表达式 > 允许脚本写入文件和访问网络」'
     }
   }
-  if (result.returned && String(result.returned).startsWith('ERROR:')) {
-    return { success: false, message: String(result.returned) }
+  const parts = String(result.returned).split('|')
+  const ok = parseInt(parts[0], 10) || 0
+  const firstName = parts[1] || ''
+  if (ok === 0) {
+    return { success: false, message: firstName ? firstName.replace(/^ERROR:/, '') : '导入失败，请确认文件格式受 AE 支持' }
   }
-  return { success: true, name: result.returned }
+  return { success: true, name: firstName, count: ok }
 }
 
 // ── 一键导入到其它剪辑软件（Pr / FCP / DaVinci），与 AE 完全一致 ──
@@ -253,9 +263,9 @@ function isProcessRunning(processName: string): boolean {
 }
 
 async function importToPremiere(
-  filePath: string,
+  filePaths: string[],
   meta: NleMeta
-): Promise<{ success: boolean; name?: string; message?: string; code?: string }> {
+): Promise<{ success: boolean; name?: string; message?: string; code?: string; count?: number }> {
   const dir = findNleDir(meta.dirPattern)
   if (!dir) return { success: false, message: `未找到 ${meta.appName}，请确认已安装。` }
   const exe = join(dir, meta.exeName)
@@ -266,17 +276,20 @@ async function importToPremiere(
   const uid = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`
   const resultPath = join(tmpdir(), `pr-result-${uid}.js`)
   const jsxPath = join(tmpdir(), `pr-cmd-${uid}.jsx`)
-  const p = JSON.stringify(filePath)
+  const arr = JSON.stringify(filePaths)
   const rp = JSON.stringify(resultPath)
 
   const jsx = [
-    'var __r;',
+    'var __files = ' + arr + ';',
+    'var __items;',
     'try {',
-    '  app.project.importFiles([' + p + '], true, app.project.rootItem, false);',
-    '  __r = "imported";',
+    '  __items = app.project.importFiles(__files, true, app.project.rootItem, false);',
     '} catch (e) {',
-    '  __r = "ERROR:" + (e && e.toString ? e.toString() : String(e));',
+    '  __items = null;',
     '}',
+    'var __cnt = (__items && __items.length) ? __items.length : 0;',
+    'var __fn = (__items && __items[0]) ? __items[0].name : "";',
+    'var __r = __cnt + "|" + __fn;',
     '(function(){',
     '  var f = new File(' + rp + ');',
     '  f.open("w");',
@@ -311,16 +324,19 @@ async function importToPremiere(
         `${meta.appName} 未返回结果。请确认：① ${meta.appName} 正在运行；② 已允许脚本写入文件（Premiere：编辑 > 首选项 > 脚本）`
     }
   }
-  if (result.returned && String(result.returned).startsWith('ERROR:')) {
-    return { success: false, message: String(result.returned) }
+  const parts = String(result.returned).split('|')
+  const count = parseInt(parts[0], 10) || 0
+  const firstName = parts[1] || ''
+  if (count === 0) {
+    return { success: false, message: `${meta.appName} 未能导入文件，请确认文件格式受支持且工程可写` }
   }
-  return { success: true, name: result.returned }
+  return { success: true, name: firstName, count }
 }
 
 async function importToNLE(
   nle: NleKey,
-  filePath: string
-): Promise<{ success: boolean; name?: string; message?: string; code?: string }> {
+  filePaths: string[]
+): Promise<{ success: boolean; name?: string; message?: string; code?: string; count?: number }> {
   const meta = NLE_LIST.find((m) => m.key === nle)
   if (!meta) return { success: false, message: '未知剪辑软件' }
 
@@ -334,7 +350,7 @@ async function importToNLE(
   }
 
   if (nle === 'pr') {
-    return importToPremiere(filePath, meta)
+    return importToPremiere(filePaths, meta)
   }
   if (nle === 'fcp') {
     // Final Cut Pro 仅 macOS 可用；Windows 上进程永远不可能在运行，上面已拦截。
@@ -414,14 +430,14 @@ export function registerIpcHandlers(): void {
     }
   })
 
-  // 一键把音频导入正在运行的 After Effects 工程（通过官方 ExtendScript importFile）
-  ipcMain.handle('app:importToAE', async (_event, filePath: string) => {
-    return importToAE(filePath)
+  // 一键把音频导入正在运行的 After Effects 工程（通过官方 ExtendScript importFile），支持批量
+  ipcMain.handle('app:importToAE', async (_event, filePaths: string[]) => {
+    return importToAE(filePaths)
   })
 
-  // 一键把音频导入正在运行的剪辑软件工程（Pr / FCP / DaVinci），与 AE 一致
-  ipcMain.handle('app:importToNLE', async (_event, nle: NleKey, filePath: string) => {
-    return importToNLE(nle, filePath)
+  // 一键把音频导入正在运行的剪辑软件工程（Pr / FCP / DaVinci），与 AE 一致，支持批量
+  ipcMain.handle('app:importToNLE', async (_event, nle: NleKey, filePaths: string[]) => {
+    return importToNLE(nle, filePaths)
   })
 
   ipcMain.handle('dialog:selectFolder', async () => {

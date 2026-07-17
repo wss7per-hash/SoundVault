@@ -151,7 +151,7 @@ export function SoundTools({ sound, onUpdate }: SoundToolsProps): JSX.Element {
     if (importing) return
     setImporting(true)
     try {
-      const res = await window.api.importToAE(sound.file_path)
+      const res = await window.api.importToAE([sound.file_path])
       if (res.success) {
         toast.success(`已导入 After Effects${res.name ? '：' + res.name : ''}`)
       } else if (res.code === 'AE_CLOSED') {
