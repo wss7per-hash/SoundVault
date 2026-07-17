@@ -45,8 +45,6 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
   const collections = useAppStore((s) => s.collections)
   const tags = useAppStore((s) => s.tags)
   const refreshSounds = useAppStore((s) => s.refreshSounds)
-  const refreshTags = useAppStore((s) => s.refreshTags)
-  const refreshTagStats = useAppStore((s) => s.refreshTagStats)
   const gridDensity = useAppStore((s) => s.gridDensity)
   const isMultiSelecting = selectedIds.length > 0
 
@@ -983,8 +981,9 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     const res = await window.api.addTagToSound(sound.id, name, 1)
     if (res.success) {
       toast.success(`已添加标签: ${name}`)
-      // 标签可能新增（addTagToSound 会在标签不存在时创建），刷新标签树
-      await Promise.all([refreshSounds(), refreshTags(), refreshTagStats()])
+      // 标签可能新建（addTagToSound 不存在时会创建），即时刷新左侧标签树
+      const store = useAppStore.getState()
+      await Promise.all([refreshSounds(), store.refreshTags(), store.refreshTagStats()])
     } else toast.error('添加标签失败，请稍后重试')
     setTagValue('')
     setTagInputVisible(false)
