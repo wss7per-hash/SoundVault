@@ -2332,8 +2332,9 @@ function ensureParentCategory(category: string, now: string): string | null {
     try {
       await access(targetDir)
       const rows = db.prepare(`
-        SELECT id, file_path, file_name, duration_ms, sample_rate, channels, bitrate_kbps, file_ext, file_size, tags
-        FROM sounds WHERE id IN (${ids.map(() => '?').join(',')})
+        SELECT s.id, s.file_path, s.file_name, s.duration_ms, s.sample_rate, s.channels, s.bitrate_kbps, s.file_ext, s.file_size,
+          (SELECT GROUP_CONCAT(t.name) FROM tags t JOIN sound_tags st ON t.id = st.tag_id WHERE st.sound_id = s.id) AS tags
+        FROM sounds s WHERE s.id IN (${ids.map(() => '?').join(',')})
       `).all(...ids) as Array<{
         id: string; file_path: string; file_name: string; duration_ms: number | null
         sample_rate: number | null; channels: number | null; bitrate_kbps: number | null

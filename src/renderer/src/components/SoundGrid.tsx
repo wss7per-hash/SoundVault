@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import type { SoundData, CollectionData, TagData } from '../../preload/index.d'
 import {
   Play, Pause, Star, Check, Music, FolderOpen, Folder, Copy, FileInput, Pencil, Tag, FolderPlus,
-  Sparkles, Trash2, X, Volume2, Heart, MoreHorizontal, Film, Wrench, Download
+  Sparkles, Trash2, X, Volume2, Heart, MoreHorizontal, Film, Wrench, Download, FileVideo
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
@@ -958,6 +958,11 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     }
   }
 
+  const handleExportNLE = () => {
+    onClose()
+    useAppStore.getState().toggleExportNLE()
+  }
+
   const handleExportSingle = async () => {
     onClose()
     const result = await window.api.selectFolder()
@@ -1028,6 +1033,7 @@ function ContextMenu({ x, y, sound, collections, tags, tagInputVisible, setTagIn
     { icon: Wrench, label: '工具（裁剪/转换/变速…）', action: handleOpenTools },
     { icon: Download, label: '导出此音效…', action: handleExportSingle },
     { icon: Film, label: '导出到 AE 工程', action: handleImportToAE },
+    { icon: FileVideo, label: '导出到剪辑工程（Pr/FCP/达芬奇）', action: handleExportNLE },
     { divider: true },
     { icon: Trash2, label: '删除', action: handleTrash, danger: true },
   ]
