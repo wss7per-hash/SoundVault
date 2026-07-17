@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
-import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, FolderSearch, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown, FileDown, FileUp, Undo2, Sparkles, HelpCircle } from 'lucide-react'
+import { Search, LayoutGrid, List, SlidersHorizontal, ArrowDownAZ, ArrowUpAZ, Clock, HardDrive, Calendar, Minimize2, Square, X, Upload, Download, Loader2, Package, FolderOpen, FolderSearch, Ban, CheckCircle2, BarChart3, Wand2, Settings, AlertTriangle, Rows3, Rows4, ChevronDown, FileDown, FileUp, Undo2, Sparkles, MoreHorizontal, HelpCircle } from 'lucide-react'
 import { ExportDialog } from './ExportDialog'
 
 const SORT_OPTIONS = [
@@ -40,6 +40,8 @@ export function Toolbar(): JSX.Element {
   const { searchQuery, setSearchQuery, searchMode, setSearchMode } = useAppStore()
   const toggleScanDialog = useAppStore((s) => s.toggleScanDialog)
   const [showFilter, setShowFilter] = useState(false)
+  const [showViewMenu, setShowViewMenu] = useState(false)
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [isMaximized, setIsMaximized] = useState(false)
   const [busy, setBusy] = useState<null | 'import'>(null)
   const [showLibMenu, setShowLibMenu] = useState(false)
@@ -706,39 +708,55 @@ export function Toolbar(): JSX.Element {
 
         <div className="w-px h-5 bg-surface-border mx-1" />
 
-        <button
-          onClick={() => setViewMode('grid')}
-          className={`p-1.5 rounded-md transition-colors ${
-            viewMode === 'grid'
-              ? 'bg-accent/20 text-accent-light'
-              : 'text-muted hover:bg-surface-hover hover:text-muted-light'
-          }`}
-          title="网格视图"
-        >
-          <LayoutGrid size={16} />
-        </button>
-        <button
-          onClick={() => setViewMode('list')}
-          className={`p-1.5 rounded-md transition-colors ${
-            viewMode === 'list'
-              ? 'bg-accent/20 text-accent-light'
-              : 'text-muted hover:bg-surface-hover hover:text-muted-light'
-          }`}
-          title="列表视图"
-        >
-          <List size={16} />
-        </button>
-        <button
-          onClick={() => setGridDensity(gridDensity === 'compact' ? 'comfortable' : 'compact')}
-          className={`p-1.5 rounded-md transition-colors ${
-            gridDensity === 'compact'
-              ? 'bg-accent/20 text-accent-light'
-              : 'text-muted hover:bg-surface-hover hover:text-muted-light'
-          }`}
-          title={gridDensity === 'compact' ? '网格密度：紧凑（点击切回舒适）' : '网格密度：舒适（点击切到紧凑）'}
-        >
-          {gridDensity === 'compact' ? <Rows4 size={16} /> : <Rows3 size={16} />}
-        </button>
+        {/* 视图模式下拉：网格 / 列表 / 密度 */}
+        <div className="relative">
+          <button
+            onClick={() => setShowViewMenu((v) => !v)}
+            onBlur={() => setTimeout(() => setShowViewMenu(false), 150)}
+            className={`p-1.5 rounded-md transition-colors flex items-center gap-0.5 ${
+              'text-muted hover:bg-surface-hover hover:text-muted-light'
+            }`}
+            title="视图模式"
+          >
+            {viewMode === 'grid' ? <LayoutGrid size={16} /> : <List size={16} />}
+            <ChevronDown size={12} />
+          </button>
+          {showViewMenu && (
+            <div className="absolute left-0 top-full mt-1 w-36 rounded-lg bg-surface border border-surface-border shadow-xl z-50 py-1 overflow-hidden">
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setShowViewMenu(false); setViewMode('grid') }}
+                className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                  viewMode === 'grid' ? 'text-accent-light bg-accent/10' : 'text-muted-light hover:bg-surface-hover'
+                }`}
+              >
+                <span className="flex items-center gap-2"><LayoutGrid size={14} /> 网格</span>
+                {viewMode === 'grid' && <CheckCircle2 size={13} />}
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setShowViewMenu(false); setViewMode('list') }}
+                className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                  viewMode === 'list' ? 'text-accent-light bg-accent/10' : 'text-muted-light hover:bg-surface-hover'
+                }`}
+              >
+                <span className="flex items-center gap-2"><List size={14} /> 列表</span>
+                {viewMode === 'list' && <CheckCircle2 size={13} />}
+              </button>
+              <div className="h-px bg-surface-border my-0.5" />
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setShowViewMenu(false); setGridDensity(gridDensity === 'compact' ? 'comfortable' : 'compact') }}
+                className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                  gridDensity === 'compact' ? 'text-accent-light bg-accent/10' : 'text-muted-light hover:bg-surface-hover'
+                }`}
+              >
+                <span className="flex items-center gap-2">{gridDensity === 'compact' ? <Rows4 size={14} /> : <Rows3 size={14} />} {gridDensity === 'compact' ? '紧凑' : '舒适'}</span>
+                {gridDensity === 'compact' && <CheckCircle2 size={13} />}
+              </button>
+            </div>
+          )}
+        </div>
         <button
           onClick={() => setActiveView(activeView === 'settings' ? 'library' : 'settings')}
           className={`p-1.5 rounded-md transition-colors ${
@@ -768,20 +786,37 @@ export function Toolbar(): JSX.Element {
         >
           <BarChart3 size={16} />
         </button>
-        <button
-          onClick={() => useAppStore.getState().toggleGenerate()}
-          className="p-1.5 rounded-md transition-colors text-purple-400 hover:bg-purple-500/10 hover:text-purple-300"
-          title="AI 生成音效（云端文本→音效）"
-        >
-          <Wand2 size={16} />
-        </button>
-        <button
-          onClick={() => useAppStore.getState().toggleAbout()}
-          className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light"
-          title="关于 SoundVault"
-        >
-          <HelpCircle size={16} />
-        </button>
+        {/* 更多菜单：AI 生成 + 关于 */}
+        <div className="relative">
+          <button
+            onClick={() => setShowMoreMenu((v) => !v)}
+            onBlur={() => setTimeout(() => setShowMoreMenu(false), 150)}
+            className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light"
+            title="更多（AI 生成 / 关于）"
+          >
+            <MoreHorizontal size={16} />
+          </button>
+          {showMoreMenu && (
+            <div className="absolute right-0 top-full mt-1 w-44 rounded-lg bg-surface border border-surface-border shadow-xl z-50 py-1 overflow-hidden">
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setShowMoreMenu(false); useAppStore.getState().toggleGenerate() }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-purple-300 hover:bg-surface-hover transition-colors"
+              >
+                <Wand2 size={14} />
+                AI 生成音效
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setShowMoreMenu(false); useAppStore.getState().toggleAbout() }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-light hover:bg-surface-hover transition-colors"
+              >
+                <HelpCircle size={14} />
+                关于 SoundVault
+              </button>
+            </div>
+          )}
+        </div>
         <div className="w-px h-5 bg-surface-border/50 mx-0.5" />
       </div>
 
