@@ -145,14 +145,22 @@ export function Sidebar(): JSX.Element {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {sidebarTab === 'tags' && <TagTree />}
-        {sidebarTab === 'collections' && <CollectionsManager />}
-        {sidebarTab === 'smart' && (
-          <>
-            <SmartClassifyPanel />
-            <SmartFolderList />
-          </>
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden">
+          {sidebarTab === 'tags' && <TagTree />}
+          {sidebarTab === 'collections' && <CollectionsManager />}
+          {sidebarTab === 'smart' && (
+            <>
+              <SmartClassifyPanel />
+              <SmartFolderList />
+            </>
+          )}
+        </div>
+        {/* 操作提示 */}
+        {sidebarTab !== 'trash' && (
+          <div className="shrink-0 px-3 py-1.5 text-[10px] text-muted/40 border-t border-surface-border/50">
+            💡 悬停显示编辑按钮 · 右键可删除 · 拖拽可连选
+          </div>
         )}
         {sidebarTab === 'trash' && confirmKind && (
           <div

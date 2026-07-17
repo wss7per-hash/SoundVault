@@ -770,11 +770,12 @@ export function Toolbar(): JSX.Element {
         </button>
         <button
           onClick={() => useAppStore.getState().toggleGenerate()}
-          className="p-1.5 rounded-md transition-colors text-muted hover:bg-surface-hover hover:text-muted-light"
+          className="p-1.5 rounded-md transition-colors text-purple-400 hover:bg-purple-500/10 hover:text-purple-300"
           title="AI 生成音效（云端文本→音效）"
         >
           <Wand2 size={16} />
         </button>
+        <div className="w-px h-5 bg-surface-border/50 mx-0.5" />
       </div>
 
       {/* Window Controls (frameless mode) */}
