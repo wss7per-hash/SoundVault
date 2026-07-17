@@ -328,7 +328,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         return false
       }
       if (result.success) {
-        await get().refreshSounds()
+        // AI 可能新增标签/标签分类，刷新标签树确保侧边栏即时显示
+        await Promise.all([
+          get().refreshSounds(),
+          get().refreshTags(),
+          get().refreshTagStats()
+        ])
         toast.success('AI 分析完成')
         return true
       } else {
@@ -362,7 +367,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         get().handleAnalyzeError(result.error || '', undefined, '批量分析失败')
       }
-      await get().refreshSounds()
+      // 批量分析可能新增大量标签，确保侧边栏标签树即时显示
+      await Promise.all([
+        get().refreshSounds(),
+        get().refreshTags(),
+        get().refreshTagStats()
+      ])
     } catch (err) {
       get().handleAnalyzeError((err as Error).message || '', (err as any)?.code, '批量分析失败')
     } finally {
