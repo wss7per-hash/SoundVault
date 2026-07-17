@@ -618,8 +618,8 @@ win.innerHTML =
 
     <div class="card">
       <div class="ico">🗂️</div>
-      <h3>八大分类标签体系</h3>
-      <p>人声 / 动物 / 环境氛围 / 动作物品 / UI交互 / 乐器音乐 / 机械科技 / 特殊效果。AI 分析结果自动归入对应父分类，左侧标签树点击即筛选。</p>
+      <h3>语义标签 · 八大分类</h3>
+      <p>AI 把每个音效的标签归入<strong style="color:var(--text)">八大标准分类</strong>：人声 / 动物 / 环境氛围 / 动作物品 / UI交互 / 乐器音乐 / 机械科技 / 特殊效果。分类节点<strong style="color:var(--text)">按需生成</strong>——只有某分类下确实有了标签，它才会出现在左侧标签树里（不再预置一堆空分类占位）。点击任一分类或标签即可在右侧过滤出对应音效。</p>
     </div>
 
     <div class="card">
@@ -721,6 +721,7 @@ win.innerHTML =
         <li>工具栏可切换 <code class="chip">网格视图</code> 与 <code class="chip">列表视图</code>。</li>
         <li>右键音效可：打开文件位置、复制、重命名、收藏、AI 分析、删除等。</li>
         <li>按 <code class="chip">文件名 / 时长 / 大小 / 导入时间</code> 排序，支持升 / 降序与格式过滤（见 Step 8）。</li>
+        <li>详情面板是<strong style="color:var(--text)">常驻右侧边栏</strong>：点别的卡片可直接切换内容，按 <code class="chip">Esc</code> 关闭；浏览多个音效时不用反复开关。</li>
       </ul>
     </div>
   </div>
@@ -734,14 +735,14 @@ win.innerHTML =
       <p>点「AI 分析」按钮，AI 会输出：形象描述、使用场景、关联关键词、拟声词，以及一组语义标签。</p>
       <div class="detail">
         <div class="row"><span class="k">按钮状态</span><span class="v">未分析＝紫色「<b>AI 分析</b>」；分析中＝「<b>分析中…（点击取消）</b>」可随时取消；已分析＝「<b>重新 AI 分析</b>」</span></div>
-        <div class="row"><span class="k">输出位置</span><span class="v">描述进「AI 描述」区、场景进「适用场景」chip、情绪进「情绪」、标签进「标签」区并归入左侧八大分类</span></div>
+        <div class="row"><span class="k">输出位置</span><span class="v">描述进「AI 描述」区、场景进「适用场景」chip、情绪进「情绪」、标签进「标签」区并归入左侧八大分类（<strong style="color:var(--text)">按需生成，不再预置空分类占位</strong>）</span></div>
         <div class="row"><span class="k">首次配置</span><span class="v">没配 Key 时点分析→ 弹友好引导提示并<b>自动弹出模型配置面板</b>（见 Step 9 细节）</span></div>
         <div class="row"><span class="k">批量分析</span><span class="v">右侧面板可对每个音效单独分析；「导入时勾选自动分析」可批量完成</span></div>
       </div>
       <ul>
         <li>首次使用前，在「设置 / 模型配置」里选择服务商并填入 API Key（仅存本机）。</li>
         <li><strong style="color:var(--text)">没配 Key 也不慌</strong>：点分析不会弹出看不懂的报错，而是显示友好引导提示并自动弹出模型配置面板，按提示选服务商、填 Key 即可。</li>
-        <li>分析结果自动归入<strong style="color:var(--text)">八大分类</strong>父节点，形成「分类 → 子标签」层级。</li>
+        <li>分析结果自动归入<strong style="color:var(--text)">八大分类</strong>父节点，形成「分类 → 子标签」层级。分类节点按标签实际情况<strong style="color:var(--text)">按需生长</strong>：没分析过时标签树是空的，分析出标签后对应分类才出现。</li>
       </ul>
       <div class="callout tip">小技巧：标签是检索的核心。分析得越充分，后面用智能文件夹与搜索时能筛得越准。</div>
     </div>
@@ -753,15 +754,17 @@ win.innerHTML =
     <div>
       <h3>标签体系与筛选</h3>
       <span class="path">左侧栏 &nbsp;·&nbsp; 第一个 Tab「标签」</span>
-      <p>左侧「标签」栏呈现八大分类树。点击任意标签，中间主区立即过滤出带该标签的音效。</p>
+      <p>左侧「标签」栏是按<strong style="color:var(--text)">八大分类</strong>组织的标签树。它<strong style="color:var(--text)">按需生长</strong>：刚装好、还没分析音效时，树是空的；当你用 AI 分析或手动加标签后，对应的分类节点与标签才会自动长出来——不再有一打开就占位的空分类。点击任意标签，中间主区立即过滤出带该标签的音效。</p>
       <div class="detail">
-        <div class="row"><span class="k">八大分类</span><span class="v">人声 / 动物 / 环境氛围 / 动作物品 / UI交互 / 乐器音乐 / 机械科技 / 特殊效果（点击父节点展开子标签）</span></div>
+        <div class="row"><span class="k">八大分类</span><span class="v">人声 / 动物 / 环境氛围 / 动作物品 / UI交互 / 乐器音乐 / 机械科技 / 特殊效果（点击父节点展开子标签；只有旗下有标签的分类才会出现）</span></div>
         <div class="row"><span class="k">手动加标签</span><span class="v">右侧面板「标签」区输入框打字→ 自动补全已有标签→ 回车或点「+」添加；手动标签前带 ✎ 标记，可点 × 移除</span></div>
+        <div class="row"><span class="k">即时刷新</span><span class="v">无论是 AI 分析还是右键手动加标签，<strong style="color:var(--text)">新标签会立刻出现在左侧标签树</strong>，无需任何手动刷新</span></div>
         <div class="row"><span class="k">搜索框</span><span class="v">顶部工具栏搜索框输入文件名 / 场景 / 情绪关键词，实时检索</span></div>
       </div>
       <ul>
-        <li>右键音效可<strong style="color:var(--text)">手动添加标签</strong>，手动标签与 AI 标签统一管理。</li>
+        <li>右键音效可<strong style="color:var(--text)">手动添加标签</strong>，手动标签与 AI 标签统一管理；添加后左侧树即时更新。</li>
         <li>顶部搜索框支持按文件名、场景、情绪关键词实时检索。</li>
+        <li>左侧栏底部有一行提示：<b>悬停显示编辑按钮 · 右键可删除 · 拖拽可连选</b>，帮你快速发现这些隐藏操作。</li>
       </ul>
     </div>
   </div>
@@ -891,7 +894,7 @@ win.innerHTML =
     <div class="num">10</div>
     <div>
       <h3>AI 生成音效（云端 text-to-SFX）</h3>
-      <span class="path">中间工具栏 &nbsp;·&nbsp; 「AI 生成」魔杖按钮 &nbsp;→&nbsp; 打开生成面板</span>
+      <span class="path">中间工具栏 &nbsp;·&nbsp; 紫色高亮的「AI 生成」魔杖按钮 &nbsp;→&nbsp; 打开生成面板</span>
       <p>用一句文字描述，让云端模型直接「造」出一段音效，并自动落进你的本地音库。</p>
       <div class="detail">
         <div class="row"><span class="k">服务商</span><span class="v"><b>Fal.ai</b>（Stable Audio 2.5，最长 190s，国内通常可直连，新用户送 ~$1–5 试用金）/ <b>ElevenLabs</b>（SFX V2，音质最佳，最长 20s，需海外卡 + 代理）</span></div>
