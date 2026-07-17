@@ -527,7 +527,7 @@ export function DetailPanel({ sound, onClose, onUpdate }: DetailPanelProps): JSX
   // RENDER
   // ================================================================
   return (
-    <div className="w-full h-full flex flex-col bg-surface">
+    <div className="w-80 h-full border-l border-surface-border flex flex-col shrink-0 bg-surface">
       {/* Hidden audio element */}
       <audio ref={audioRef} src={`sv://${sound.id}`} preload="auto" />
 

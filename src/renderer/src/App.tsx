@@ -384,17 +384,7 @@ export default function App(): JSX.Element {
               </div>
 
               {selectedSound && (
-                <>
-                  {/* 半透明遮罩 — 点击关闭 */}
-                  <div
-                    className="absolute inset-0 bg-black/40 z-30"
-                    onClick={() => selectSound(null)}
-                  />
-                  {/* 详情面板浮层 — 右侧滑出 */}
-                  <div className="absolute right-0 top-0 bottom-0 w-[420px] max-w-[85vw] z-40 bg-surface border-l border-surface-border shadow-2xl overflow-y-auto">
-                    <DetailPanel sound={selectedSound} onClose={() => selectSound(null)} onUpdate={loadData} />
-                  </div>
-                </>
+                <DetailPanel sound={selectedSound} onClose={() => selectSound(null)} onUpdate={loadData} />
               )}
             </>
           )}
