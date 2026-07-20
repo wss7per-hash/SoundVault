@@ -243,6 +243,14 @@ export default function App(): JSX.Element {
     return unsub
   }, [])
 
+  // 宠物窗口「打开设置」动作 → 切到设置面板（宠物区在设置里）
+  useEffect(() => {
+    const unsub = window.api.pet?.onOpenSettings?.(() => {
+      useAppStore.getState().setActiveView('settings')
+    })
+    return unsub
+  }, [])
+
   // Ctrl+A / Ctrl+D select all；Ctrl+Z 撤销
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

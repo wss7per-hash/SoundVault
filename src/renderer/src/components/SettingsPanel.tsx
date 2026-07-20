@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useAppStore } from '../stores/appStore'
 import type { AIConfig } from '../../preload/index.d'
 import { PopupMenu, useContextMenu, type MenuItem } from './PopupMenu'
+import { PetSettingsSection } from './PetSettingsSection'
 
 // ── AI 服务商预设（与后端兼容） ──
 const PROVIDERS = [
@@ -22,7 +23,7 @@ const PROVIDERS = [
 ]
 
 // ── 通用 UI 片段 ──
-function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
+export function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-surface-border bg-surface-panel p-5">
       <div className="mb-4">
@@ -34,7 +35,7 @@ function Section({ title, desc, children }: { title: string; desc: string; child
   )
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+export function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="text-sm text-muted-light shrink-0">{label}</span>
@@ -43,7 +44,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
-function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[] }) {
+export function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[] }) {
   return (
     <div className="flex rounded-lg border border-surface-border overflow-hidden">
       {options.map((opt) => (
@@ -61,7 +62,7 @@ function Segmented<T extends string>({ value, onChange, options }: { value: T; o
   )
 }
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+export function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
       role="switch"
@@ -322,6 +323,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             <span className="text-xs text-muted">开启后，每次导入音效会自动进行语义分析</span>
           </Row>
         </Section>
+
+        <PetSettingsSection />
 
         <div className="flex items-center gap-2 text-xs text-muted pt-2 pb-4">
           <Sparkles size={13} className="text-accent-light" />

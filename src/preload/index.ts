@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { PetConfigStored } from '../shared/pet-types'
 
 const api = {
   // App
@@ -244,7 +245,44 @@ const api = {
 
   // 获取常用目录路径（扫描快捷入口用）
   getCommonPaths: () =>
-    ipcRenderer.invoke('common:getPaths') as Promise<{ desktop: string; documents: string; downloads: string; music: string; videos: string }>
+    ipcRenderer.invoke('common:getPaths') as Promise<{ desktop: string; documents: string; downloads: string; music: string; videos: string }>,
+
+  // ── 宠物（声波小精灵）──
+  pet: {
+    getConfig: () => ipcRenderer.invoke('pet:getConfig') as Promise<PetConfigStored | null>,
+    saveConfig: (config: PetConfigStored) => ipcRenderer.invoke('pet:saveConfig', config) as Promise<{ success: boolean }>,
+    setDisplay: (display: PetConfigStored['display']) => ipcRenderer.invoke('pet:setDisplay', display) as Promise<{ success: boolean }>,
+    resetPosition: () => ipcRenderer.send('pet:resetPosition'),
+    toggle: () => ipcRenderer.send('pet:toggle'),
+    show: () => ipcRenderer.send('pet:show'),
+    hide: () => ipcRenderer.send('pet:hide'),
+    setEnabled: (enabled: boolean) => ipcRenderer.send('pet:setEnabled', enabled),
+    openSettings: () => ipcRenderer.send('pet:openSettings'),
+    sendAudioEvent: (event: { type: 'level' | 'start' | 'stop'; level?: number }) => ipcRenderer.send('pet:audio', event),
+    move: (dx: number, dy: number) => ipcRenderer.send('pet:move', dx, dy),
+    onAudioEvent: (cb: (event: { type: 'level' | 'start' | 'stop'; level?: number }) => void) => {
+      const listener = (_e: unknown, event: { type: 'level' | 'start' | 'stop'; level?: number }) => cb(event)
+      ipcRenderer.on('pet:audio', listener)
+      return () => ipcRenderer.removeListener('pet:audio', listener)
+    },
+    onConfigChanged: (cb: () => void) => {
+      const listener = (): void => cb()
+      ipcRenderer.on('pet:config', listener)
+      return () => ipcRenderer.removeListener('pet:config', listener)
+    },
+    onStateChange: (cb: (state: { visible: boolean }) => void) => {
+      const listener = (_e: unknown, state: { visible: boolean }) => cb(state)
+      ipcRenderer.on('pet:state', listener)
+      return () => ipcRenderer.removeListener('pet:state', listener)
+    },
+    onOpenSettings: (cb: () => void) => {
+      const listener = () => cb()
+      ipcRenderer.on('pet:openSettings', listener)
+      return () => ipcRenderer.removeListener('pet:openSettings', listener)
+    },
+    exportPetpack: () => ipcRenderer.invoke('pet:exportPetpack') as Promise<{ success: boolean; path?: string; message?: string }>,
+    importPetpack: () => ipcRenderer.invoke('pet:importPetpack') as Promise<{ success: boolean; message?: string }>
+  }
 }
 
 if (process.contextIsolated) {

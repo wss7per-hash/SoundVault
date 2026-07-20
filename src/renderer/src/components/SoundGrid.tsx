@@ -34,6 +34,11 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  // 音频联动：Web Audio 分析节点（跨试听复用）
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
+  const levelIntervalRef = useRef<number | null>(null)
 
   const selectedIds = useAppStore((s) => s.selectedSoundIds)
   const toggleSoundSelection = useAppStore((s) => s.toggleSoundSelection)
@@ -78,24 +83,97 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
   const typeaheadRef = useRef('')
   const typeaheadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // ── 音频联动：Web Audio AnalyserNode 抽取实时音量电平，周期上报给宠物窗口 ──
+  const stopLevelLoop = useCallback(() => {
+    if (levelIntervalRef.current != null) {
+      clearInterval(levelIntervalRef.current)
+      levelIntervalRef.current = null
+    }
+    if (audioSourceRef.current) {
+      try { audioSourceRef.current.disconnect() } catch { /* noop */ }
+      audioSourceRef.current = null
+    }
+  }, [])
+
+  const startLevelLoop = useCallback(() => {
+    const analyser = analyserRef.current
+    if (!analyser) return
+    const buf = new Uint8Array(analyser.fftSize)
+    if (levelIntervalRef.current != null) clearInterval(levelIntervalRef.current)
+    levelIntervalRef.current = window.setInterval(() => {
+      analyser.getByteTimeDomainData(buf)
+      let sum = 0
+      for (let i = 0; i < buf.length; i++) {
+        const v = (buf[i] - 128) / 128
+        sum += v * v
+      }
+      const rms = Math.sqrt(sum / buf.length)
+      const level = Math.min(1, rms * 3.2)
+      window.api.pet.sendAudioEvent({ type: 'level', level })
+    }, 50)
+  }, [])
+
+  const setupAudioAnalysis = useCallback((audio: HTMLAudioElement) => {
+    try {
+      if (!audioCtxRef.current) {
+        const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+        audioCtxRef.current = new AC()
+        const analyser = audioCtxRef.current.createAnalyser()
+        analyser.fftSize = 1024
+        analyser.connect(audioCtxRef.current.destination)
+        analyserRef.current = analyser
+      }
+      const ctx = audioCtxRef.current
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {})
+      const source = ctx.createMediaElementSource(audio)
+      source.connect(analyserRef.current as AnalyserNode)
+      audioSourceRef.current = source
+      startLevelLoop()
+    } catch {
+      /* 分析失败不影响试听播放 */
+    }
+  }, [startLevelLoop])
+
   // Audio preview logic
   const startPreview = useCallback((sound: SoundData) => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    // 先停止旧播放并通知宠物窗口（避免缺失 stop 事件）
+    if (audioRef.current) {
+      try { audioRef.current.pause() } catch { /* noop */ }
+      audioRef.current = null
+      window.api.pet.sendAudioEvent({ type: 'stop' })
+    }
+    stopLevelLoop()
     const audio = new Audio(`sv://${sound.id}`)
     audioRef.current = audio
-    audio.onended = () => setPlayingId(null)
-    audio.onerror = () => { setPlayingId(null); toast.error('无法播放此格式') }
+    setupAudioAnalysis(audio)
+    audio.onended = () => {
+      setPlayingId(null)
+      stopLevelLoop()
+      window.api.pet.sendAudioEvent({ type: 'stop' })
+    }
+    audio.onerror = () => {
+      setPlayingId(null)
+      toast.error('无法播放此格式')
+      stopLevelLoop()
+      window.api.pet.sendAudioEvent({ type: 'stop' })
+    }
     audio.volume = 0.6
     audio.play().then(() => {
       setPlayingId(sound.id)
       window.api.incrementPlayCount(sound.id).catch(() => {})
+      window.api.pet.sendAudioEvent({ type: 'start' })
     }).catch(() => {})
-  }, [])
+  }, [stopLevelLoop, setupAudioAnalysis])
 
   const stopPreview = useCallback(() => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    if (audioRef.current) {
+      try { audioRef.current.pause() } catch { /* noop */ }
+      audioRef.current = null
+    }
     setPlayingId(null)
-  }, [])
+    stopLevelLoop()
+    window.api.pet.sendAudioEvent({ type: 'stop' })
+  }, [stopLevelLoop])
 
   const handleMouseEnter = useCallback((sound: SoundData, e: React.MouseEvent) => {
     if (isDragging) return

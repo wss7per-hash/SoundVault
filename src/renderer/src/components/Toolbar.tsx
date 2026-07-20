@@ -97,6 +97,16 @@ export function Toolbar(): JSX.Element {
     }).catch(() => {})
   }, [])
 
+  // 宠物（声波小精灵）开关状态
+  const [petEnabled, setPetEnabled] = useState(true)
+  useEffect(() => {
+    window.api?.pet?.getConfig?.().then((cfg: { enabled?: boolean } | null) => {
+      if (cfg && typeof cfg.enabled === 'boolean') setPetEnabled(cfg.enabled)
+    }).catch(() => {})
+    const unsub = window.api?.pet?.onStateChange?.((s: { visible: boolean }) => setPetEnabled(s.visible))
+    return () => { unsub?.() }
+  }, [])
+
   useEffect(() => {
     window.api?.getSetting('toolbar.searchWidth').then((v) => {
       if (v) {
@@ -474,6 +484,20 @@ export function Toolbar(): JSX.Element {
       >
         <span className="text-[13px] leading-none">⌨</span>
         <span className="tabular-nums">{spotShortcut}</span>
+      </button>
+
+      {/* 宠物（声波小精灵）开关 */}
+      <button
+        onClick={() => window.api?.pet?.toggle()}
+        title={petEnabled ? '隐藏声波小精灵' : '显示声波小精灵'}
+        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-colors shrink-0 no-drag ${
+          petEnabled
+            ? 'text-accent-light bg-accent/15 hover:bg-accent/25'
+            : 'text-muted hover:bg-surface-hover hover:text-muted-light'
+        }`}
+      >
+        <Sparkles size={14} className={petEnabled ? 'text-accent-light' : 'text-muted'} />
+        <span>小精灵</span>
       </button>
 
       {/* Drag handle to resize search box */}

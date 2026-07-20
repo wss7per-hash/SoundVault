@@ -1,0 +1,42 @@
+SoundVault
+Copyright (C) 2026 SoundVault contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
+----------------------------------------------------------------------------
+Third-party components
+----------------------------------------------------------------------------
+
+声波小精灵 (Sound-Wave Sprite) pet feature
+  The interaction rule engine (conditions → filters(operator/value) →
+  actions, priority sort, cooldown, conditionWindowMs, stopOnMatch,
+  stateful enter/exit with continuous mouse-move sustain) is PORTED and
+  ADAPTED from:
+
+    duzexu/desktop-pet
+    https://github.com/duzexu/desktop-pet
+    Copyright (C) duzexu — licensed under the GNU General Public License v3.0.
+
+  Adaptations made for SoundVault:
+    - Removed the asset/material sprite layer; the pet is rendered as a
+      procedural audio-reactive canvas sprite (original SoundVault code).
+    - Replaced desktop-pet action types (playAnimation / openPanel /
+      pomodoro / disableInteractions / changeDisplay) with SoundVault
+      equivalents (playSpriteAnim / openPetSettings / changeDisplay).
+    - Added audio-linkage events (audioStart / audioLevel / audioStop)
+      so the sprite reacts to SoundVault playback.
+
+  Per the GPL-3.0, the adapted source retains the above attribution and
+  is distributed under the same license.

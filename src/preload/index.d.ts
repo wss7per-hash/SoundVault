@@ -1,3 +1,5 @@
+import type { PetConfigStored } from '../shared/pet-types'
+
 declare global {
   interface Window {
     api: SoundVaultAPI
@@ -185,6 +187,40 @@ export interface SoundVaultAPI {
   minimizeWindow: () => Promise<void>
   maximizeRestoreWindow: () => Promise<void>
   closeWindow: () => Promise<void>
+
+  // 宠物（声波小精灵）· 精简配置存于 settings 表，渲染端补全完整规则集
+  pet: PetAPI
+}
+
+// 宠物 API（声波小精灵）
+export interface PetAudioEvent {
+  type: 'level' | 'start' | 'stop'
+  level?: number
+}
+
+export interface PetAPI {
+  getConfig: () => Promise<PetConfigStored | null>
+  saveConfig: (config: PetConfigStored) => Promise<{ success: boolean }>
+  setDisplay: (display: PetConfigStored['display']) => Promise<{ success: boolean }>
+  resetPosition: () => void
+  toggle: () => void
+  show: () => void
+  hide: () => void
+  setEnabled: (enabled: boolean) => void
+  openSettings: () => void
+  // 主窗口播放音效时上报音频事件（电平/起停），由主进程转发给宠物窗口
+  sendAudioEvent: (event: PetAudioEvent) => void
+  // 主进程 → 宠物窗口 推送
+  onAudioEvent: (cb: (event: PetAudioEvent) => void) => () => void
+  onConfigChanged: (cb: () => void) => () => void
+  onStateChange: (cb: (state: { visible: boolean }) => void) => () => void
+  // 宠物窗口请求打开主窗口设置面板（声波小精灵「设置」动作）
+  onOpenSettings: (cb: () => void) => () => void
+  // 宠物窗口拖动：按屏幕坐标增量移动
+  move: (dx: number, dy: number) => void
+  // Petpack 导入/导出（jszip）
+  exportPetpack: () => Promise<{ success: boolean; path?: string; message?: string }>
+  importPetpack: () => Promise<{ success: boolean; message?: string }>
 }
 
 // ---- Types ----

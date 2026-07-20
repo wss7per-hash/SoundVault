@@ -1,7 +1,8 @@
-import { app, BrowserWindow, shell, Menu, protocol, net, globalShortcut, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, Menu, protocol, net, globalShortcut, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
-import { existsSync, readFileSync, statSync } from 'fs'
+import { existsSync, readFileSync, statSync, writeFileSync } from 'fs'
+import JSZip from 'jszip'
 import { initDatabase, closeDatabase, getDatabase } from './database'
 import { registerIpcHandlers } from './ipc-handlers'
 
@@ -109,6 +110,155 @@ function toggleSpotlight(): void {
     // 通知渲染端清空/聚焦输入框
     spotlightWindow.webContents.send('spotlight:opened')
   }
+}
+
+// ============================================================
+// 宠物窗口（声波小精灵）· 透明常驻 / 可开关
+// 移植自 duzexu/desktop-pet 的交互思路（GPL-3.0），渲染层为自绘 canvas 精灵。
+// 配置以「精简结构」存于 settings 表(key=pet.config)，渲染端用 DEFAULT_PET_CONFIG
+// 补全完整规则集（避免主进程重复维护 9 条默认规则）。
+// ============================================================
+let petWindow: BrowserWindow | null = null
+const PET_CONFIG_KEY = 'pet.config'
+
+interface PetDisplay {
+  x: number
+  y: number
+  scale: number
+  opacity: number
+  alwaysOnTop: boolean
+  clickThrough: boolean
+  locked: boolean
+}
+interface PetConfigStored {
+  enabled?: boolean
+  display?: Partial<PetDisplay>
+  sprite?: { hue?: number; name?: string }
+  messages?: { clickMessages?: string[]; randomMessages?: string[]; bubbleDurationMs?: number }
+  ruleEnabled?: Record<string, boolean>
+}
+
+const DEFAULT_PET_STORED: PetConfigStored = {
+  enabled: true,
+  display: { x: 80, y: 160, scale: 1, opacity: 1, alwaysOnTop: true, clickThrough: false, locked: false },
+  sprite: { hue: 265, name: '声波小精灵' },
+  messages: {
+    clickMessages: ['♪ 这个我喜欢！', '♫ 听起来不错~', '嗨，继续放！'],
+    randomMessages: ['在听什么呢？', '需要我帮你找音效吗？', 'SoundVault 随时待命~'],
+    bubbleDurationMs: 2000
+  },
+  ruleEnabled: {}
+}
+
+function defaultPetStored(): PetConfigStored {
+  return JSON.parse(JSON.stringify(DEFAULT_PET_STORED))
+}
+
+function loadPetStored(): PetConfigStored {
+  try {
+    const db = getDatabase()
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(PET_CONFIG_KEY) as
+      | { value: string }
+      | undefined
+    if (row?.value) {
+      const parsed = JSON.parse(row.value)
+      return {
+        ...defaultPetStored(),
+        ...parsed,
+        display: { ...defaultPetStored().display, ...(parsed.display || {}) },
+        sprite: { ...defaultPetStored().sprite, ...(parsed.sprite || {}) },
+        messages: { ...defaultPetStored().messages, ...(parsed.messages || {}) },
+        ruleEnabled: { ...(parsed.ruleEnabled || {}) }
+      }
+    }
+  } catch {
+    /* 解析失败回退默认 */
+  }
+  return defaultPetStored()
+}
+
+function persistPetStored(s: PetConfigStored): void {
+  try {
+    const db = getDatabase()
+    db.prepare(`
+      INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?
+    `).run(PET_CONFIG_KEY, JSON.stringify(s), new Date().toISOString(), JSON.stringify(s), new Date().toISOString())
+  } catch {
+    /* 持久化失败不阻断 */
+  }
+}
+
+function applyDisplayToWindow(win: BrowserWindow, d: PetDisplay): void {
+  win.setAlwaysOnTop(!!d.alwaysOnTop, 'screen-saver')
+  win.setIgnoreMouseEvents(!!d.clickThrough)
+}
+
+function createPetWindow(): BrowserWindow {
+  const cfg = loadPetStored()
+  const d = cfg.display as PetDisplay
+  const win = new BrowserWindow({
+    width: 240,
+    height: 300,
+    x: d.x,
+    y: d.y,
+    show: true,
+    frame: false,
+    resizable: false,
+    movable: true,
+    skipTaskbar: true,
+    alwaysOnTop: !!d.alwaysOnTop,
+    transparent: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      webSecurity: true
+    }
+  })
+
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#pet`)
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'pet' })
+  }
+
+  applyDisplayToWindow(win, d)
+
+  win.on('closed', () => {
+    petWindow = null
+  })
+  return win
+}
+
+function showPetWindow(): void {
+  if (!petWindow || petWindow.isDestroyed()) {
+    petWindow = createPetWindow()
+  } else {
+    petWindow.show()
+    const d = loadPetStored().display as PetDisplay
+    applyDisplayToWindow(petWindow, d)
+  }
+}
+
+function hidePetWindow(): void {
+  if (petWindow && !petWindow.isDestroyed()) petWindow.hide()
+}
+
+function setPetEnabled(enabled: boolean): void {
+  const s = loadPetStored()
+  s.enabled = enabled
+  persistPetStored(s)
+  if (enabled) showPetWindow()
+  else hidePetWindow()
+  // 通知主窗口（设置面板）同步开关状态
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('pet:state', { visible: enabled })
+  }
+}
+
+function togglePetWindow(): void {
+  setPetEnabled(!loadPetStored().enabled)
 }
 
 function createWindow(): void {
@@ -255,6 +405,14 @@ app.whenReady().then(() => {
   registerIpcHandlers()
   createWindow()
 
+  // 宠物（声波小精灵）：默认常驻显示，enabled=false 时不创建窗口
+  if (loadPetStored().enabled) {
+    // 延迟一帧创建，避免与主窗口抢首屏资源
+    setTimeout(() => {
+      if (!petWindow) petWindow = createPetWindow()
+    }, 300)
+  }
+
   // 全局快捷搜索：注册系统级快捷键（默认 Ctrl/Cmd+Shift+Space，可在 Spotlight 内自定义并持久化）
   currentSpotlightShortcut = loadSpotlightShortcut()
   const ok = globalShortcut.register(currentSpotlightShortcut, toggleSpotlight)
@@ -314,6 +472,128 @@ app.whenReady().then(() => {
     if (!spotlightWindow || spotlightWindow.isDestroyed()) return
     const [x, y] = spotlightWindow.getPosition()
     spotlightWindow.setPosition(Math.round(x + dx), Math.round(y + dy))
+  })
+
+  // ── 宠物（声波小精灵）IPC ──
+  ipcMain.handle('pet:getConfig', () => loadPetStored())
+  ipcMain.handle('pet:saveConfig', (_e, cfg: PetConfigStored) => {
+    persistPetStored(cfg)
+    if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:config')
+    return { success: true }
+  })
+  ipcMain.handle('pet:setDisplay', (_e, display: Partial<PetDisplay>) => {
+    const s = loadPetStored()
+    s.display = { ...(s.display || {}), ...display } as PetDisplay
+    persistPetStored(s)
+    if (petWindow && !petWindow.isDestroyed()) {
+      const d = s.display as PetDisplay
+      applyDisplayToWindow(petWindow, d)
+      if (typeof d.x === 'number' && typeof d.y === 'number') petWindow.setPosition(d.x, d.y)
+    }
+    return { success: true }
+  })
+  // 渲染进程拖动宠物：按屏幕坐标增量移动窗口，并持久化新位置
+  ipcMain.on('pet:move', (_e, dx: number, dy: number) => {
+    if (!petWindow || petWindow.isDestroyed()) return
+    const [x, y] = petWindow.getPosition()
+    const nx = Math.round(x + dx)
+    const ny = Math.round(y + dy)
+    petWindow.setPosition(nx, ny)
+    const s = loadPetStored()
+    s.display = { ...(s.display || {}), x: nx, y: ny } as PetDisplay
+    persistPetStored(s)
+  })
+  ipcMain.on('pet:resetPosition', () => {
+    const s = loadPetStored()
+    s.display = { ...(s.display || {}), x: 80, y: 160 } as PetDisplay
+    persistPetStored(s)
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.setPosition(80, 160)
+      applyDisplayToWindow(petWindow, s.display as PetDisplay)
+    }
+  })
+  ipcMain.on('pet:toggle', () => togglePetWindow())
+  ipcMain.on('pet:show', () => showPetWindow())
+  ipcMain.on('pet:hide', () => hidePetWindow())
+  ipcMain.on('pet:setEnabled', (_e, enabled: boolean) => setPetEnabled(enabled))
+  // 设置面板请求打开宠物设置（定位到主窗口设置面板宠物标签页）
+  ipcMain.on('pet:openSettings', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+      mainWindow.webContents.send('pet:openSettings')
+    }
+  })
+  // 音频联动：主窗口播放音效时上报电平/起停，转发给宠物窗口
+  ipcMain.on('pet:audio', (_e, payload: { type: 'level' | 'start' | 'stop'; level?: number }) => {
+    if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:audio', payload)
+  })
+  // 设置变更后通知宠物窗口重载配置
+  ipcMain.on('pet:configChanged', () => {
+    if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:config')
+  })
+
+  // ── Petpack 导入 / 导出（jszip 打包精简配置 + manifest） ──
+  ipcMain.handle('pet:exportPetpack', async () => {
+    try {
+      const cfg = loadPetStored()
+      const manifest = {
+        format: 'soundvault-petpack',
+        version: 1,
+        appVersion: '0.1.0',
+        exportedAt: new Date().toISOString(),
+        config: cfg
+      }
+      const zip = new JSZip()
+      zip.file('manifest.json', JSON.stringify(manifest, null, 2))
+      const buf = await zip.generateAsync({ type: 'nodebuffer' })
+      const { canceled, filePath } = await dialog.showSaveDialog(mainWindow ?? undefined, {
+        title: '导出声波小精灵配置 (Petpack)',
+        defaultPath: 'soundvault-petpack.svpet',
+        filters: [{ name: 'SoundVault Petpack', extensions: ['svpet', 'zip'] }]
+      })
+      if (canceled || !filePath) return { success: false, message: '已取消' }
+      writeFileSync(filePath, buf)
+      return { success: true, path: filePath }
+    } catch (e) {
+      return { success: false, message: String((e as Error)?.message || e) }
+    }
+  })
+
+  ipcMain.handle('pet:importPetpack', async () => {
+    try {
+      const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow ?? undefined, {
+        title: '导入声波小精灵配置 (Petpack)',
+        properties: ['openFile'],
+        filters: [{ name: 'SoundVault Petpack', extensions: ['svpet', 'zip'] }]
+      })
+      if (canceled || !filePaths || filePaths.length === 0) return { success: false, message: '已取消' }
+      const data = readFileSync(filePaths[0])
+      const zip = await JSZip.loadAsync(data)
+      const mf = zip.file('manifest.json')
+      if (!mf) return { success: false, message: '无效的 Petpack：缺少 manifest.json' }
+      const manifest = JSON.parse(await mf.async('string'))
+      if (manifest?.format !== 'soundvault-petpack' || !manifest?.config) {
+        return { success: false, message: 'Petpack 格式不匹配' }
+      }
+      const imported = manifest.config as PetConfigStored
+      const base = defaultPetStored()
+      const merged: PetConfigStored = {
+        ...base,
+        ...imported,
+        display: { ...base.display, ...(imported.display || {}) },
+        sprite: { ...base.sprite, ...(imported.sprite || {}) },
+        messages: { ...base.messages, ...(imported.messages || {}) },
+        ruleEnabled: { ...(imported.ruleEnabled || {}) }
+      }
+      persistPetStored(merged)
+      if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:config')
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('pet:openSettings')
+      return { success: true }
+    } catch (e) {
+      return { success: false, message: String((e as Error)?.message || e) }
+    }
   })
 
   app.on('activate', () => {
