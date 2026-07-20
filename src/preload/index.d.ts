@@ -217,6 +217,10 @@ export interface PetAPI {
   onStateChange: (cb: (state: { visible: boolean }) => void) => () => void
   // 宠物窗口请求打开主窗口设置面板（声波小精灵「设置」动作）
   onOpenSettings: (cb: () => void) => () => void
+  // 宠物右键菜单「AI 生成音效」→ 打开生成面板
+  onOpenGenerate: (cb: () => void) => () => void
+  // 宠物右键菜单「库洞察」→ 切到统计面板
+  onOpenStats: (cb: () => void) => () => void
   // 宠物窗口拖动：按屏幕坐标增量移动
   move: (dx: number, dy: number) => void
   // 取宠物窗口屏幕坐标/尺寸

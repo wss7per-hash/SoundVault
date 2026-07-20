@@ -251,6 +251,22 @@ export default function App(): JSX.Element {
     return unsub
   }, [])
 
+  // 宠物右键菜单「AI 生成音效」→ 打开生成面板
+  useEffect(() => {
+    const unsub = window.api.pet?.onOpenGenerate?.(() => {
+      useAppStore.getState().toggleGenerate()
+    })
+    return unsub
+  }, [])
+
+  // 宠物右键菜单「库洞察」→ 切到统计面板
+  useEffect(() => {
+    const unsub = window.api.pet?.onOpenStats?.(() => {
+      useAppStore.getState().setActiveView('stats')
+    })
+    return unsub
+  }, [])
+
   // Ctrl+A / Ctrl+D select all；Ctrl+Z 撤销
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

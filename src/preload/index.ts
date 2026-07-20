@@ -292,6 +292,16 @@ const api = {
       ipcRenderer.on('pet:openSettings', listener)
       return () => ipcRenderer.removeListener('pet:openSettings', listener)
     },
+    onOpenGenerate: (cb: () => void) => {
+      const listener = () => cb()
+      ipcRenderer.on('pet:openGenerate', listener)
+      return () => ipcRenderer.removeListener('pet:openGenerate', listener)
+    },
+    onOpenStats: (cb: () => void) => {
+      const listener = () => cb()
+      ipcRenderer.on('pet:openStats', listener)
+      return () => ipcRenderer.removeListener('pet:openStats', listener)
+    },
     exportPetpack: () => ipcRenderer.invoke('pet:exportPetpack') as Promise<{ success: boolean; path?: string; message?: string }>,
     importPetpack: () => ipcRenderer.invoke('pet:importPetpack') as Promise<{ success: boolean; message?: string }>
   }

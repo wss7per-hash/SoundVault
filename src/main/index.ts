@@ -224,10 +224,17 @@ function applyDisplayToWindow(win: BrowserWindow, d: PetDisplay): void {
   win.setIgnoreMouseEvents(!!d.clickThrough)
 }
 
-/** 取应用图标路径（打包后位于 resources/app-icon.png；开发态回退到源码资源） */
+/**
+ * 取应用图标路径。统一使用打包进 resources 的品牌图标（electron-builder.yml 的
+ * buildResources=resources 会把整个 resources/ 打进包，resources/icon.png 必然存在），
+ * 而非 app-icon.png（仅 extraResources 才复制，portable 构建默认没有 → 图标取空）。
+ * 开发态回退到项目内 resources/ 与源码 assets。
+ */
 function getAppIconPath(): string {
   const candidates = [
-    join(process.resourcesPath, 'app-icon.png'),
+    join(process.resourcesPath, 'icon.png'),
+    join(process.resourcesPath, 'icon.ico'),
+    join(app.getAppPath(), 'resources/icon.png'),
     join(app.getAppPath(), 'src/renderer/src/assets/images/app-icon.png')
   ]
   for (const p of candidates) {
@@ -423,7 +430,6 @@ function buildAppTrayMenu(): Menu {
     { label: `${d.locked ? '解锁' : '锁定'}拖动`, click: () => setPetDisplay({ locked: !d.locked }) },
     { label: `暂停互动：${b.paused ? '开' : '关'}`, click: () => setPetBehavior({ paused: !b.paused }) },
     { label: `跟随音量呼吸：${b.audioBreath ? '开' : '关'}`, click: () => setPetBehavior({ audioBreath: !b.audioBreath }) },
-    { label: '重置位置', click: () => resetPetPosition() },
     { type: 'separator' },
     // ── 全局 ──
     { label: '退出 SoundVault', click: () => app.quit() }
@@ -447,18 +453,36 @@ function buildPetContextMenu(): Menu {
       }
     },
     { label: s.enabled ? '隐藏小精灵' : '显示小精灵', click: () => togglePetWindow() },
-    { label: '重置位置', click: () => resetPetPosition() },
     { label: '切换置顶', click: () => setPetDisplay({ alwaysOnTop: !d.alwaysOnTop }) },
+    { type: 'separator' },
+    // ── 快捷功能 ──
     {
-      label: '关于声波小精灵',
+      label: 'AI 生成音效',
       click: () => {
-        if (petWindow && !petWindow.isDestroyed()) {
-          petWindow.webContents.send('pet:about', '声波小精灵 · SoundVault 的桌面小伙伴 ♪')
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.show()
+          mainWindow.webContents.send('pet:openGenerate')
         }
       }
     },
-    { label: `${b.paused ? '恢复互动' : '暂停互动'}`, click: () => setPetBehavior({ paused: !b.paused }) },
-    { label: `跟随音量呼吸：${b.audioBreath ? '开' : '关'}`, click: () => setPetBehavior({ audioBreath: !b.audioBreath }) },
+    {
+      label: 'API & AI 设置',
+      click: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.show()
+          mainWindow.webContents.send('pet:openSettings')
+        }
+      }
+    },
+    {
+      label: '库洞察',
+      click: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.show()
+          mainWindow.webContents.send('pet:openStats')
+        }
+      }
+    },
     { type: 'separator' },
     { label: '退出 SoundVault', click: () => app.quit() }
   ]

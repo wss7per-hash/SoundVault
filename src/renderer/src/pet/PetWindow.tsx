@@ -27,7 +27,6 @@ type PetMenuItem =
 const PET_MENU_ITEMS: PetMenuItem[] = [
   { id: 'settings', label: '打开设置', icon: '⚙️' },
   { id: 'hide', label: '隐藏小精灵', icon: '🙈' },
-  { id: 'reset', label: '重置位置', icon: '📍' },
   { id: 'top', label: '切换置顶', icon: '📌' },
   { id: 'about', label: '关于声波小精灵', icon: '💡' },
   { id: 'pause', label: '暂停互动', icon: '⏸️' },
@@ -76,11 +75,7 @@ export function PetWindow(): JSX.Element {
       startClientX: 0,
       startClientY: 0,
       startX: 0,
-      startY: 0,
-      // 拖动时用 rAF 节流 setPosition（避免每帧 IPC 导致抖动）
-      pendingX: 0,
-      pendingY: 0,
-      dragRafId: 0 as number
+      startY: 0
     }
 
     let runtime: RuleRuntime | null = null
@@ -244,9 +239,6 @@ export function PetWindow(): JSX.Element {
       // 无需异步 getBounds——消除了「首帧跳变」的根因。
       dragRef.startX = posRef.current.x
       dragRef.startY = posRef.current.y
-      dragRef.pendingX = dragRef.startX
-      dragRef.pendingY = dragRef.startY
-      dragRef.dragRafId = 0
       try { canvas.setPointerCapture(e.pointerId) } catch { /* noop */ }
       triggerAnim('drag')
       dispatch({ type: 'dragStart', timestamp: performance.now(), eventSource: 'petPointer' })
@@ -257,26 +249,17 @@ export function PetWindow(): JSX.Element {
       const dy = e.clientY - dragRef.startClientY
       if (!dragRef.moved && Math.hypot(dx, dy) < 3) return
       dragRef.moved = true
-      // 立即更新本地跟踪（保证视觉/逻辑坐标不滞后）
+      // 绝对定位：起点 + 指针位移，直接 setPosition（同步发 IPC，无 rAF 延迟）
       const nx = Math.round(dragRef.startX + dx)
       const ny = Math.round(dragRef.startY + dy)
       posRef.current = { x: nx, y: ny }
-      // 用 rAF 节流 IPC：每帧最多一次 setPosition（而非每事件一次）
-      dragRef.pendingX = nx
-      dragRef.pendingY = ny
-      if (!dragRef.dragRafId) {
-        dragRef.dragRafId = requestAnimationFrame(() => {
-          dragRef.dragRafId = 0
-          window.api.pet.moveTo(dragRef.pendingX, dragRef.pendingY)
-        })
-      }
+      window.api.pet.moveTo(nx, ny)
       dispatch({ type: 'dragging', dragDeltaX: dx, dragDeltaY: dy, dragDistance: Math.hypot(dx, dy), timestamp: performance.now(), eventSource: 'petPointer' })
     }
     const onPointerUp = (e: PointerEvent) => {
       if (!dragRef.active) return
       dragRef.active = false
-      // 确保最终位置同步（rAF 可能尚未触发）
-      if (dragRef.dragRafId) { cancelAnimationFrame(dragRef.dragRafId); dragRef.dragRafId = 0 }
+      // flush 最终位置（确保不丢步）
       if (dragRef.moved) window.api.pet.moveTo(posRef.current.x, posRef.current.y)
       try { canvas.releasePointerCapture(e.pointerId) } catch { /* noop */ }
       if (dragRef.moved) {
