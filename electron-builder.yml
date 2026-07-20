@@ -33,6 +33,12 @@ win:
     - target: portable
       arch: [x64]
   icon: resources/icon.ico
+# 复制品牌图标 PNG 到运行时 resources/，供主窗口+托盘运行时读取
+# （buildResources 只用于编译 EXE 图标/查找资源，不会复制 png 到产物，
+#  必须靠 extraResources 显式复制，否则 process.resourcesPath/icon.png 不存在 → 托盘图标为空）
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
 mac:
   target: dmg
   icon: resources/icon.icns
