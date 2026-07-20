@@ -202,6 +202,7 @@ export interface PetAPI {
   getConfig: () => Promise<PetConfigStored | null>
   saveConfig: (config: PetConfigStored) => Promise<{ success: boolean }>
   setDisplay: (display: PetConfigStored['display']) => Promise<{ success: boolean }>
+  setBehavior: (behavior: { audioBreath?: boolean; paused?: boolean }) => void
   resetPosition: () => void
   toggle: () => void
   show: () => void
@@ -218,6 +219,12 @@ export interface PetAPI {
   onOpenSettings: (cb: () => void) => () => void
   // 宠物窗口拖动：按屏幕坐标增量移动
   move: (dx: number, dy: number) => void
+  // 取宠物窗口屏幕坐标/尺寸
+  getBounds: () => Promise<{ x: number; y: number; width: number; height: number } | null>
+  // 按绝对屏幕坐标定位宠物窗口
+  moveTo: (x: number, y: number) => void
+  // 退出整个应用
+  quit: () => void
   // Petpack 导入/导出（jszip）
   exportPetpack: () => Promise<{ success: boolean; path?: string; message?: string }>
   importPetpack: () => Promise<{ success: boolean; message?: string }>

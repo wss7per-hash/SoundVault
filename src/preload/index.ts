@@ -252,6 +252,7 @@ const api = {
     getConfig: () => ipcRenderer.invoke('pet:getConfig') as Promise<PetConfigStored | null>,
     saveConfig: (config: PetConfigStored) => ipcRenderer.invoke('pet:saveConfig', config) as Promise<{ success: boolean }>,
     setDisplay: (display: PetConfigStored['display']) => ipcRenderer.invoke('pet:setDisplay', display) as Promise<{ success: boolean }>,
+    setBehavior: (behavior: { audioBreath?: boolean; paused?: boolean }) => ipcRenderer.send('pet:setBehavior', behavior),
     resetPosition: () => ipcRenderer.send('pet:resetPosition'),
     toggle: () => ipcRenderer.send('pet:toggle'),
     show: () => ipcRenderer.send('pet:show'),

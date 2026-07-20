@@ -60,6 +60,7 @@ export const TRIGGER_PARAMETER_FIELDS: Record<PetEventType, string[]> = {
   mouseEnter: DISCRETE_POINTER_FIELDS,
   mouseLeave: DISCRETE_POINTER_FIELDS,
   mouseMove: DRAG_PROGRESS_FIELDS,
+  proximity: DISCRETE_POINTER_FIELDS,
   hoverDuration: TIME_FIELDS,
   idleDuration: TIME_FIELDS,
   audioStart: AUDIO_FIELDS,

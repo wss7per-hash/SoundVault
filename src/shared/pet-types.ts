@@ -19,10 +19,18 @@ export interface PetDisplayStored {
  * 仅存用户可改的部分；完整规则集(triggerRules)由渲染端 DEFAULT_PET_CONFIG 补全，
  * 避免主进程重复维护默认规则。ruleEnabled 为各规则启停覆盖。
  */
+export interface PetBehaviorStored {
+  /** 随音量呼吸：播放时精灵随音量轻微缩放 + 光晕脉动 */
+  audioBreath?: boolean
+  /** 暂停互动：冻结所有规则反应（仍保持待机待动画） */
+  paused?: boolean
+}
+
 export interface PetConfigStored {
   enabled?: boolean
   display?: PetDisplayStored
   sprite?: { hue?: number; name?: string }
+  behavior?: PetBehaviorStored
   messages?: {
     clickMessages?: string[]
     randomMessages?: string[]

@@ -11,7 +11,12 @@ import { DEFAULT_PET_CONFIG } from './engine/defaults'
 const W = 240
 const H = 300
 const MENU_W = 152
-const MENU_H = 232
+const MENU_H = 280
+const PET_CX = W / 2
+const PET_CY = H - 92
+// 靠近判定的半径（指针距小精灵中心小于此值视为「靠近」）
+const PROXIMITY_RADIUS = 82
+const HOVER_MS = 700
 const PERSISTENT: SpriteAnimId[] = ['drag', 'sleep']
 const TRANSIENT_MS: Record<string, number> = { click: 600, surprised: 800, wave: 900, bounce: 350 }
 
@@ -25,6 +30,8 @@ const PET_MENU_ITEMS: PetMenuItem[] = [
   { id: 'reset', label: '重置位置', icon: '📍' },
   { id: 'top', label: '切换置顶', icon: '📌' },
   { id: 'about', label: '关于声波小精灵', icon: '💡' },
+  { id: 'pause', label: '暂停互动', icon: '⏸️' },
+  { id: 'breath', label: '跟随音量呼吸', icon: '💨' },
   { type: 'separator' },
   { id: 'quit', label: '退出 SoundVault', icon: '⏻', danger: true }
 ]
@@ -37,6 +44,8 @@ export function PetWindow(): JSX.Element {
   const alwaysOnTopRef = useRef(true)
   // 右键菜单浮层状态（位置为窗口内 client 坐标）
   const [menu, setMenu] = useState<{ open: boolean; x: number; y: number }>({ open: false, x: 0, y: 0 })
+  // 行为开关（暂停互动 / 跟随音量呼吸）——镜像 config.behavior 供菜单动态显示
+  const [behavior, setBehavior] = useState<{ audioBreath: boolean; paused: boolean }>({ audioBreath: true, paused: false })
   const menuActionRef = useRef<(id: string) => void>(() => {})
 
   useEffect(() => {
@@ -56,6 +65,9 @@ export function PetWindow(): JSX.Element {
     const transientAnimRef = { current: 'idle' as SpriteAnimId }
     const persistentRef = { current: null as SpriteAnimId | null }
     const lastActivityRef = { current: performance.now() }
+    const breathRef = { current: 0 }
+    const hoverTimerRef = { current: 0 as number }
+    const nearRef = { current: false }
     const dragRef = {
       active: false,
       moved: false,
@@ -92,8 +104,13 @@ export function PetWindow(): JSX.Element {
     }
 
     const persistDisplay = () => { window.api.pet.setDisplay(config.display).catch(() => {}) }
+    const persistBehavior = () => {
+      window.api.pet.setBehavior({ audioBreath: config.behavior.audioBreath, paused: config.behavior.paused })
+    }
 
     const dispatch = (ev: PetEventContext) => {
+      // 暂停互动：冻结所有规则反应（仍保留待机待动画与手动拖拽）
+      if (config.behavior.paused) return
       markActivity()
       const actions = runtime?.evaluateEvent(ev) ?? []
       for (const a of actions) manager?.executeAction(a, ev)
@@ -108,12 +125,14 @@ export function PetWindow(): JSX.Element {
         alwaysOnTopRef.current = !!config.display.alwaysOnTop
       }
       if (s.sprite) config.sprite = { ...config.sprite, ...s.sprite }
+      if (s.behavior) config.behavior = { ...config.behavior, ...s.behavior }
       if (s.messages) config.messages = { ...config.messages, ...s.messages }
       if (s.ruleEnabled) {
         for (const r of config.triggerRules) {
           if (typeof s.ruleEnabled[r.id] === 'boolean') r.enabled = s.ruleEnabled[r.id]
         }
       }
+      setBehavior({ audioBreath: !!config.behavior.audioBreath, paused: !!config.behavior.paused })
     }
 
     const buildExecutors = (): SpriteActionExecutors => ({
@@ -248,6 +267,25 @@ export function PetWindow(): JSX.Element {
       setMenu({ open: true, x: e.clientX, y: e.clientY })
     }
 
+    // 双击：被戳了一下
+    const onDoubleClick = () => {
+      triggerAnim('surprised')
+      dispatch({ type: 'doubleClick', timestamp: performance.now(), eventSource: 'petPointer' })
+    }
+    // 指针在窗口内移动（非拖拽）：计算与精灵中心距离，进入/离开「靠近」区时触发 proximity
+    const onHoverMove = (e: PointerEvent) => {
+      if (dragRef.active) return
+      const dist = Math.hypot(e.clientX - PET_CX, e.clientY - PET_CY)
+      const near = dist < PROXIMITY_RADIUS
+      if (near && !nearRef.current) {
+        nearRef.current = true
+        dispatch({ type: 'proximity', stateTransition: 'enter', distanceToPetCenter: dist, timestamp: performance.now(), eventSource: 'petPointer' })
+      } else if (!near && nearRef.current) {
+        nearRef.current = false
+        dispatch({ type: 'proximity', stateTransition: 'exit', distanceToPetCenter: dist, timestamp: performance.now(), eventSource: 'petPointer' })
+      }
+    }
+
     // 右键菜单各功能实现（原生菜单不可靠，改由窗口内 HTML 浮层触发）
     const handleMenuAction = (id: string) => {
       switch (id) {
@@ -270,6 +308,20 @@ export function PetWindow(): JSX.Element {
         case 'about':
           sprite.showMessage('声波小精灵 · SoundVault 的桌面小伙伴 ♪', 3200)
           break
+        case 'pause': {
+          config.behavior.paused = !config.behavior.paused
+          setBehavior((b) => ({ ...b, paused: config.behavior.paused }))
+          persistBehavior()
+          if (config.behavior.paused) sprite.showMessage('已暂停互动，我去发呆啦~', 1800)
+          else sprite.showMessage('互动恢复，继续陪你听歌！', 1800)
+          break
+        }
+        case 'breath': {
+          config.behavior.audioBreath = !config.behavior.audioBreath
+          setBehavior((b) => ({ ...b, audioBreath: config.behavior.audioBreath }))
+          persistBehavior()
+          break
+        }
         case 'quit':
           window.api.pet.quit()
           break
@@ -277,13 +329,29 @@ export function PetWindow(): JSX.Element {
       setMenu((m) => ({ ...m, open: false }))
     }
     menuActionRef.current = handleMenuAction
-    const onEnter = () => dispatch({ type: 'mouseEnter', timestamp: performance.now(), eventSource: 'petPointer' })
-    const onLeave = () => dispatch({ type: 'mouseLeave', timestamp: performance.now(), eventSource: 'petPointer' })
+    const onEnter = () => {
+      dispatch({ type: 'mouseEnter', timestamp: performance.now(), eventSource: 'petPointer' })
+      // 悬停持续一段时间后触发 hoverDuration（寒暄）
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = window.setTimeout(() => {
+        dispatch({ type: 'hoverDuration', elapsedMs: HOVER_MS, timestamp: performance.now(), eventSource: 'petPointer' })
+      }, HOVER_MS)
+    }
+    const onLeave = () => {
+      if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = 0 }
+      if (nearRef.current) {
+        nearRef.current = false
+        dispatch({ type: 'proximity', stateTransition: 'exit', distanceToPetCenter: PROXIMITY_RADIUS, timestamp: performance.now(), eventSource: 'petPointer' })
+      }
+      dispatch({ type: 'mouseLeave', timestamp: performance.now(), eventSource: 'petPointer' })
+    }
 
     const attachHandlers = () => {
       canvas.addEventListener('pointerdown', onPointerDown)
       canvas.addEventListener('pointermove', onPointerMove)
+      canvas.addEventListener('pointermove', onHoverMove)
       canvas.addEventListener('pointerup', onPointerUp)
+      canvas.addEventListener('dblclick', onDoubleClick)
       canvas.addEventListener('contextmenu', onContextMenu)
       canvas.addEventListener('mouseenter', onEnter)
       canvas.addEventListener('mouseleave', onLeave)
@@ -308,6 +376,11 @@ export function PetWindow(): JSX.Element {
       sprite.setAudioLevel(effLevel)
       sprite.setAudioPlaying(audioPlayingRef.current)
 
+      // 随音量呼吸：开启且播放时按音量平滑缩放，否则平滑归零
+      const breathTarget = config.behavior.audioBreath && audioPlayingRef.current ? effLevel : 0
+      breathRef.current += (breathTarget - breathRef.current) * 0.18
+      sprite.setBreath(breathRef.current)
+
       if (audioPlayingRef.current && now - lastAudioRuleRef.current > 100) {
         lastAudioRuleRef.current = now
         dispatch({ type: 'audioLevel', audioLevel: audioLevelRef.current, timestamp: now, eventSource: 'audio' })
@@ -316,7 +389,7 @@ export function PetWindow(): JSX.Element {
       let eff: SpriteAnimId
       if (persistentRef.current) eff = persistentRef.current
       else if (now < transientUntilRef.current) eff = transientAnimRef.current
-      else eff = audioPlayingRef.current ? 'bounce' : 'idle'
+      else eff = (audioPlayingRef.current && !config.behavior.paused) ? 'bounce' : 'idle'
       sprite.setAnim(eff, now)
 
       sprite.draw(ctx, W, H, now)
@@ -334,10 +407,13 @@ export function PetWindow(): JSX.Element {
       unsubConfig()
       canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointermove', onPointerMove)
+      canvas.removeEventListener('pointermove', onHoverMove)
       canvas.removeEventListener('pointerup', onPointerUp)
+      canvas.removeEventListener('dblclick', onDoubleClick)
       canvas.removeEventListener('contextmenu', onContextMenu)
       canvas.removeEventListener('mouseenter', onEnter)
       canvas.removeEventListener('mouseleave', onLeave)
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
       runtime?.destroy()
     }
   }, [])
@@ -378,10 +454,21 @@ export function PetWindow(): JSX.Element {
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', padding: '2px 8px 6px' }}>
               声波小精灵
             </div>
-            {PET_MENU_ITEMS.map((it, i) =>
-              'type' in it ? (
-                <div key={i} style={{ height: 1, background: 'rgba(255,255,255,0.10)', margin: '4px 4px' }} />
-              ) : (
+            {PET_MENU_ITEMS.map((it, i) => {
+              if ('type' in it) {
+                return <div key={i} style={{ height: 1, background: 'rgba(255,255,255,0.10)', margin: '4px 4px' }} />
+              }
+              // 暂停 / 呼吸项根据当前状态显示动态文案与图标
+              let label = it.label
+              let icon = it.icon
+              if (it.id === 'pause') {
+                label = behavior.paused ? '恢复互动' : '暂停互动'
+                icon = behavior.paused ? '▶️' : '⏸️'
+              } else if (it.id === 'breath') {
+                label = behavior.audioBreath ? '跟随音量呼吸：开' : '跟随音量呼吸：关'
+                icon = '💨'
+              }
+              return (
                 <div
                   key={i}
                   onClick={() => menuActionRef.current(it.id)}
@@ -403,11 +490,11 @@ export function PetWindow(): JSX.Element {
                     e.currentTarget.style.background = 'transparent'
                   }}
                 >
-                  <span style={{ opacity: 0.9 }}>{it.icon}</span>
-                  <span>{it.label}</span>
+                  <span style={{ opacity: 0.9 }}>{icon}</span>
+                  <span>{label}</span>
                 </div>
               )
-            )}
+            })}
           </div>
         </>
       )}

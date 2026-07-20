@@ -8,6 +8,8 @@ export interface SpriteRenderState {
   animStartedAt: number
   audioLevel: number
   audioPlaying: boolean
+  /** 随音量呼吸强度 0..1（由帧循环平滑后写入） */
+  breath: number
   message: string | null
   messageUntil: number
   hue: number
@@ -36,6 +38,7 @@ export class SpriteRenderer {
       animStartedAt: performance.now(),
       audioLevel: 0,
       audioPlaying: false,
+      breath: 0,
       message: null,
       messageUntil: 0,
       hue,
@@ -58,6 +61,11 @@ export class SpriteRenderer {
   setAudioPlaying(playing: boolean): void {
     this.state.audioPlaying = playing
     if (!playing) this.state.audioLevel = 0
+  }
+
+  /** 设置随音量呼吸强度（0..1），由帧循环按音频电平平滑后写入 */
+  setBreath(b: number): void {
+    this.state.breath = Math.max(0, Math.min(1, b))
   }
 
   showMessage(text: string | undefined, durationMs: number, now = performance.now()): void {
@@ -181,22 +189,25 @@ export class SpriteRenderer {
     const r = 56
     const x = cx + p.shakeX
     const y = baseY + p.bobY
-    const rx = r * p.squashX
-    const ry = r * p.squashY
+    // 随音量呼吸：整体缩放（叠加在姿态 squash 之上）
+    const breath = Math.max(0, Math.min(1, this.state.breath))
+    const breathScale = 1 + breath * 0.16
+    const rx = r * p.squashX * breathScale
+    const ry = r * p.squashY * breathScale
 
     const hue = this.state.hue
     const bodyFill = `hsl(${hue}, 72%, 66%)`
     const bodyFillDark = `hsl(${hue}, 62%, 55%)`
     const outline = `hsl(${hue}, 52%, 46%)`
 
-    // 声音光晕
+    // 声音光晕（随呼吸轻微放大 + 增亮，呈现「随音量呼吸」的透明度脉动）
     if (p.glow > 0.01) {
-      const g = ctx.createRadialGradient(x, y, r * 0.4, x, y, r * 1.8)
-      g.addColorStop(0, `hsla(${hue}, 90%, 70%, ${0.35 * p.glow})`)
+      const g = ctx.createRadialGradient(x, y, r * 0.4 * breathScale, x, y, r * 1.8 * breathScale)
+      g.addColorStop(0, `hsla(${hue}, 90%, 70%, ${0.35 * p.glow * (1 + breath * 0.6)})`)
       g.addColorStop(1, `hsla(${hue}, 90%, 70%, 0)`)
       ctx.fillStyle = g
       ctx.beginPath()
-      ctx.arc(x, y, r * 1.8, 0, Math.PI * 2)
+      ctx.arc(x, y, r * 1.8 * breathScale, 0, Math.PI * 2)
       ctx.fill()
     }
 

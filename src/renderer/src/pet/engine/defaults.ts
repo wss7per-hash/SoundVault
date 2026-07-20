@@ -4,10 +4,29 @@ import type { PetConfig, PetRule } from './types'
 
 // 默认文案（点击/随机互动气泡），模板与配置共用，避免 TDZ 引用。
 const DEFAULT_MESSAGES = {
-  clickMessages: ['♪ 这个我喜欢！', '♫ 听起来不错~', '嗨，继续放！'],
-  randomMessages: ['在听什么呢？', '需要我帮你找音效吗？', 'SoundVault 随时待命~'],
+  clickMessages: [
+    '♪ 这个我喜欢！',
+    '♫ 听起来不错~',
+    '嗨，继续放！',
+    '这段旋律好抓耳！',
+    '加进收藏夹吧~',
+    '节奏感拉满了！'
+  ],
+  randomMessages: [
+    '在听什么呢？',
+    '需要我帮你找音效吗？',
+    'SoundVault 随时待命~',
+    '今天也是爱音乐的一天 ♪',
+    '要不要试试随机播放？',
+    '我在这儿陪你听歌~'
+  ],
   bubbleDurationMs: 2000
 }
+
+// 更丰富的默认互动气泡（双击/悬停/靠近等事件专用，不持久化，仅作为默认规则的动作文案）
+const POKE_MESSAGES = ['哎哟，戳到我啦！', '嘿嘿，别闹~', '你戳中我啦！', '再戳就害羞了 >_<']
+const HOVER_MESSAGES = ['陪我听会儿歌吧~', '在忙呀？', '需要什么音效尽管说', '我就在这儿哦']
+const NEAR_MESSAGES = ['♪ 你在附近耶~', '离我这么近呀', '我感觉到你啦！', '要不要一起听？']
 
 const DEFAULT_RULE_TEMPLATES: PetRule[] = [
   {
@@ -96,6 +115,46 @@ const DEFAULT_RULE_TEMPLATES: PetRule[] = [
     priority: 5,
     actionStrategy: 'sequence',
     actions: [{ type: 'playSpriteAnim', animation: 'sleep' }, { type: 'showMessage', text: 'Zzz...', durationMs: 2000 }]
+  },
+
+  {
+    id: 'default-double-click',
+    name: '双击被戳',
+    enabled: true,
+    conditions: [{ type: 'doubleClick', required: true }],
+    cooldownMs: 1000,
+    priority: 60,
+    actionStrategy: 'sequence',
+    actions: [
+      { type: 'playSpriteAnim', animation: 'surprised' },
+      { type: 'randomMessage', messages: POKE_MESSAGES, durationMs: 2000 }
+    ]
+  },
+  {
+    id: 'default-hover-duration',
+    name: '悬停寒暄',
+    enabled: true,
+    conditions: [{ type: 'hoverDuration', required: true, filters: [{ field: 'elapsedMs', operator: '>=', value: 700, unit: 'ms' }] }],
+    cooldownMs: 4000,
+    priority: 25,
+    actionStrategy: 'sequence',
+    actions: [
+      { type: 'playSpriteAnim', animation: 'wave' },
+      { type: 'randomMessage', messages: HOVER_MESSAGES, durationMs: 2200 }
+    ]
+  },
+  {
+    id: 'default-proximity-near',
+    name: '靠近互动',
+    enabled: true,
+    conditions: [{ type: 'proximity', required: true, filters: [{ field: 'stateTransition', operator: '=', value: 'enter' }] }],
+    cooldownMs: 3500,
+    priority: 40,
+    actionStrategy: 'sequence',
+    actions: [
+      { type: 'playSpriteAnim', animation: 'bounce' },
+      { type: 'randomMessage', messages: NEAR_MESSAGES, durationMs: 2200 }
+    ]
   }
 ]
 
@@ -114,6 +173,10 @@ export const DEFAULT_PET_CONFIG: PetConfig = {
   sprite: {
     hue: 265,
     name: '声波小精灵'
+  },
+  behavior: {
+    audioBreath: true,
+    paused: false
   },
   triggerRules: DEFAULT_RULE_TEMPLATES
 }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Menu, protocol, net, globalShortcut, ipcMain, dialog, screen } from 'electron'
+import { app, BrowserWindow, shell, Menu, Tray, protocol, net, globalShortcut, ipcMain, dialog, screen, nativeImage, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { existsSync, readFileSync, statSync, writeFileSync } from 'fs'
@@ -119,6 +119,7 @@ function toggleSpotlight(): void {
 // 补全完整规则集（避免主进程重复维护 9 条默认规则）。
 // ============================================================
 let petWindow: BrowserWindow | null = null
+let petTray: Tray | null = null
 const PET_CONFIG_KEY = 'pet.config'
 
 interface PetDisplay {
@@ -130,10 +131,15 @@ interface PetDisplay {
   clickThrough: boolean
   locked: boolean
 }
+interface PetBehaviorStored {
+  audioBreath?: boolean
+  paused?: boolean
+}
 interface PetConfigStored {
   enabled?: boolean
   display?: Partial<PetDisplay>
   sprite?: { hue?: number; name?: string }
+  behavior?: PetBehaviorStored
   messages?: { clickMessages?: string[]; randomMessages?: string[]; bubbleDurationMs?: number }
   ruleEnabled?: Record<string, boolean>
 }
@@ -142,6 +148,7 @@ const DEFAULT_PET_STORED: PetConfigStored = {
   enabled: true,
   display: { x: 80, y: 160, scale: 0.35, opacity: 1, alwaysOnTop: true, clickThrough: false, locked: false },
   sprite: { hue: 265, name: '声波小精灵' },
+  behavior: { audioBreath: true, paused: false },
   messages: {
     clickMessages: ['♪ 这个我喜欢！', '♫ 听起来不错~', '嗨，继续放！'],
     randomMessages: ['在听什么呢？', '需要我帮你找音效吗？', 'SoundVault 随时待命~'],
@@ -168,6 +175,7 @@ function loadPetStored(): PetConfigStored {
         ...parsed,
         display: { ...defaultPetStored().display, ...(parsed.display || {}) },
         sprite: { ...defaultPetStored().sprite, ...(parsed.sprite || {}) },
+        behavior: { ...defaultPetStored().behavior, ...(parsed.behavior || {}) },
         messages: { ...defaultPetStored().messages, ...(parsed.messages || {}) },
         ruleEnabled: { ...(parsed.ruleEnabled || {}) }
       }
@@ -194,6 +202,19 @@ function persistPetStored(s: PetConfigStored): void {
     `).run(PET_CONFIG_KEY, JSON.stringify(s), new Date().toISOString(), JSON.stringify(s), new Date().toISOString())
   } catch {
     /* 持久化失败不阻断 */
+  }
+}
+
+/** 深合并两个精简配置（用于 saveConfig 的部分覆盖，避免丢失 behavior / display 等子对象） */
+function mergePetStored(base: PetConfigStored, patch: PetConfigStored): PetConfigStored {
+  return {
+    ...base,
+    ...patch,
+    display: { ...(base.display || {}), ...(patch.display || {}) },
+    sprite: { ...(base.sprite || {}), ...(patch.sprite || {}) },
+    behavior: { ...(base.behavior || {}), ...(patch.behavior || {}) },
+    messages: { ...(base.messages || {}), ...(patch.messages || {}) },
+    ruleEnabled: { ...(base.ruleEnabled || {}), ...(patch.ruleEnabled || {}) }
   }
 }
 
@@ -283,6 +304,100 @@ function setPetEnabled(enabled: boolean): void {
 
 function togglePetWindow(): void {
   setPetEnabled(!loadPetStored().enabled)
+}
+
+/** 部分更新宠物显示态（位置/缩放/透明度/置顶/点击穿透/锁定）并立即应用到窗口 */
+function setPetDisplay(patch: Partial<PetDisplay>): void {
+  const s = loadPetStored()
+  s.display = { ...(s.display || {}), ...patch } as PetDisplay
+  persistPetStored(s)
+  if (petWindow && !petWindow.isDestroyed()) {
+    const d = s.display as PetDisplay
+    applyDisplayToWindow(petWindow, d)
+    if (typeof d.x === 'number' && typeof d.y === 'number') petWindow.setPosition(d.x, d.y)
+  }
+}
+
+/** 部分更新宠物行为（暂停互动 / 跟随音量呼吸）并通知渲染端重载 */
+function setPetBehavior(patch: PetBehaviorStored): void {
+  const s = loadPetStored()
+  s.behavior = { ...(s.behavior || {}), ...patch }
+  persistPetStored(s)
+  if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:config')
+}
+
+/** 重置宠物到默认位置（屏幕左下 80,160） */
+function resetPetPosition(): void {
+  const s = loadPetStored()
+  s.display = { ...(s.display || {}), x: 80, y: 160 } as PetDisplay
+  persistPetStored(s)
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.setPosition(80, 160)
+    applyDisplayToWindow(petWindow, s.display as PetDisplay)
+    petWindow.webContents.send('pet:config')
+  }
+}
+
+/** 构建系统托盘右键菜单（标签随当前状态动态变化） */
+function buildPetTrayMenu(): Menu {
+  const s = loadPetStored()
+  const d = (s.display || {}) as PetDisplay
+  const b = s.behavior || {}
+  const items: MenuItemConstructorOptions[] = [
+    {
+      label: '打开 SoundVault',
+      click: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          if (mainWindow.isMinimized()) mainWindow.restore()
+          mainWindow.show()
+          mainWindow.focus()
+        }
+      }
+    },
+    { type: 'separator' },
+    { label: s.enabled ? '隐藏小精灵' : '显示小精灵', click: () => togglePetWindow() },
+    { label: `${d.locked ? '解锁' : '锁定'}拖动`, click: () => setPetDisplay({ locked: !d.locked }) },
+    { label: `点击穿透：${d.clickThrough ? '开' : '关'}`, click: () => setPetDisplay({ clickThrough: !d.clickThrough }) },
+    { label: `置顶：${d.alwaysOnTop ? '开' : '关'}`, click: () => setPetDisplay({ alwaysOnTop: !d.alwaysOnTop }) },
+    { label: `暂停互动：${b.paused ? '开' : '关'}`, click: () => setPetBehavior({ paused: !b.paused }) },
+    { label: `跟随音量呼吸：${b.audioBreath ? '开' : '关'}`, click: () => setPetBehavior({ audioBreath: !b.audioBreath }) },
+    { type: 'separator' },
+    { label: '缩放 35%', click: () => setPetDisplay({ scale: 0.35 }) },
+    { label: '缩放 50%', click: () => setPetDisplay({ scale: 0.5 }) },
+    { label: '缩放 70%', click: () => setPetDisplay({ scale: 0.7 }) },
+    { label: '缩放 100%', click: () => setPetDisplay({ scale: 1 }) },
+    { label: '重置位置', click: () => resetPetPosition() },
+    { type: 'separator' },
+    { label: '退出 SoundVault', click: () => app.quit() }
+  ]
+  return Menu.buildFromTemplate(items)
+}
+
+/** 创建系统托盘图标与菜单（复用应用可执行文件图标，避免额外素材依赖） */
+function createPetTray(): void {
+  if (petTray) return
+  petTray = new Tray(nativeImage.createEmpty())
+  petTray.setToolTip('SoundVault · 声波小精灵')
+  petTray.on('click', () => {
+    if (petTray) petTray.popupContextMenu(buildPetTrayMenu())
+  })
+  // 用应用图标作为托盘图标（Windows 托盘需要有效图标）
+  try {
+    const exePath = app.getPath('exe')
+    app.getFileIcon(exePath).then((icon) => {
+      if (petTray && !icon.isEmpty()) petTray.setImage(icon)
+    }).catch(() => {})
+  } catch {
+    /* 图标获取失败不阻断托盘创建 */
+  }
+}
+
+/** 销毁系统托盘 */
+function destroyPetTray(): void {
+  if (petTray) {
+    petTray.destroy()
+    petTray = null
+  }
 }
 
 function createWindow(): void {
@@ -441,6 +556,9 @@ app.whenReady().then(() => {
     }, 300)
   }
 
+  // 系统托盘：始终创建（即便宠物隐藏，也可从托盘恢复 / 退出应用）
+  createPetTray()
+
   // 全局快捷搜索：注册系统级快捷键（默认 Ctrl/Cmd+Shift+Space，可在 Spotlight 内自定义并持久化）
   currentSpotlightShortcut = loadSpotlightShortcut()
   const ok = globalShortcut.register(currentSpotlightShortcut, toggleSpotlight)
@@ -505,19 +623,18 @@ app.whenReady().then(() => {
   // ── 宠物（声波小精灵）IPC ──
   ipcMain.handle('pet:getConfig', () => loadPetStored())
   ipcMain.handle('pet:saveConfig', (_e, cfg: PetConfigStored) => {
-    persistPetStored(cfg)
+    // 合并而非整体覆盖：防止设置面板仅保存部分字段时丢失 behavior / display
+    const merged = mergePetStored(loadPetStored(), cfg)
+    persistPetStored(merged)
     if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:config')
     return { success: true }
   })
+  // 行为开关（暂停互动 / 跟随音量呼吸）独立持久化，便于右键菜单 / 托盘直接切换
+  ipcMain.on('pet:setBehavior', (_e, behavior: PetBehaviorStored) => {
+    setPetBehavior(behavior)
+  })
   ipcMain.handle('pet:setDisplay', (_e, display: Partial<PetDisplay>) => {
-    const s = loadPetStored()
-    s.display = { ...(s.display || {}), ...display } as PetDisplay
-    persistPetStored(s)
-    if (petWindow && !petWindow.isDestroyed()) {
-      const d = s.display as PetDisplay
-      applyDisplayToWindow(petWindow, d)
-      if (typeof d.x === 'number' && typeof d.y === 'number') petWindow.setPosition(d.x, d.y)
-    }
+    setPetDisplay(display)
     return { success: true }
   })
   // 渲染进程拖动宠物：按屏幕坐标增量移动窗口，并持久化新位置
@@ -554,17 +671,7 @@ app.whenReady().then(() => {
   ipcMain.on('pet:quit', () => {
     app.quit()
   })
-  ipcMain.on('pet:resetPosition', () => {
-    const s = loadPetStored()
-    s.display = { ...(s.display || {}), x: 80, y: 160 } as PetDisplay
-    persistPetStored(s)
-    if (petWindow && !petWindow.isDestroyed()) {
-      petWindow.setPosition(80, 160)
-      applyDisplayToWindow(petWindow, s.display as PetDisplay)
-      // 通知渲染端重载配置，使拖动起点坐标与重置后的位置保持一致
-      petWindow.webContents.send('pet:config')
-    }
-  })
+  ipcMain.on('pet:resetPosition', () => resetPetPosition())
   ipcMain.on('pet:toggle', () => togglePetWindow())
   ipcMain.on('pet:show', () => showPetWindow())
   ipcMain.on('pet:hide', () => hidePetWindow())
@@ -657,7 +764,8 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
-  // 退出前确保常驻窗口都被销毁，避免宠物 / 浮层残留导致进程不退出
+  // 退出前确保常驻窗口 / 托盘都被销毁，避免宠物 / 浮层残留导致进程不退出
+  destroyPetTray()
   closePetWindow()
   closeSpotlightWindow()
 })

@@ -16,6 +16,7 @@ export type PetEventType =
   | 'mouseEnter'
   | 'mouseLeave'
   | 'hoverDuration'
+  | 'proximity'
   | 'idleDuration'
   | 'audioStart'
   | 'audioLevel'
@@ -122,6 +123,12 @@ export interface PetConfig {
     hue: number
     /** 名称，显示在气泡/设置里 */
     name: string
+  }
+  behavior: {
+    /** 随音量呼吸：播放时随音量缩放 + 光晕脉动 */
+    audioBreath: boolean
+    /** 暂停互动：冻结所有规则反应 */
+    paused: boolean
   }
   triggerRules: PetRule[]
 }
