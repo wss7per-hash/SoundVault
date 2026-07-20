@@ -237,6 +237,13 @@ export interface PetAPI {
   notifySelection: (payload: PetSelectionPayload) => void
   // 主进程 → 宠物窗口 推送选中音效分析
   onSelectionChanged: (cb: (payload: PetSelectionPayload) => void) => () => void
+  // B2 试听拖拽：主窗口卡片拖拽开始/结束上报
+  beginTrialDrag: (id: string) => void
+  endTrialDrag: () => void
+  // 主进程 → 宠物窗口：光标是否悬停在宠物窗口上方（高亮提示）
+  onTrialHover: (cb: (armed: boolean) => void) => () => void
+  // 主进程 → 主窗口：拖卡片到宠物窗口松手后，请求主窗口试听该音效
+  onPlayTrial: (cb: (id: string) => void) => () => void
   // Petpack 导入/导出（jszip）
   exportPetpack: () => Promise<{ success: boolean; path?: string; message?: string }>
   importPetpack: () => Promise<{ success: boolean; message?: string }>

@@ -290,6 +290,32 @@ export default function App(): JSX.Element {
     })
   }, [selectedSoundId])
 
+  // B2 试听拖拽：从音效卡片拖出时通知主进程开始轮询光标，松手时通知结束
+  useEffect(() => {
+    const onDragStart = (e: DragEvent) => {
+      const el = (e.target as HTMLElement | null)?.closest?.('[data-sound-id]') as HTMLElement | null
+      const id = el?.getAttribute('data-sound-id')
+      if (id) window.api.pet?.beginTrialDrag?.(id)
+    }
+    const onDragEnd = () => window.api.pet?.endTrialDrag?.()
+    document.addEventListener('dragstart', onDragStart)
+    document.addEventListener('dragend', onDragEnd)
+    return () => {
+      document.removeEventListener('dragstart', onDragStart)
+      document.removeEventListener('dragend', onDragEnd)
+    }
+  }, [])
+
+  // B2 试听拖拽：拖卡片到宠物窗口松手后，主进程请求主窗口试听该音效（复用 startPreview 播放 + 宠物电平联动）
+  useEffect(() => {
+    const unsub = window.api.pet?.onPlayTrial?.((id: string) => {
+      if (!id) return
+      const sound = useAppStore.getState().sounds.find((s) => s.id === id)
+      if (sound) window.dispatchEvent(new CustomEvent('pet-trial-play', { detail: sound }))
+    })
+    return unsub
+  }, [])
+
   // Ctrl+A / Ctrl+D select all；Ctrl+Z 撤销
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

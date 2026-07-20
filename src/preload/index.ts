@@ -280,6 +280,21 @@ const api = {
       ipcRenderer.on('pet:selection', listener)
       return () => ipcRenderer.removeListener('pet:selection', listener)
     },
+    // B2 试听拖拽：主窗口卡片拖拽开始/结束上报（主进程据此判断光标是否在宠物窗口内）
+    beginTrialDrag: (id: string) => ipcRenderer.send('pet:beginTrialDrag', id),
+    endTrialDrag: () => ipcRenderer.send('pet:endTrialDrag'),
+    // 主进程 → 宠物窗口：光标是否悬停在宠物窗口上方（用于高亮提示）
+    onTrialHover: (cb: (armed: boolean) => void) => {
+      const listener = (_e: unknown, armed: boolean): void => cb(armed)
+      ipcRenderer.on('pet:trialHover', listener)
+      return () => ipcRenderer.removeListener('pet:trialHover', listener)
+    },
+    // 主进程 → 主窗口：拖卡片到宠物窗口松手后，请求主窗口试听该音效
+    onPlayTrial: (cb: (id: string) => void) => {
+      const listener = (_e: unknown, id: string): void => cb(id)
+      ipcRenderer.on('pet:playTrial', listener)
+      return () => ipcRenderer.removeListener('pet:playTrial', listener)
+    },
     onAudioEvent: (cb: (event: { type: 'level' | 'start' | 'stop'; level?: number }) => void) => {
       const listener = (_e: unknown, event: { type: 'level' | 'start' | 'stop'; level?: number }) => cb(event)
       ipcRenderer.on('pet:audio', listener)

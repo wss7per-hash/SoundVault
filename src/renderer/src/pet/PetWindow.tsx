@@ -32,6 +32,36 @@ function buildSelectionComment(p: {
   if (p.onomatopoeia && p.onomatopoeia.length) bits.push(`拟声「${p.onomatopoeia.slice(0, 3).join('、')}」`)
   return bits.length ? `${name}：${bits.join('，')}～` : `${name}，这个我还没分析过呢～`
 }
+
+// A2 懂你的库：用库统计生成友好气泡（空闲时偶尔冒一句）
+function formatDuration(ms: number): string {
+  const s = Math.round(ms / 1000)
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  if (h > 0) return `${h} 小时 ${m} 分`
+  if (m > 0) return `${m} 分 ${s % 60} 秒`
+  return `${s} 秒`
+}
+function buildStatsComment(stats: Record<string, any>): string {
+  const total: number = stats.total ?? 0
+  if (total === 0) return '你的库还是空的，拖点音效进来我们就热闹啦～'
+  const analyzed: number = stats.analyzed ?? 0
+  const unanalyzed: number = stats.unanalyzed ?? 0
+  const starred: number = stats.starred ?? 0
+  const byExt: { wav: number; mp3: number; flac: number; other: number } = stats.byExt ?? { wav: 0, mp3: 0, flac: 0, other: 0 }
+  const tagCount: number = stats.tagCount ?? 0
+  const withOno: number = stats.withOnomatopoeia ?? 0
+  const totalDurationMs: number = stats.totalDurationMs ?? 0
+  const pool: string[] = [
+    `你库里已经有 ${total} 个音效啦～`,
+    `我已经帮 ${analyzed} 个做过 AI 分析，${unanalyzed > 0 ? `${unanalyzed} 个还在等我呢` : '全部都读完啦'}`,
+    starred > 0 ? `你收藏了 ${starred} 个心头好 ♥` : `试试右键音效「收藏」，挑几个心头好呀`,
+    byExt.wav > 0 ? `WAV 占了 ${byExt.wav} 个，是你最常用的格式` : `你攒了 ${formatDuration(totalDurationMs)} 的素材，真不少`,
+    tagCount > 0 ? `已经打了 ${tagCount} 个标签，整理得真工整` : `给音效加点标签，找起来更顺手哦`,
+    withOno > 0 ? `有 ${withOno} 个音效带拟声词，念起来可好玩了` : `让 AI 分析一下，就能知道它们的拟声词啦`
+  ]
+  return pool[Math.floor(Math.random() * pool.length)]
+}
 // 靠近判定的半径（指针距小精灵中心小于此值视为「靠近」）
 const PROXIMITY_RADIUS = 82
 const HOVER_MS = 700
@@ -65,6 +95,7 @@ export function PetWindow(): JSX.Element {
   // 消息气泡（窗口内 HTML 浮层，不受 canvas scale 影响，保证文字清晰可读）
   const [bubble, setBubble] = useState<{ text: string } | null>(null)
   const bubbleTimerRef = useRef(0 as number)
+  const bubbleUntilRef = useRef(0 as number)
   const scaleRef = useRef(0.35)
 
   useEffect(() => {
@@ -87,6 +118,7 @@ export function PetWindow(): JSX.Element {
     const breathRef = { current: 0 }
     const hoverTimerRef = { current: 0 as number }
     const nearRef = { current: false }
+    const trialArmedRef = { current: false }
     const dragRef = {
       active: false,
       moved: false,
@@ -102,6 +134,7 @@ export function PetWindow(): JSX.Element {
     let fixedTimer = 0
     let randomTimer: number | undefined = undefined
     let idleTimer = 0
+    let statsTimer = 0
     // 情绪：开心临时态截止时间戳（戳一下/选中音效时点亮）
     const happyUntilRef = { current: 0 }
 
@@ -117,6 +150,7 @@ export function PetWindow(): JSX.Element {
     // 消息气泡：以窗口内 HTML 浮层呈现（不随 canvas scale 缩小，文字清晰可读）
     const showBubble = (text: string, ms: number) => {
       setBubble({ text })
+      bubbleUntilRef.current = performance.now() + ms
       if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current)
       bubbleTimerRef.current = window.setTimeout(() => setBubble(null), ms)
     }
@@ -215,6 +249,15 @@ export function PetWindow(): JSX.Element {
         const elapsed = performance.now() - lastActivityRef.current
         dispatch({ type: 'idleDuration', elapsedMs: elapsed, timestamp: performance.now(), eventSource: 'timer' })
       }, 1000)
+      // A2 懂你的库：空闲且当前无气泡时，偶尔用真实库统计冒一句友好提示
+      statsTimer = window.setInterval(() => {
+        const now = performance.now()
+        if (now < bubbleUntilRef.current + 2000) return
+        if (now - lastActivityRef.current < 25000) return
+        window.api.getStats().then((s: any) => {
+          if (s) showBubble(buildStatsComment(s), 3600)
+        }).catch(() => {})
+      }, 52000)
     }
 
     const onAudio = (ev: { type: 'level' | 'start' | 'stop'; level?: number }) => {
@@ -257,6 +300,16 @@ export function PetWindow(): JSX.Element {
     }) => {
       happyUntilRef.current = performance.now() + 2200
       showBubble(buildSelectionComment(p), 4200)
+    })
+
+    // B2：从主窗口拖卡片到宠物窗口上方时，点亮高亮并提示「松手就能试听」
+    const unsubTrial = window.api.pet.onTrialHover((armed: boolean) => {
+      trialArmedRef.current = armed
+      sprite.setTrialArmed(armed)
+      if (armed) {
+        happyUntilRef.current = performance.now() + 1500
+        showBubble('松手就能试听啦～', 1400)
+      }
     })
 
     const onPointerDown = (e: PointerEvent) => {
@@ -417,10 +470,12 @@ export function PetWindow(): JSX.Element {
       clearInterval(fixedTimer)
       if (randomTimer) clearTimeout(randomTimer)
       clearInterval(idleTimer)
+      if (statsTimer) clearInterval(statsTimer)
       unsubAudio()
       unsubConfig()
       unsubAbout()
       unsubSelection()
+      unsubTrial()
       if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current)
       canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointermove', onPointerMove)

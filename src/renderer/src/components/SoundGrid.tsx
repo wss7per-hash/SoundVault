@@ -175,6 +175,16 @@ export function SoundGrid({ sounds, selectedId, onSelect }: SoundGridProps): JSX
     window.api.pet.sendAudioEvent({ type: 'stop' })
   }, [stopLevelLoop])
 
+  // B2 试听拖拽：宠物窗口那边松手后，主窗口派发此事件，复用 startPreview 试听（宠物经既有电平管线演唱）
+  useEffect(() => {
+    const onTrialPlay = (e: Event) => {
+      const sound = (e as CustomEvent).detail as SoundData | undefined
+      if (sound) startPreview(sound)
+    }
+    window.addEventListener('pet-trial-play', onTrialPlay as EventListener)
+    return () => window.removeEventListener('pet-trial-play', onTrialPlay as EventListener)
+  }, [startPreview])
+
   const handleMouseEnter = useCallback((sound: SoundData, e: React.MouseEvent) => {
     if (isDragging) return
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)

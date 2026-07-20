@@ -18,6 +18,8 @@ export interface SpriteRenderState {
   name: string
   /** 情绪状态机（A1）：idle 待机 / focus 专注(播放) / happy 开心(临时) / sleepy 瞌睡(久置) */
   mood: PetMood
+  /** 试听拖拽高亮（B2）：拖卡片到宠物窗口上方时点亮，提示「松手就能试听」 */
+  trialArmed: boolean
 }
 
 interface Pose {
@@ -54,7 +56,8 @@ export class SpriteRenderer {
       messageUntil: 0,
       hue,
       name,
-      mood: 'idle'
+      mood: 'idle',
+      trialArmed: false
     }
     this.scheduleBlink(performance.now())
     this.scheduleMicro(performance.now())
@@ -103,6 +106,11 @@ export class SpriteRenderer {
   /** 设置情绪状态（A1），由帧循环按播放/无操作时长推导后写入 */
   setMood(mood: PetMood): void {
     this.state.mood = mood
+  }
+
+  /** 设置试听拖拽高亮（B2）：拖卡片到宠物窗口上方时点亮 */
+  setTrialArmed(armed: boolean): void {
+    this.state.trialArmed = armed
   }
 
   private scheduleBlink(now: number): void {
@@ -303,14 +311,31 @@ export class SpriteRenderer {
     const outline = `hsl(${moodHue}, ${clampPct(52 + satMod)}%, ${clampPct(46 + lightMod)}%)`
 
     // 声音光晕（随呼吸轻微放大 + 增亮，呈现「随音量呼吸」的透明度脉动）
-    if (p.glow > 0.01) {
+    if (p.glow > 0.01 || this.state.trialArmed) {
+      const glowA = this.state.trialArmed ? 0.4 + 0.15 * Math.sin(now / 160) : p.glow
       const g = ctx.createRadialGradient(x, y, r * 0.4 * breathScale, x, y, r * 1.8 * breathScale)
-      g.addColorStop(0, `hsla(${moodHue}, 90%, 70%, ${0.35 * p.glow * (1 + breath * 0.6)})`)
+      g.addColorStop(0, `hsla(${moodHue}, 90%, 70%, ${0.35 * glowA * (1 + breath * 0.6)})`)
       g.addColorStop(1, `hsla(${moodHue}, 90%, 70%, 0)`)
       ctx.fillStyle = g
       ctx.beginPath()
       ctx.arc(x, y, r * 1.8 * breathScale, 0, Math.PI * 2)
       ctx.fill()
+    }
+
+    // 试听拖拽高亮（B2）：拖卡片到宠物窗口上方时，画一圈旋转虚线提示「松手就能试听」
+    if (this.state.trialArmed) {
+      ctx.save()
+      ctx.translate(x, y)
+      ctx.rotate(now / 900)
+      ctx.strokeStyle = `hsla(${(moodHue + 30) % 360}, 90%, 75%, 0.9)`
+      ctx.lineWidth = 3
+      ctx.setLineDash([10, 9])
+      ctx.lineDashOffset = -(now / 40) % 19
+      ctx.beginPath()
+      ctx.arc(0, 0, r * 2.15 * breathScale, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.restore()
     }
 
     // 影子

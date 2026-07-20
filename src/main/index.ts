@@ -831,6 +831,38 @@ app.whenReady().then(() => {
     if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:config')
   })
 
+  // B2 试听拖拽：主窗口卡片拖拽时，轮询光标是否落在宠物窗口内并高亮提示；
+  // 松手时若仍在宠物窗口内，则请求主窗口试听该音效（复用主窗口播放管线，宠物经既有电平管线演唱）。
+  let trialDragId: string | null = null
+  let trialDragHover = false
+  let trialPollTimer: ReturnType<typeof setInterval> | null = null
+  ipcMain.on('pet:beginTrialDrag', (_e, id: string) => {
+    trialDragId = id
+    if (!trialPollTimer) {
+      trialPollTimer = setInterval(() => {
+        if (!petWindow || petWindow.isDestroyed()) return
+        const pt = screen.getCursorScreenPoint()
+        const b = petWindow.getBounds()
+        const inside = pt.x >= b.x && pt.x <= b.x + b.width && pt.y >= b.y && pt.y <= b.y + b.height
+        if (inside !== trialDragHover) {
+          trialDragHover = inside
+          petWindow.webContents.send('pet:trialHover', inside)
+        }
+      }, 60)
+    }
+  })
+  ipcMain.on('pet:endTrialDrag', () => {
+    if (trialPollTimer) { clearInterval(trialPollTimer); trialPollTimer = null }
+    const id = trialDragId
+    const hover = trialDragHover
+    trialDragId = null
+    trialDragHover = false
+    if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:trialHover', false)
+    if (hover && id && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('pet:playTrial', id)
+    }
+  })
+
   // ── Petpack 导入 / 导出（jszip 打包精简配置 + manifest） ──
   ipcMain.handle('pet:exportPetpack', async () => {
     try {
