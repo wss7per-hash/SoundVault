@@ -233,6 +233,10 @@ export interface PetAPI {
   showContextMenu: () => void
   // 主进程「关于」原生菜单触发后转发文本，渲染端据此显示气泡
   onAbout: (cb: (text: string) => void) => () => void
+  // 主窗口选中音效 → 通知宠物做 AI 点评
+  notifySelection: (payload: PetSelectionPayload) => void
+  // 主进程 → 宠物窗口 推送选中音效分析
+  onSelectionChanged: (cb: (payload: PetSelectionPayload) => void) => () => void
   // Petpack 导入/导出（jszip）
   exportPetpack: () => Promise<{ success: boolean; path?: string; message?: string }>
   importPetpack: () => Promise<{ success: boolean; message?: string }>

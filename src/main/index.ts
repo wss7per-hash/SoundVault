@@ -822,6 +822,10 @@ app.whenReady().then(() => {
   ipcMain.on('pet:audio', (_e, payload: { type: 'level' | 'start' | 'stop'; level?: number }) => {
     if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:audio', payload)
   })
+  // 选中点评（B1）：主窗口选中音效时上报分析摘要，转发给宠物窗口
+  ipcMain.on('pet:notifySelection', (_e, payload: unknown) => {
+    if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:selection', payload)
+  })
   // 设置变更后通知宠物窗口重载配置
   ipcMain.on('pet:configChanged', () => {
     if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:config')

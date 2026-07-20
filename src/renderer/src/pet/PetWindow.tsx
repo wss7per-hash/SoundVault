@@ -2,7 +2,7 @@
 // 透明窗口内的全屏 canvas；rAF 循环驱动 SpriteRenderer；
 // 持有规则运行时 + 动作分发器，处理指针事件 / timer / 音频联动。
 import { useEffect, useRef, useState } from 'react'
-import { SpriteRenderer } from './sprite'
+import { SpriteRenderer, type PetMood } from './sprite'
 import { createRuleRuntime, type RuleRuntime } from './engine/ruleRuntime'
 import { UserTriggerManager, type SpriteActionExecutors } from './engine/userTriggerManager'
 import type { PetConfig, PetEventContext, SpriteAnimId, PetConfigStored } from './engine/types'
@@ -14,6 +14,24 @@ const MENU_W = 152
 const MENU_H = 280
 const PET_CX = W / 2
 const PET_CY = H - 92
+
+// 选中音效时宠物点评文案（用 AI 分析结果拼一句）
+function buildSelectionComment(p: {
+  fileName: string
+  description?: string | null
+  useCases?: string | null
+  onomatopoeia?: string[] | null
+}): string {
+  const name = p.fileName || '这个音效'
+  const clean = (s?: string | null) => (s ? s.replace(/[。.\s]+$/, '') : '')
+  const bits: string[] = []
+  const desc = clean(p.description)
+  if (desc) bits.push(desc)
+  const uc = clean(p.useCases)
+  if (uc) bits.push(`适合${uc}`)
+  if (p.onomatopoeia && p.onomatopoeia.length) bits.push(`拟声「${p.onomatopoeia.slice(0, 3).join('、')}」`)
+  return bits.length ? `${name}：${bits.join('，')}～` : `${name}，这个我还没分析过呢～`
+}
 // 靠近判定的半径（指针距小精灵中心小于此值视为「靠近」）
 const PROXIMITY_RADIUS = 82
 const HOVER_MS = 700
@@ -84,6 +102,8 @@ export function PetWindow(): JSX.Element {
     let fixedTimer = 0
     let randomTimer: number | undefined = undefined
     let idleTimer = 0
+    // 情绪：开心临时态截止时间戳（戳一下/选中音效时点亮）
+    const happyUntilRef = { current: 0 }
 
     const applyDisplay = (disp: PetConfig['display']) => {
       scaleRef.current = Math.max(0.3, disp.scale)
@@ -228,6 +248,17 @@ export function PetWindow(): JSX.Element {
       }).catch(() => {})
     })
 
+    // B1：主窗口选中音效 → 宠物开心一下并用 AI 分析结果点评
+    const unsubSelection = window.api.pet.onSelectionChanged((p: {
+      fileName: string
+      description?: string | null
+      useCases?: string | null
+      onomatopoeia?: string[] | null
+    }) => {
+      happyUntilRef.current = performance.now() + 2200
+      showBubble(buildSelectionComment(p), 4200)
+    })
+
     const onPointerDown = (e: PointerEvent) => {
       if (e.button === 2) return
       if (config.display.locked) return
@@ -272,6 +303,7 @@ export function PetWindow(): JSX.Element {
         dispatch({ type: 'dragEnd', timestamp: performance.now(), eventSource: 'petPointer' })
       } else {
         dispatch({ type: 'click', timestamp: performance.now(), eventSource: 'petPointer' })
+        happyUntilRef.current = performance.now() + 2600
       }
     }
     const onContextMenu = (e: MouseEvent) => {
@@ -285,6 +317,7 @@ export function PetWindow(): JSX.Element {
     const onDoubleClick = () => {
       triggerAnim('surprised')
       dispatch({ type: 'doubleClick', timestamp: performance.now(), eventSource: 'petPointer' })
+      happyUntilRef.current = performance.now() + 2600
     }
     // 指针在窗口内移动（非拖拽）：计算与精灵中心距离，进入/离开「靠近」区时触发 proximity
     const onHoverMove = (e: PointerEvent) => {
@@ -293,6 +326,7 @@ export function PetWindow(): JSX.Element {
       const near = dist < PROXIMITY_RADIUS
       if (near && !nearRef.current) {
         nearRef.current = true
+        happyUntilRef.current = performance.now() + 1500
         dispatch({ type: 'proximity', stateTransition: 'enter', distanceToPetCenter: dist, timestamp: performance.now(), eventSource: 'petPointer' })
       } else if (!near && nearRef.current) {
         nearRef.current = false
@@ -365,6 +399,13 @@ export function PetWindow(): JSX.Element {
       else eff = (audioPlayingRef.current && !config.behavior.paused && config.behavior.audioBreath) ? 'sing' : 'idle'
       sprite.setAnim(eff, now)
 
+      // 情绪状态机（A1）：开心(临时)>专注(播放)>瞌睡(久置)>待机
+      let mood: PetMood = 'idle'
+      if (now < happyUntilRef.current) mood = 'happy'
+      else if (audioPlayingRef.current) mood = 'focus'
+      else if (now - lastActivityRef.current > 55000) mood = 'sleepy'
+      sprite.setMood(mood)
+
       sprite.draw(ctx, W, H, now)
       raf = requestAnimationFrame(frame)
     }
@@ -379,6 +420,7 @@ export function PetWindow(): JSX.Element {
       unsubAudio()
       unsubConfig()
       unsubAbout()
+      unsubSelection()
       if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current)
       canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointermove', onPointerMove)

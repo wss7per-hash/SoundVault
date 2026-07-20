@@ -3,6 +3,8 @@
 // 外观由 hue 决定，嘴部为波形线，振幅随 audioLevel（实时音量）起伏。
 import type { SpriteAnimId } from './engine/types'
 
+export type PetMood = 'idle' | 'focus' | 'happy' | 'sleepy'
+
 export interface SpriteRenderState {
   anim: SpriteAnimId
   animStartedAt: number
@@ -14,6 +16,8 @@ export interface SpriteRenderState {
   messageUntil: number
   hue: number
   name: string
+  /** 情绪状态机（A1）：idle 待机 / focus 专注(播放) / happy 开心(临时) / sleepy 瞌睡(久置) */
+  mood: PetMood
 }
 
 interface Pose {
@@ -49,7 +53,8 @@ export class SpriteRenderer {
       message: null,
       messageUntil: 0,
       hue,
-      name
+      name,
+      mood: 'idle'
     }
     this.scheduleBlink(performance.now())
     this.scheduleMicro(performance.now())
@@ -93,6 +98,11 @@ export class SpriteRenderer {
 
   setName(name: string): void {
     this.state.name = name
+  }
+
+  /** 设置情绪状态（A1），由帧循环按播放/无操作时长推导后写入 */
+  setMood(mood: PetMood): void {
+    this.state.mood = mood
   }
 
   private scheduleBlink(now: number): void {
@@ -233,7 +243,37 @@ export class SpriteRenderer {
       }
     }
 
+    // 情绪叠加（更高层状态，调制姿势/表情/配色）
+    this.applyMood(now, base)
+
     return base
+  }
+
+  private applyMood(now: number, base: Pose): void {
+    switch (this.state.mood) {
+      case 'happy':
+        // 开心：轻微蹦跳 + 鼓胀 + 大眼 + 明显光晕
+        base.bobY -= Math.abs(Math.sin(now / 220)) * 4
+        base.squashX *= 1.04
+        base.squashY *= 0.97
+        base.eyeScale *= 1.08
+        base.glow = Math.max(base.glow, 0.25)
+        break
+      case 'sleepy':
+        // 瞌睡：下垂 + 微缩 + 半眯眼
+        base.bobY += 9
+        base.squashY *= 1.04
+        base.eyeScale *= 0.55
+        base.mouth = 'flat'
+        break
+      case 'focus':
+        // 专注：稳一点 + 微微光晕
+        base.glow = Math.max(base.glow, 0.12)
+        break
+      case 'idle':
+      default:
+        break
+    }
   }
 
   draw(ctx: CanvasRenderingContext2D, W: number, H: number, now = performance.now()): void {
@@ -253,16 +293,20 @@ export class SpriteRenderer {
     const rx = r * p.squashX * breathScale
     const ry = r * p.squashY * breathScale
 
-    const hue = this.state.hue
-    const bodyFill = `hsl(${hue}, 72%, 66%)`
-    const bodyFillDark = `hsl(${hue}, 62%, 55%)`
-    const outline = `hsl(${hue}, 52%, 46%)`
+    // 情绪配色：开心偏暖、瞌睡暗淡、专注略饱和，待机保持原色
+    const moodHue = (this.state.hue + (this.state.mood === 'happy' ? 8 : 0) + 360) % 360
+    const clampPct = (v: number) => Math.max(0, Math.min(100, v))
+    const satMod = this.state.mood === 'sleepy' ? -22 : this.state.mood === 'happy' ? 6 : this.state.mood === 'focus' ? 5 : 0
+    const lightMod = this.state.mood === 'sleepy' ? -12 : this.state.mood === 'happy' ? 3 : 0
+    const bodyFill = `hsl(${moodHue}, ${clampPct(72 + satMod)}%, ${clampPct(66 + lightMod)}%)`
+    const bodyFillDark = `hsl(${moodHue}, ${clampPct(62 + satMod)}%, ${clampPct(55 + lightMod)}%)`
+    const outline = `hsl(${moodHue}, ${clampPct(52 + satMod)}%, ${clampPct(46 + lightMod)}%)`
 
     // 声音光晕（随呼吸轻微放大 + 增亮，呈现「随音量呼吸」的透明度脉动）
     if (p.glow > 0.01) {
       const g = ctx.createRadialGradient(x, y, r * 0.4 * breathScale, x, y, r * 1.8 * breathScale)
-      g.addColorStop(0, `hsla(${hue}, 90%, 70%, ${0.35 * p.glow * (1 + breath * 0.6)})`)
-      g.addColorStop(1, `hsla(${hue}, 90%, 70%, 0)`)
+      g.addColorStop(0, `hsla(${moodHue}, 90%, 70%, ${0.35 * p.glow * (1 + breath * 0.6)})`)
+      g.addColorStop(1, `hsla(${moodHue}, 90%, 70%, 0)`)
       ctx.fillStyle = g
       ctx.beginPath()
       ctx.arc(x, y, r * 1.8 * breathScale, 0, Math.PI * 2)
@@ -283,7 +327,7 @@ export class SpriteRenderer {
     ctx.translate(x, y)
     ctx.rotate(p.tilt)
 
-    this.drawAntennae(ctx, rx, ry, hue, now)
+    this.drawAntennae(ctx, rx, ry, moodHue, now)
 
     // 身体
     const grad = ctx.createLinearGradient(0, -ry, 0, ry)
@@ -306,28 +350,43 @@ export class SpriteRenderer {
     ctx.fill()
     ctx.restore()
 
-    // 眼睛（更大更圆，自带高光，更可爱）
+    // 眼睛（更大更圆，自带高光，更可爱；情绪驱动样式：开心^_^ / 瞌睡半眯）
     const eyeY = -ry * 0.18
     const eyeDX = rx * 0.36
     const eyeR = rx * 0.26 * p.eyeScale
-    if (this.state.anim === 'sleep') {
+    const isSleepyEye = this.state.mood === 'sleepy' && this.state.anim !== 'sleep'
+    const isHappyEye = this.state.mood === 'happy'
+    const drawEyeStroke = (sx: number, fn: (x: number) => void): void => {
       ctx.strokeStyle = outline
       ctx.lineWidth = 3
       ctx.lineCap = 'round'
+      ctx.beginPath()
+      fn(sx)
+      ctx.stroke()
+    }
+    if (this.state.anim === 'sleep') {
       for (const sx of [-eyeDX, eyeDX]) {
-        ctx.beginPath()
-        ctx.arc(sx, eyeY, eyeR * 0.95, Math.PI * 0.12, Math.PI * 0.88)
-        ctx.stroke()
+        drawEyeStroke(sx, (x) => ctx.arc(x, eyeY, eyeR * 0.95, Math.PI * 0.12, Math.PI * 0.88))
+      }
+    } else if (isSleepyEye) {
+      // 瞌睡：半眯眼（浅浅的弧）
+      for (const sx of [-eyeDX, eyeDX]) {
+        drawEyeStroke(sx, (x) => {
+          ctx.moveTo(x - eyeR, eyeY - eyeR * 0.15)
+          ctx.quadraticCurveTo(x, eyeY + eyeR * 0.7, x + eyeR, eyeY - eyeR * 0.15)
+        })
+      }
+    } else if (isHappyEye) {
+      // 开心：^_^ 笑眼
+      for (const sx of [-eyeDX, eyeDX]) {
+        drawEyeStroke(sx, (x) => {
+          ctx.moveTo(x - eyeR, eyeY)
+          ctx.quadraticCurveTo(x, eyeY - eyeR * 1.2, x + eyeR, eyeY)
+        })
       }
     } else if (blink) {
-      ctx.strokeStyle = outline
-      ctx.lineWidth = 3
-      ctx.lineCap = 'round'
       for (const sx of [-eyeDX, eyeDX]) {
-        ctx.beginPath()
-        ctx.moveTo(sx - eyeR, eyeY)
-        ctx.lineTo(sx + eyeR, eyeY)
-        ctx.stroke()
+        drawEyeStroke(sx, (x) => { ctx.moveTo(x - eyeR, eyeY); ctx.lineTo(x + eyeR, eyeY) })
       }
     } else {
       for (const sx of [-eyeDX, eyeDX]) {
@@ -388,7 +447,7 @@ export class SpriteRenderer {
     // 腮红（更明显，更可爱）
     ctx.save()
     ctx.globalAlpha = 0.5
-    ctx.fillStyle = `hsl(${(hue + 18) % 360}, 85%, 72%)`
+    ctx.fillStyle = `hsl(${(moodHue + 18) % 360}, 85%, 72%)`
     ctx.beginPath()
     ctx.ellipse(-rx * 0.52, ry * 0.18, rx * 0.15, ry * 0.1, 0, 0, Math.PI * 2)
     ctx.ellipse(rx * 0.52, ry * 0.18, rx * 0.15, ry * 0.1, 0, 0, Math.PI * 2)
@@ -419,12 +478,22 @@ export class SpriteRenderer {
     // 睡觉 Zzz
     if (this.state.anim === 'sleep') {
       ctx.save()
-      ctx.fillStyle = `hsla(${hue}, 60%, 55%, 0.9)`
+      ctx.fillStyle = `hsla(${moodHue}, 60%, 55%, 0.9)`
       ctx.font = 'bold 18px sans-serif'
       const zz = (Math.sin(now / 600) + 1) * 4
       ctx.fillText('Z', x + rx * 0.5, y - ry * 0.6 - zz)
       ctx.font = 'bold 13px sans-serif'
       ctx.fillText('z', x + rx * 0.78, y - ry * 0.95 - zz * 1.5)
+      ctx.restore()
+    }
+
+    // 瞌睡小 Z（mood=sleepy 但还没进入 sleep 动画时）
+    if (this.state.mood === 'sleepy' && this.state.anim !== 'sleep') {
+      ctx.save()
+      ctx.fillStyle = `hsla(${moodHue}, 60%, 55%, 0.85)`
+      ctx.font = 'bold 14px sans-serif'
+      const zz = (Math.sin(now / 700) + 1) * 3
+      ctx.fillText('z', x + rx * 0.5, y - ry * 0.6 - zz)
       ctx.restore()
     }
   }

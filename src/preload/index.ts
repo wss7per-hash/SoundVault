@@ -272,6 +272,14 @@ const api = {
       ipcRenderer.on('pet:about', listener)
       return () => ipcRenderer.removeListener('pet:about', listener)
     },
+    // 主窗口选中音效 → 通知宠物点评（渲染端发给主进程，主进程转发宠物窗口）
+    notifySelection: (payload: unknown) => ipcRenderer.send('pet:notifySelection', payload),
+    // 主进程 → 宠物窗口 推送选中音效分析
+    onSelectionChanged: (cb: (payload: unknown) => void) => {
+      const listener = (_e: unknown, payload: unknown): void => cb(payload)
+      ipcRenderer.on('pet:selection', listener)
+      return () => ipcRenderer.removeListener('pet:selection', listener)
+    },
     onAudioEvent: (cb: (event: { type: 'level' | 'start' | 'stop'; level?: number }) => void) => {
       const listener = (_e: unknown, event: { type: 'level' | 'start' | 'stop'; level?: number }) => cb(event)
       ipcRenderer.on('pet:audio', listener)

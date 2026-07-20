@@ -267,6 +267,29 @@ export default function App(): JSX.Element {
     return unsub
   }, [])
 
+  // 选中音效 → 通知宠物窗口用 AI 分析结果做点评（B1）
+  useEffect(() => {
+    if (!selectedSound) return
+    let onoma: string[] | null = null
+    if (selectedSound.onomatopoeia) {
+      try {
+        const parsed = JSON.parse(selectedSound.onomatopoeia)
+        if (Array.isArray(parsed)) {
+          onoma = parsed
+            .map((o: any) => (typeof o === 'string' ? o : (o && o.zh) || ''))
+            .filter(Boolean)
+        }
+      } catch { /* 非 JSON，忽略 */ }
+    }
+    window.api.pet?.notifySelection?.({
+      fileName: selectedSound.file_name,
+      description: selectedSound.description,
+      useCases: selectedSound.use_cases,
+      emotion: selectedSound.emotion,
+      onomatopoeia: onoma
+    })
+  }, [selectedSoundId])
+
   // Ctrl+A / Ctrl+D select all；Ctrl+Z 撤销
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
