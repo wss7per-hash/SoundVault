@@ -142,6 +142,8 @@ interface PetConfigStored {
   behavior?: PetBehaviorStored
   messages?: { clickMessages?: string[]; randomMessages?: string[]; bubbleDurationMs?: number }
   ruleEnabled?: Record<string, boolean>
+  /** B3 新手引导是否已展示过 */
+  onboarded?: boolean
 }
 
 const DEFAULT_PET_STORED: PetConfigStored = {
@@ -155,7 +157,8 @@ const DEFAULT_PET_STORED: PetConfigStored = {
     randomMessages: ['在听什么呢？', '需要我帮你找音效吗？', 'SoundVault 随时待命~'],
     bubbleDurationMs: 2000
   },
-  ruleEnabled: {}
+  ruleEnabled: {},
+  onboarded: false
 }
 
 function defaultPetStored(): PetConfigStored {
@@ -474,6 +477,7 @@ function buildPetContextMenu(): Menu {
         }
       }
     },
+    { label: '重新引导', click: () => { if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:replayOnboarding') } },
     { type: 'separator' },
     { label: '退出 SoundVault', click: () => app.quit() }
   ]
@@ -829,6 +833,10 @@ app.whenReady().then(() => {
   // 设置变更后通知宠物窗口重载配置
   ipcMain.on('pet:configChanged', () => {
     if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:config')
+  })
+  // B3 新手引导：右键菜单「重新引导」→ 转发给宠物窗口重跑气泡序列
+  ipcMain.on('pet:replayOnboarding', () => {
+    if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:replayOnboarding')
   })
 
   // B2 试听拖拽：主窗口卡片拖拽时，轮询光标是否落在宠物窗口内并高亮提示；

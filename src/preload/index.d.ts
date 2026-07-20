@@ -244,6 +244,8 @@ export interface PetAPI {
   onTrialHover: (cb: (armed: boolean) => void) => () => void
   // 主进程 → 主窗口：拖卡片到宠物窗口松手后，请求主窗口试听该音效
   onPlayTrial: (cb: (id: string) => void) => () => void
+  // 主进程 → 宠物窗口：右键菜单「重新引导」触发，重跑新手气泡序列
+  onReplayOnboarding: (cb: () => void) => () => void
   // Petpack 导入/导出（jszip）
   exportPetpack: () => Promise<{ success: boolean; path?: string; message?: string }>
   importPetpack: () => Promise<{ success: boolean; message?: string }>

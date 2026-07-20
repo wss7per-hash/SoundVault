@@ -295,6 +295,12 @@ const api = {
       ipcRenderer.on('pet:playTrial', listener)
       return () => ipcRenderer.removeListener('pet:playTrial', listener)
     },
+    // B3 新手引导：右键菜单「重新引导」→ 主进程转发 → 宠物窗口重跑气泡序列
+    onReplayOnboarding: (cb: () => void) => {
+      const listener = (): void => cb()
+      ipcRenderer.on('pet:replayOnboarding', listener)
+      return () => ipcRenderer.removeListener('pet:replayOnboarding', listener)
+    },
     onAudioEvent: (cb: (event: { type: 'level' | 'start' | 'stop'; level?: number }) => void) => {
       const listener = (_e: unknown, event: { type: 'level' | 'start' | 'stop'; level?: number }) => cb(event)
       ipcRenderer.on('pet:audio', listener)

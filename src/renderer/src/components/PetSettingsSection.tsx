@@ -3,10 +3,20 @@
 // 渲染端用 DEFAULT_PET_CONFIG 补全完整规则集。
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { RotateCcw, Download, Upload, Crosshair } from 'lucide-react'
+import { RotateCcw, Download, Upload } from 'lucide-react'
 import { Section, Row, Toggle } from './SettingsPanel'
 import { DEFAULT_RULE_TEMPLATES } from '../pet/engine/defaults'
 import type { PetConfigStored } from '../../../shared/pet-types'
+
+// A3 换肤：一键预设皮肤（不同色相），点击直接应用
+const SKIN_PRESETS: { name: string; hue: number }[] = [
+  { name: '经典紫', hue: 265 },
+  { name: '薄荷绿', hue: 150 },
+  { name: '天空蓝', hue: 205 },
+  { name: '蜜桃粉', hue: 330 },
+  { name: '暖阳橙', hue: 25 },
+  { name: '葡萄紫', hue: 285 }
+]
 
 export function PetSettingsSection(): JSX.Element {
   const [cfg, setCfg] = useState<PetConfigStored | null>(null)
@@ -104,6 +114,20 @@ export function PetSettingsSection(): JSX.Element {
         </div>
       </Row>
 
+      <Row label="预设皮肤">
+        <div className="flex flex-wrap gap-2">
+          {SKIN_PRESETS.map((sk) => (
+            <button
+              key={sk.hue}
+              title={sk.name}
+              onClick={() => setSprite({ hue: sk.hue })}
+              className={`w-7 h-7 rounded-full transition-transform hover:scale-110 ${sprite.hue === sk.hue ? 'ring-2 ring-accent ring-offset-2 ring-offset-surface-panel' : ''}`}
+              style={{ background: `hsl(${sk.hue}, 70%, 60%)` }}
+            />
+          ))}
+        </div>
+      </Row>
+
       <Row label="缩放">
         <div className="flex items-center gap-3">
           <input
@@ -158,12 +182,6 @@ export function PetSettingsSection(): JSX.Element {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 pt-2">
-        <button
-          onClick={() => window.api?.pet?.resetPosition()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-light bg-surface-card border border-surface-border hover:bg-surface-hover transition-colors"
-        >
-          <Crosshair size={13} /> 重置位置
-        </button>
         <button
           onClick={onResetDefaults}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-light bg-surface-card border border-surface-border hover:bg-surface-hover transition-colors"

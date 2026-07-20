@@ -37,6 +37,8 @@ export interface PetConfigStored {
     bubbleDurationMs?: number
   }
   ruleEnabled?: Record<string, boolean>
+  /** B3 新手引导是否已展示过（首次启动后由宠物窗口写入 true） */
+  onboarded?: boolean
 }
 
 /** 主窗口播放音效时上报给宠物窗口的音频事件 */

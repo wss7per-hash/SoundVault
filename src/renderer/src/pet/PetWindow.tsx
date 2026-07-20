@@ -62,6 +62,13 @@ function buildStatsComment(stats: Record<string, any>): string {
   ]
   return pool[Math.floor(Math.random() * pool.length)]
 }
+// B3 新手引导序列文案（首次启动 / 右键「重新引导」时按顺序弹出）
+const ONBOARDING_STEPS = [
+  '你好呀，我是声波小精灵 ♪',
+  '按住我拖动，可以把我放到任意位置～',
+  '右键我有更多功能，比如 AI 生成音效',
+  '播放音效时，我会跟着节奏唱歌哦！'
+]
 // 靠近判定的半径（指针距小精灵中心小于此值视为「靠近」）
 const PROXIMITY_RADIUS = 82
 const HOVER_MS = 700
@@ -227,6 +234,7 @@ export function PetWindow(): JSX.Element {
       rebuild()
       startLoop()
       attachHandlers()
+      if (cfg && !cfg.onboarded) runOnboarding()
     }).catch(() => {
       if (destroyed) return
       rebuild()
@@ -258,6 +266,22 @@ export function PetWindow(): JSX.Element {
           if (s) showBubble(buildStatsComment(s), 3600)
         }).catch(() => {})
       }, 52000)
+    }
+
+    // B3 新手引导：顺序播放气泡序列，结束后把 onboarded 持久化为 true
+    let onboardingTimer = 0
+    const runOnboarding = () => {
+      let i = 0
+      const step = () => {
+        if (i >= ONBOARDING_STEPS.length) {
+          window.api.pet.saveConfig({ onboarded: true }).catch(() => {})
+          return
+        }
+        showBubble(ONBOARDING_STEPS[i], 3500)
+        i++
+        onboardingTimer = window.setTimeout(step, 3800)
+      }
+      step()
     }
 
     const onAudio = (ev: { type: 'level' | 'start' | 'stop'; level?: number }) => {
@@ -311,6 +335,9 @@ export function PetWindow(): JSX.Element {
         showBubble('松手就能试听啦～', 1400)
       }
     })
+
+    // B3：右键菜单「重新引导」→ 重跑气泡序列
+    const unsubReplay = window.api.pet.onReplayOnboarding(() => runOnboarding())
 
     const onPointerDown = (e: PointerEvent) => {
       if (e.button === 2) return
@@ -471,11 +498,13 @@ export function PetWindow(): JSX.Element {
       if (randomTimer) clearTimeout(randomTimer)
       clearInterval(idleTimer)
       if (statsTimer) clearInterval(statsTimer)
+      if (onboardingTimer) clearTimeout(onboardingTimer)
       unsubAudio()
       unsubConfig()
       unsubAbout()
       unsubSelection()
       unsubTrial()
+      unsubReplay()
       if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current)
       canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointermove', onPointerMove)
