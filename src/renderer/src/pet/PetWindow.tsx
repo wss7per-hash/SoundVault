@@ -1,7 +1,7 @@
 // 声波小精灵 · 宠物窗口渲染根
 // 透明窗口内的全屏 canvas；rAF 循环驱动 SpriteRenderer；
 // 持有规则运行时 + 动作分发器，处理指针事件 / timer / 音频联动。
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { SpriteRenderer } from './sprite'
 import { createRuleRuntime, type RuleRuntime } from './engine/ruleRuntime'
 import { UserTriggerManager, type SpriteActionExecutors } from './engine/userTriggerManager'
@@ -10,18 +10,23 @@ import { DEFAULT_PET_CONFIG } from './engine/defaults'
 
 const W = 240
 const H = 300
+const MENU_W = 152
+const MENU_H = 232
 const PERSISTENT: SpriteAnimId[] = ['drag', 'sleep']
 const TRANSIENT_MS: Record<string, number> = { click: 600, surprised: 800, wave: 900, bounce: 350 }
 
-// 右键小精灵弹出的原生菜单（复用主进程 contextmenu:native）
-const PET_MENU_ITEMS = [
-  { label: '打开设置' },
-  { label: '隐藏小精灵' },
-  { label: '重置位置' },
-  { label: '切换置顶' },
-  { label: '关于声波小精灵' },
+// 右键小精灵弹出的菜单（窗口内 HTML 浮层，规避原生菜单坐标/焦点问题）
+type PetMenuItem =
+  | { type: 'separator' }
+  | { id: string; label: string; icon?: string; danger?: boolean }
+const PET_MENU_ITEMS: PetMenuItem[] = [
+  { id: 'settings', label: '打开设置', icon: '⚙️' },
+  { id: 'hide', label: '隐藏小精灵', icon: '🙈' },
+  { id: 'reset', label: '重置位置', icon: '📍' },
+  { id: 'top', label: '切换置顶', icon: '📌' },
+  { id: 'about', label: '关于声波小精灵', icon: '💡' },
   { type: 'separator' },
-  { label: '退出 SoundVault', danger: true }
+  { id: 'quit', label: '退出 SoundVault', icon: '⏻', danger: true }
 ]
 
 export function PetWindow(): JSX.Element {
@@ -30,6 +35,9 @@ export function PetWindow(): JSX.Element {
   // 跟踪窗口真实屏幕坐标（拖动/重置后保持同步，避免起点漂移）
   const posRef = useRef({ x: 80, y: 160 })
   const alwaysOnTopRef = useRef(true)
+  // 右键菜单浮层状态（位置为窗口内 client 坐标）
+  const [menu, setMenu] = useState<{ open: boolean; x: number; y: number }>({ open: false, x: 0, y: 0 })
+  const menuActionRef = useRef<(id: string) => void>(() => {})
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -234,36 +242,41 @@ export function PetWindow(): JSX.Element {
         dispatch({ type: 'click', timestamp: performance.now(), eventSource: 'petPointer' })
       }
     }
-    const onContextMenu = async (e: MouseEvent) => {
+    const onContextMenu = (e: MouseEvent) => {
       e.preventDefault()
       triggerAnim('surprised')
-      const label = await window.api.showNativeContextMenu(PET_MENU_ITEMS as any, e.clientX, e.clientY)
-      if (!label) return
-      switch (label) {
-        case '打开设置':
+      setMenu({ open: true, x: e.clientX, y: e.clientY })
+    }
+
+    // 右键菜单各功能实现（原生菜单不可靠，改由窗口内 HTML 浮层触发）
+    const handleMenuAction = (id: string) => {
+      switch (id) {
+        case 'settings':
           window.api.pet.openSettings()
           break
-        case '隐藏小精灵':
+        case 'hide':
           window.api.pet.setEnabled(false)
           break
-        case '重置位置':
+        case 'reset':
           window.api.pet.resetPosition()
           break
-        case '切换置顶': {
+        case 'top': {
           const next = !alwaysOnTopRef.current
           alwaysOnTopRef.current = next
           config.display.alwaysOnTop = next
           window.api.pet.setDisplay({ alwaysOnTop: next })
           break
         }
-        case '关于声波小精灵':
+        case 'about':
           sprite.showMessage('声波小精灵 · SoundVault 的桌面小伙伴 ♪', 3200)
           break
-        case '退出 SoundVault':
+        case 'quit':
           window.api.pet.quit()
           break
       }
+      setMenu((m) => ({ ...m, open: false }))
     }
+    menuActionRef.current = handleMenuAction
     const onEnter = () => dispatch({ type: 'mouseEnter', timestamp: performance.now(), eventSource: 'petPointer' })
     const onLeave = () => dispatch({ type: 'mouseLeave', timestamp: performance.now(), eventSource: 'petPointer' })
 
@@ -330,11 +343,74 @@ export function PetWindow(): JSX.Element {
   }, [])
 
   return (
-    <div
-      ref={wrapRef}
-      style={{ width: W, height: H, transformOrigin: 'bottom center', position: 'relative' }}
-    >
-      <canvas ref={canvasRef} style={{ width: W, height: H, display: 'block' }} />
-    </div>
+    <>
+      <div
+        ref={wrapRef}
+        style={{ width: W, height: H, transformOrigin: 'bottom center', position: 'relative' }}
+      >
+        <canvas ref={canvasRef} style={{ width: W, height: H, display: 'block' }} />
+      </div>
+
+      {menu.open && (
+        <>
+          {/* 点击空白处关闭菜单（同时吞掉指针事件，避免误触拖动） */}
+          <div
+            onClick={() => setMenu((m) => ({ ...m, open: false }))}
+            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
+          />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              left: Math.min(Math.max(4, menu.x), W - MENU_W - 4),
+              top: Math.min(Math.max(4, menu.y), H - MENU_H - 4),
+              width: MENU_W,
+              zIndex: 21,
+              background: 'rgba(28, 26, 44, 0.96)',
+              borderRadius: 14,
+              padding: 6,
+              boxShadow: '0 8px 26px rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(255, 255, 255, 0.10)',
+              fontFamily: "'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif",
+              userSelect: 'none'
+            }}
+          >
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', padding: '2px 8px 6px' }}>
+              声波小精灵
+            </div>
+            {PET_MENU_ITEMS.map((it, i) =>
+              'type' in it ? (
+                <div key={i} style={{ height: 1, background: 'rgba(255,255,255,0.10)', margin: '4px 4px' }} />
+              ) : (
+                <div
+                  key={i}
+                  onClick={() => menuActionRef.current(it.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '7px 10px',
+                    borderRadius: 9,
+                    fontSize: 13,
+                    color: it.danger ? '#ff8f8f' : '#f3eefb',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = it.danger ? 'rgba(255,90,90,0.18)' : 'rgba(255,138,190,0.22)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  <span style={{ opacity: 0.9 }}>{it.icon}</span>
+                  <span>{it.label}</span>
+                </div>
+              )
+            )}
+          </div>
+        </>
+      )}
+    </>
   )
 }

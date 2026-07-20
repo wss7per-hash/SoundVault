@@ -140,7 +140,7 @@ interface PetConfigStored {
 
 const DEFAULT_PET_STORED: PetConfigStored = {
   enabled: true,
-  display: { x: 80, y: 160, scale: 0.7, opacity: 1, alwaysOnTop: true, clickThrough: false, locked: false },
+  display: { x: 80, y: 160, scale: 0.35, opacity: 1, alwaysOnTop: true, clickThrough: false, locked: false },
   sprite: { hue: 265, name: '声波小精灵' },
   messages: {
     clickMessages: ['♪ 这个我喜欢！', '♫ 听起来不错~', '嗨，继续放！'],
@@ -155,6 +155,7 @@ function defaultPetStored(): PetConfigStored {
 }
 
 function loadPetStored(): PetConfigStored {
+  let s: PetConfigStored = defaultPetStored()
   try {
     const db = getDatabase()
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(PET_CONFIG_KEY) as
@@ -162,7 +163,7 @@ function loadPetStored(): PetConfigStored {
       | undefined
     if (row?.value) {
       const parsed = JSON.parse(row.value)
-      return {
+      s = {
         ...defaultPetStored(),
         ...parsed,
         display: { ...defaultPetStored().display, ...(parsed.display || {}) },
@@ -174,7 +175,14 @@ function loadPetStored(): PetConfigStored {
   } catch {
     /* 解析失败回退默认 */
   }
-  return defaultPetStored()
+  // ── 迁移：宠物默认尺寸逐步收紧 ──
+  // 旧装/旧默认把 scale 存成了 1 或 0.7，统一纠正到当前默认（0.35），
+  // 仅当存储值恰好为旧默认值时执行，避免覆盖用户主动调整过的尺寸。
+  if (s.display && (s.display.scale === 1 || s.display.scale === 0.7)) {
+    s.display.scale = DEFAULT_PET_STORED.display.scale
+    persistPetStored(s)
+  }
+  return s
 }
 
 function persistPetStored(s: PetConfigStored): void {

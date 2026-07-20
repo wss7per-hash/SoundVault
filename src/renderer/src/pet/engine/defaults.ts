@@ -104,7 +104,7 @@ export const DEFAULT_PET_CONFIG: PetConfig = {
   display: {
     x: 80,
     y: 160,
-    scale: 0.7,
+    scale: 0.35,
     opacity: 1,
     alwaysOnTop: true,
     clickThrough: false,
