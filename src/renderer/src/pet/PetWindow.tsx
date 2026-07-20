@@ -13,9 +13,23 @@ const H = 300
 const PERSISTENT: SpriteAnimId[] = ['drag', 'sleep']
 const TRANSIENT_MS: Record<string, number> = { click: 600, surprised: 800, wave: 900, bounce: 350 }
 
+// 右键小精灵弹出的原生菜单（复用主进程 contextmenu:native）
+const PET_MENU_ITEMS = [
+  { label: '打开设置' },
+  { label: '隐藏小精灵' },
+  { label: '重置位置' },
+  { label: '切换置顶' },
+  { label: '关于声波小精灵' },
+  { type: 'separator' },
+  { label: '退出 SoundVault', danger: true }
+]
+
 export function PetWindow(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  // 跟踪窗口真实屏幕坐标（拖动/重置后保持同步，避免起点漂移）
+  const posRef = useRef({ x: 80, y: 160 })
+  const alwaysOnTopRef = useRef(true)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -34,7 +48,15 @@ export function PetWindow(): JSX.Element {
     const transientAnimRef = { current: 'idle' as SpriteAnimId }
     const persistentRef = { current: null as SpriteAnimId | null }
     const lastActivityRef = { current: performance.now() }
-    const dragRef = { active: false, lastX: 0, lastY: 0, moved: false }
+    const dragRef = {
+      active: false,
+      moved: false,
+      startClientX: 0,
+      startClientY: 0,
+      startX: 0,
+      startY: 0,
+      boundsReady: false
+    }
 
     let runtime: RuleRuntime | null = null
     let manager: UserTriggerManager | null = null
@@ -72,7 +94,11 @@ export function PetWindow(): JSX.Element {
     const applyStored = (s: PetConfigStored | null) => {
       if (!s) return
       if (typeof s.enabled === 'boolean') config.enabled = s.enabled
-      if (s.display) config.display = { ...config.display, ...s.display }
+      if (s.display) {
+        config.display = { ...config.display, ...s.display }
+        posRef.current = { x: config.display.x ?? 80, y: config.display.y ?? 160 }
+        alwaysOnTopRef.current = !!config.display.alwaysOnTop
+      }
       if (s.sprite) config.sprite = { ...config.sprite, ...s.sprite }
       if (s.messages) config.messages = { ...config.messages, ...s.messages }
       if (s.ruleEnabled) {
@@ -169,24 +195,33 @@ export function PetWindow(): JSX.Element {
       if (e.button === 2) return
       if (config.display.locked) return
       dragRef.active = true
-      dragRef.lastX = e.clientX
-      dragRef.lastY = e.clientY
       dragRef.moved = false
+      dragRef.startClientX = e.clientX
+      dragRef.startClientY = e.clientY
+      // 以当前已知坐标作为起点，并异步用主进程真实窗口坐标校准，
+      // 避免「重置 / 外部移动」后起点漂移导致拖动跳变。
+      dragRef.startX = posRef.current.x
+      dragRef.startY = posRef.current.y
+      dragRef.boundsReady = false
+      window.api.pet.getBounds().then((b) => {
+        if (b) { dragRef.startX = b.x; dragRef.startY = b.y; dragRef.boundsReady = true }
+      }).catch(() => {})
       try { canvas.setPointerCapture(e.pointerId) } catch { /* noop */ }
       triggerAnim('drag')
       dispatch({ type: 'dragStart', timestamp: performance.now(), eventSource: 'petPointer' })
     }
     const onPointerMove = (e: PointerEvent) => {
       if (!dragRef.active) return
-      const dx = e.clientX - dragRef.lastX
-      const dy = e.clientY - dragRef.lastY
-      if (!dragRef.moved && Math.hypot(dx, dy) > 4) dragRef.moved = true
-      if (dragRef.moved) {
-        dragRef.lastX = e.clientX
-        dragRef.lastY = e.clientY
-        window.api.pet.move(dx, dy)
-        dispatch({ type: 'dragging', dragDeltaX: dx, dragDeltaY: dy, dragDistance: Math.hypot(dx, dy), timestamp: performance.now(), eventSource: 'petPointer' })
-      }
+      const dx = e.clientX - dragRef.startClientX
+      const dy = e.clientY - dragRef.startClientY
+      if (!dragRef.moved && Math.hypot(dx, dy) < 3) return
+      dragRef.moved = true
+      // 绝对定位：起点 + 指针位移，直接 setPosition（同步、无累积误差 → 不抖）
+      const nx = Math.round(dragRef.startX + dx)
+      const ny = Math.round(dragRef.startY + dy)
+      posRef.current = { x: nx, y: ny }
+      window.api.pet.moveTo(nx, ny)
+      dispatch({ type: 'dragging', dragDeltaX: dx, dragDeltaY: dy, dragDistance: Math.hypot(dx, dy), timestamp: performance.now(), eventSource: 'petPointer' })
     }
     const onPointerUp = (e: PointerEvent) => {
       if (!dragRef.active) return
@@ -199,9 +234,35 @@ export function PetWindow(): JSX.Element {
         dispatch({ type: 'click', timestamp: performance.now(), eventSource: 'petPointer' })
       }
     }
-    const onContextMenu = (e: MouseEvent) => {
+    const onContextMenu = async (e: MouseEvent) => {
       e.preventDefault()
-      dispatch({ type: 'rightClick', timestamp: performance.now(), eventSource: 'petPointer' })
+      triggerAnim('surprised')
+      const label = await window.api.showNativeContextMenu(PET_MENU_ITEMS as any, e.clientX, e.clientY)
+      if (!label) return
+      switch (label) {
+        case '打开设置':
+          window.api.pet.openSettings()
+          break
+        case '隐藏小精灵':
+          window.api.pet.setEnabled(false)
+          break
+        case '重置位置':
+          window.api.pet.resetPosition()
+          break
+        case '切换置顶': {
+          const next = !alwaysOnTopRef.current
+          alwaysOnTopRef.current = next
+          config.display.alwaysOnTop = next
+          window.api.pet.setDisplay({ alwaysOnTop: next })
+          break
+        }
+        case '关于声波小精灵':
+          sprite.showMessage('声波小精灵 · SoundVault 的桌面小伙伴 ♪', 3200)
+          break
+        case '退出 SoundVault':
+          window.api.pet.quit()
+          break
+      }
     }
     const onEnter = () => dispatch({ type: 'mouseEnter', timestamp: performance.now(), eventSource: 'petPointer' })
     const onLeave = () => dispatch({ type: 'mouseLeave', timestamp: performance.now(), eventSource: 'petPointer' })

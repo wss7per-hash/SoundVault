@@ -260,6 +260,9 @@ const api = {
     openSettings: () => ipcRenderer.send('pet:openSettings'),
     sendAudioEvent: (event: { type: 'level' | 'start' | 'stop'; level?: number }) => ipcRenderer.send('pet:audio', event),
     move: (dx: number, dy: number) => ipcRenderer.send('pet:move', dx, dy),
+    getBounds: () => ipcRenderer.invoke('pet:getBounds') as Promise<{ x: number; y: number; width: number; height: number } | null>,
+    moveTo: (x: number, y: number) => ipcRenderer.send('pet:moveTo', x, y),
+    quit: () => ipcRenderer.send('pet:quit'),
     onAudioEvent: (cb: (event: { type: 'level' | 'start' | 'stop'; level?: number }) => void) => {
       const listener = (_e: unknown, event: { type: 'level' | 'start' | 'stop'; level?: number }) => cb(event)
       ipcRenderer.on('pet:audio', listener)

@@ -177,17 +177,17 @@ export class SpriteRenderer {
     const p = this.computePose(now)
 
     const cx = W / 2
-    const baseY = H - 96
-    const r = 64
+    const baseY = H - 92
+    const r = 56
     const x = cx + p.shakeX
     const y = baseY + p.bobY
     const rx = r * p.squashX
     const ry = r * p.squashY
 
     const hue = this.state.hue
-    const bodyFill = `hsl(${hue}, 68%, 63%)`
-    const bodyFillDark = `hsl(${hue}, 60%, 50%)`
-    const outline = `hsl(${hue}, 58%, 42%)`
+    const bodyFill = `hsl(${hue}, 72%, 66%)`
+    const bodyFillDark = `hsl(${hue}, 62%, 55%)`
+    const outline = `hsl(${hue}, 52%, 46%)`
 
     // 声音光晕
     if (p.glow > 0.01) {
@@ -237,17 +237,17 @@ export class SpriteRenderer {
     ctx.fill()
     ctx.restore()
 
-    // 眼睛
-    const eyeY = -ry * 0.16
-    const eyeDX = rx * 0.34
-    const eyeR = rx * 0.2 * p.eyeScale
+    // 眼睛（更大更圆，自带高光，更可爱）
+    const eyeY = -ry * 0.18
+    const eyeDX = rx * 0.36
+    const eyeR = rx * 0.26 * p.eyeScale
     if (this.state.anim === 'sleep') {
       ctx.strokeStyle = outline
       ctx.lineWidth = 3
       ctx.lineCap = 'round'
       for (const sx of [-eyeDX, eyeDX]) {
         ctx.beginPath()
-        ctx.arc(sx, eyeY, eyeR * 0.9, Math.PI * 0.15, Math.PI * 0.85)
+        ctx.arc(sx, eyeY, eyeR * 0.95, Math.PI * 0.12, Math.PI * 0.88)
         ctx.stroke()
       }
     } else if (blink) {
@@ -262,17 +262,24 @@ export class SpriteRenderer {
       }
     } else {
       for (const sx of [-eyeDX, eyeDX]) {
+        // 眼白
         ctx.fillStyle = '#fff'
         ctx.beginPath()
-        ctx.ellipse(sx, eyeY, eyeR, eyeR * 1.15, 0, 0, Math.PI * 2)
+        ctx.ellipse(sx, eyeY, eyeR, eyeR * 1.18, 0, 0, Math.PI * 2)
         ctx.fill()
+        // 瞳孔
         ctx.fillStyle = '#2a2540'
         ctx.beginPath()
-        ctx.arc(sx, eyeY + eyeR * 0.1, eyeR * 0.52, 0, Math.PI * 2)
+        ctx.arc(sx + eyeR * 0.12, eyeY + eyeR * 0.12, eyeR * 0.6, 0, Math.PI * 2)
         ctx.fill()
+        // 大高光
         ctx.fillStyle = '#fff'
         ctx.beginPath()
-        ctx.arc(sx - eyeR * 0.18, eyeY - eyeR * 0.2, eyeR * 0.18, 0, Math.PI * 2)
+        ctx.arc(sx - eyeR * 0.22, eyeY - eyeR * 0.28, eyeR * 0.34, 0, Math.PI * 2)
+        ctx.fill()
+        // 小高光
+        ctx.beginPath()
+        ctx.arc(sx + eyeR * 0.34, eyeY + eyeR * 0.36, eyeR * 0.14, 0, Math.PI * 2)
         ctx.fill()
       }
     }
@@ -308,14 +315,33 @@ export class SpriteRenderer {
       ctx.stroke()
     }
 
-    // 腮红
+    // 腮红（更明显，更可爱）
     ctx.save()
-    ctx.globalAlpha = 0.4
-    ctx.fillStyle = `hsl(${(hue + 20) % 360}, 80%, 70%)`
+    ctx.globalAlpha = 0.5
+    ctx.fillStyle = `hsl(${(hue + 18) % 360}, 85%, 72%)`
     ctx.beginPath()
-    ctx.ellipse(-rx * 0.5, ry * 0.12, rx * 0.12, ry * 0.08, 0, 0, Math.PI * 2)
-    ctx.ellipse(rx * 0.5, ry * 0.12, rx * 0.12, ry * 0.08, 0, 0, Math.PI * 2)
+    ctx.ellipse(-rx * 0.52, ry * 0.18, rx * 0.15, ry * 0.1, 0, 0, Math.PI * 2)
+    ctx.ellipse(rx * 0.52, ry * 0.18, rx * 0.15, ry * 0.1, 0, 0, Math.PI * 2)
     ctx.fill()
+    ctx.restore()
+
+    // 小脚丫
+    ctx.fillStyle = bodyFillDark
+    ctx.strokeStyle = outline
+    ctx.lineWidth = 2.5
+    for (const sx of [-rx * 0.34, rx * 0.34]) {
+      ctx.beginPath()
+      ctx.ellipse(sx, ry * 0.96, rx * 0.2, ry * 0.12, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+    }
+
+    // 闪亮小星星 ✦
+    const tw = 0.5 + 0.5 * Math.sin(now / 300)
+    ctx.save()
+    ctx.globalAlpha = 0.75 * tw
+    ctx.fillStyle = '#fff'
+    this.drawSparkle(ctx, rx * 1.02, -ry * 0.95, 4 + 2.5 * tw)
     ctx.restore()
 
     ctx.restore() // tilt
@@ -357,6 +383,17 @@ export class SpriteRenderer {
       ctx.arc(tipX, tipY, 4 * pulse, 0, Math.PI * 2)
       ctx.fill()
     }
+  }
+
+  private drawSparkle(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
+    ctx.beginPath()
+    ctx.moveTo(cx, cy - size)
+    ctx.quadraticCurveTo(cx, cy, cx + size, cy)
+    ctx.quadraticCurveTo(cx, cy, cx, cy + size)
+    ctx.quadraticCurveTo(cx, cy, cx - size, cy)
+    ctx.quadraticCurveTo(cx, cy, cx, cy - size)
+    ctx.closePath()
+    ctx.fill()
   }
 
   private drawBubble(ctx: CanvasRenderingContext2D, cx: number, bottomY: number, W: number, text: string, hue: number): void {

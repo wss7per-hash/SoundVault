@@ -44,16 +44,6 @@ const DEFAULT_RULE_TEMPLATES: PetRule[] = [
     ]
   },
   {
-    id: 'default-right-click-settings',
-    name: '右键打开设置',
-    enabled: true,
-    conditions: [{ type: 'rightClick', required: true, filters: [] }],
-    cooldownMs: 400,
-    priority: 100,
-    actionStrategy: 'sequence',
-    actions: [{ type: 'openPetSettings' }]
-  },
-  {
     id: 'default-dragging',
     name: '拖动中',
     enabled: true,
@@ -114,7 +104,7 @@ export const DEFAULT_PET_CONFIG: PetConfig = {
   display: {
     x: 80,
     y: 160,
-    scale: 1,
+    scale: 0.7,
     opacity: 1,
     alwaysOnTop: true,
     clickThrough: false,

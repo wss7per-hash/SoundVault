@@ -12,10 +12,12 @@ const isSpotlight = window.location.hash === '#spotlight'
 // 宠物窗口同样复用同一个 bundle：#pet hash 时只渲染宠物根组件。
 const isPet = window.location.hash === '#pet'
 
-// overlay / 宠物窗口本身是透明的，需让 body/html 背景透明才能呈现浮层效果
+// overlay / 宠物窗口本身是透明的，需让 body/html/#root 背景透明才能呈现浮层效果
 if (isSpotlight || isPet) {
   document.documentElement.style.background = 'transparent'
   document.body.style.background = 'transparent'
+  const root = document.getElementById('root')
+  if (root) root.style.background = 'transparent'
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

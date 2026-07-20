@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Menu, protocol, net, globalShortcut, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, shell, Menu, protocol, net, globalShortcut, ipcMain, dialog, screen } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { existsSync, readFileSync, statSync, writeFileSync } from 'fs'
@@ -140,7 +140,7 @@ interface PetConfigStored {
 
 const DEFAULT_PET_STORED: PetConfigStored = {
   enabled: true,
-  display: { x: 80, y: 160, scale: 1, opacity: 1, alwaysOnTop: true, clickThrough: false, locked: false },
+  display: { x: 80, y: 160, scale: 0.7, opacity: 1, alwaysOnTop: true, clickThrough: false, locked: false },
   sprite: { hue: 265, name: '声波小精灵' },
   messages: {
     clickMessages: ['♪ 这个我喜欢！', '♫ 听起来不错~', '嗨，继续放！'],
@@ -205,7 +205,7 @@ function createPetWindow(): BrowserWindow {
     show: true,
     frame: false,
     resizable: false,
-    movable: true,
+    movable: false,
     skipTaskbar: true,
     alwaysOnTop: !!d.alwaysOnTop,
     transparent: true,
@@ -229,6 +229,22 @@ function createPetWindow(): BrowserWindow {
     petWindow = null
   })
   return win
+}
+
+// 销毁宠物窗口（同步关闭，供主窗口关闭 / app 退出时清理）
+function closePetWindow(): void {
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.destroy()
+  }
+  petWindow = null
+}
+
+// 销毁全局快捷搜索 overlay（隐藏态仍存活，会阻塞 app 退出，一并清理）
+function closeSpotlightWindow(): void {
+  if (spotlightWindow && !spotlightWindow.isDestroyed()) {
+    spotlightWindow.destroy()
+  }
+  spotlightWindow = null
 }
 
 function showPetWindow(): void {
@@ -292,6 +308,10 @@ function createWindow(): void {
     mainWindow.on('closed', () => {
       console.log('[window] closed')
       mainWindow = null
+      // 主窗口关闭时一并销毁宠物（声波小精灵）与搜索浮层，
+      // 否则宠物窗口常驻会使 app 永不退出、宠物随之残留。
+      closePetWindow()
+      closeSpotlightWindow()
     })
     mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
       console.error('[window] did-fail-load', code, desc, url)
@@ -503,6 +523,29 @@ app.whenReady().then(() => {
     s.display = { ...(s.display || {}), x: nx, y: ny } as PetDisplay
     persistPetStored(s)
   })
+  // 渲染进程按绝对屏幕坐标定位宠物窗口（绝对定位拖动，避免累积抖动）
+  ipcMain.handle('pet:getBounds', () => {
+    if (!petWindow || petWindow.isDestroyed()) return null
+    const [x, y] = petWindow.getPosition()
+    const [w, h] = petWindow.getSize()
+    return { x, y, width: w, height: h }
+  })
+  ipcMain.on('pet:moveTo', (_e, x: number, y: number) => {
+    if (!petWindow || petWindow.isDestroyed()) return
+    // 限制在屏幕工作区内，避免宠物被拖出可视范围
+    const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize
+    const [w, h] = petWindow.getSize()
+    const nx = Math.max(0, Math.min(sw - w, Math.round(x)))
+    const ny = Math.max(0, Math.min(sh - h, Math.round(y)))
+    petWindow.setPosition(nx, ny)
+    const s = loadPetStored()
+    s.display = { ...(s.display || {}), x: nx, y: ny } as PetDisplay
+    persistPetStored(s)
+  })
+  // 退出整个应用（右键菜单「退出 SoundVault」）
+  ipcMain.on('pet:quit', () => {
+    app.quit()
+  })
   ipcMain.on('pet:resetPosition', () => {
     const s = loadPetStored()
     s.display = { ...(s.display || {}), x: 80, y: 160 } as PetDisplay
@@ -510,6 +553,8 @@ app.whenReady().then(() => {
     if (petWindow && !petWindow.isDestroyed()) {
       petWindow.setPosition(80, 160)
       applyDisplayToWindow(petWindow, s.display as PetDisplay)
+      // 通知渲染端重载配置，使拖动起点坐标与重置后的位置保持一致
+      petWindow.webContents.send('pet:config')
     }
   })
   ipcMain.on('pet:toggle', () => togglePetWindow())
@@ -601,6 +646,12 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
+})
+
+app.on('before-quit', () => {
+  // 退出前确保常驻窗口都被销毁，避免宠物 / 浮层残留导致进程不退出
+  closePetWindow()
+  closeSpotlightWindow()
 })
 
 app.on('will-quit', () => {
