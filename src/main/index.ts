@@ -466,15 +466,6 @@ function buildPetContextMenu(): Menu {
       }
     },
     {
-      label: 'API & AI 设置',
-      click: () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.show()
-          mainWindow.webContents.send('pet:openSettings')
-        }
-      }
-    },
-    {
       label: '库洞察',
       click: () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -778,15 +769,22 @@ app.whenReady().then(() => {
   })
   ipcMain.on('pet:moveTo', (_e, x: number, y: number) => {
     if (!petWindow || petWindow.isDestroyed()) return
-    // 限制在屏幕工作区内，避免宠物被拖出可视范围
-    const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize
+    // 使用所有显示器的虚拟桌面边界（支持多屏拖动），仅防止窗口完全移出可视区域
+    const displays = screen.getAllDisplays()
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const d of displays) {
+      minX = Math.min(minX, d.workArea.x)
+      minY = Math.min(minY, d.workArea.y)
+      maxX = Math.max(maxX, d.workArea.x + d.workArea.width)
+      maxY = Math.max(maxY, d.workArea.y + d.workArea.height)
+    }
     const [w, h] = petWindow.getSize()
-    const nx = Math.max(0, Math.min(sw - w, Math.round(x)))
-    const ny = Math.max(0, Math.min(sh - h, Math.round(y)))
+    // 允许窗口部分超出屏幕边缘（更跟手），只保证不完全消失
+    const nx = Math.round(Math.min(Math.max(x, minX - w + 40), maxX - 40))
+    const ny = Math.round(Math.min(Math.max(y, minY - h + 40), maxY - 40))
     petWindow.setPosition(nx, ny)
-    const s = loadPetStored()
-    s.display = { ...(s.display || {}), x: nx, y: ny } as PetDisplay
-    persistPetStored(s)
+    // 注意：不在此处 persistPet！拖动过程每帧写 DB 是性能杀手。
+    // 最终位置由渲染端 onPointerUp 通过 setDisplay 统一持久化。
   })
   // 退出整个应用（右键菜单「退出 SoundVault」）
   ipcMain.on('pet:quit', () => {

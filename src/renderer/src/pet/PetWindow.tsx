@@ -259,8 +259,13 @@ export function PetWindow(): JSX.Element {
     const onPointerUp = (e: PointerEvent) => {
       if (!dragRef.active) return
       dragRef.active = false
-      // flush 最终位置（确保不丢步）
-      if (dragRef.moved) window.api.pet.moveTo(posRef.current.x, posRef.current.y)
+      if (dragRef.moved) {
+        // flush 最终位置 + 持久化到 DB（主进程 moveTo 不再写 DB，由渲染端统一保存）
+        const nx = posRef.current.x
+        const ny = posRef.current.y
+        window.api.pet.moveTo(nx, ny)
+        window.api.pet.setDisplay({ x: nx, y: ny }).catch(() => {})
+      }
       try { canvas.releasePointerCapture(e.pointerId) } catch { /* noop */ }
       if (dragRef.moved) {
         persistentRef.current = null
