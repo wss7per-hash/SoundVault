@@ -410,9 +410,9 @@ export class SpriteRenderer {
   private drawBubble(ctx: CanvasRenderingContext2D, cx: number, bottomY: number, W: number, text: string, hue: number): void {
     const maxW = 180
     const padX = 12
-    const padY = 9
-    const lineH = 18
-    ctx.font = '13px "PingFang SC", "Microsoft YaHei", sans-serif'
+    const padY = 10
+    const lineH = 22
+    ctx.font = '16px "PingFang SC", "Microsoft YaHei", sans-serif'
     const lines = this.wrapText(ctx, text, maxW - padX * 2)
     const bw = Math.min(maxW, Math.max(...lines.map((l) => ctx.measureText(l).width)) + padX * 2)
     const bh = lines.length * lineH + padY * 2

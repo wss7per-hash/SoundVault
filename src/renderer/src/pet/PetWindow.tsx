@@ -40,7 +40,7 @@ export function PetWindow(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   // 跟踪窗口真实屏幕坐标（拖动/重置后保持同步，避免起点漂移）
-  const posRef = useRef({ x: 80, y: 160 })
+  const posRef = useRef({ x: 0, y: 0 })
   const alwaysOnTopRef = useRef(true)
   // 右键菜单浮层状态（位置为窗口内 client 坐标）
   const [menu, setMenu] = useState<{ open: boolean; x: number; y: number }>({ open: false, x: 0, y: 0 })
@@ -75,7 +75,10 @@ export function PetWindow(): JSX.Element {
       startClientY: 0,
       startX: 0,
       startY: 0,
-      boundsReady: false
+      // 拖动时用 rAF 节流 setPosition（避免每帧 IPC 导致抖动）
+      pendingX: 0,
+      pendingY: 0,
+      dragRafId: 0 as number
     }
 
     let runtime: RuleRuntime | null = null
@@ -121,7 +124,7 @@ export function PetWindow(): JSX.Element {
       if (typeof s.enabled === 'boolean') config.enabled = s.enabled
       if (s.display) {
         config.display = { ...config.display, ...s.display }
-        posRef.current = { x: config.display.x ?? 80, y: config.display.y ?? 160 }
+        posRef.current = { x: config.display.x ?? 0, y: config.display.y ?? 0 }
         alwaysOnTopRef.current = !!config.display.alwaysOnTop
       }
       if (s.sprite) config.sprite = { ...config.sprite, ...s.sprite }
@@ -225,14 +228,13 @@ export function PetWindow(): JSX.Element {
       dragRef.moved = false
       dragRef.startClientX = e.clientX
       dragRef.startClientY = e.clientY
-      // 以当前已知坐标作为起点，并异步用主进程真实窗口坐标校准，
-      // 避免「重置 / 外部移动」后起点漂移导致拖动跳变。
+      // 同步取起点：posRef 始终与主进程同步（每次 moveTo 后立即更新），
+      // 无需异步 getBounds——消除了「首帧跳变」的根因。
       dragRef.startX = posRef.current.x
       dragRef.startY = posRef.current.y
-      dragRef.boundsReady = false
-      window.api.pet.getBounds().then((b) => {
-        if (b) { dragRef.startX = b.x; dragRef.startY = b.y; dragRef.boundsReady = true }
-      }).catch(() => {})
+      dragRef.pendingX = dragRef.startX
+      dragRef.pendingY = dragRef.startY
+      dragRef.dragRafId = 0
       try { canvas.setPointerCapture(e.pointerId) } catch { /* noop */ }
       triggerAnim('drag')
       dispatch({ type: 'dragStart', timestamp: performance.now(), eventSource: 'petPointer' })
@@ -243,16 +245,27 @@ export function PetWindow(): JSX.Element {
       const dy = e.clientY - dragRef.startClientY
       if (!dragRef.moved && Math.hypot(dx, dy) < 3) return
       dragRef.moved = true
-      // 绝对定位：起点 + 指针位移，直接 setPosition（同步、无累积误差 → 不抖）
+      // 立即更新本地跟踪（保证视觉/逻辑坐标不滞后）
       const nx = Math.round(dragRef.startX + dx)
       const ny = Math.round(dragRef.startY + dy)
       posRef.current = { x: nx, y: ny }
-      window.api.pet.moveTo(nx, ny)
+      // 用 rAF 节流 IPC：每帧最多一次 setPosition（而非每事件一次）
+      dragRef.pendingX = nx
+      dragRef.pendingY = ny
+      if (!dragRef.dragRafId) {
+        dragRef.dragRafId = requestAnimationFrame(() => {
+          dragRef.dragRafId = 0
+          window.api.pet.moveTo(dragRef.pendingX, dragRef.pendingY)
+        })
+      }
       dispatch({ type: 'dragging', dragDeltaX: dx, dragDeltaY: dy, dragDistance: Math.hypot(dx, dy), timestamp: performance.now(), eventSource: 'petPointer' })
     }
     const onPointerUp = (e: PointerEvent) => {
       if (!dragRef.active) return
       dragRef.active = false
+      // 确保最终位置同步（rAF 可能尚未触发）
+      if (dragRef.dragRafId) { cancelAnimationFrame(dragRef.dragRafId); dragRef.dragRafId = 0 }
+      if (dragRef.moved) window.api.pet.moveTo(posRef.current.x, posRef.current.y)
       try { canvas.releasePointerCapture(e.pointerId) } catch { /* noop */ }
       if (dragRef.moved) {
         persistentRef.current = null
@@ -264,7 +277,11 @@ export function PetWindow(): JSX.Element {
     const onContextMenu = (e: MouseEvent) => {
       e.preventDefault()
       triggerAnim('surprised')
-      setMenu({ open: true, x: e.clientX, y: e.clientY })
+      // 菜单弹到精灵右上方的空白区，避免遮挡本体
+      // 精灵中心在 (PET_CX, PET_CY) ≈ (120, 208)，菜单放到右上角区域
+      const menuX = Math.min(W - MENU_W - 8, PET_CX + 40)
+      const menuY = Math.max(8, PET_CY - MENU_H - 70)
+      setMenu({ open: true, x: menuX, y: menuY })
     }
 
     // 双击：被戳了一下

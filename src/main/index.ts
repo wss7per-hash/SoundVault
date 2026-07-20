@@ -119,7 +119,7 @@ function toggleSpotlight(): void {
 // 补全完整规则集（避免主进程重复维护 9 条默认规则）。
 // ============================================================
 let petWindow: BrowserWindow | null = null
-let petTray: Tray | null = null
+let appTray: Tray | null = null
 const PET_CONFIG_KEY = 'pet.config'
 
 interface PetDisplay {
@@ -146,7 +146,8 @@ interface PetConfigStored {
 
 const DEFAULT_PET_STORED: PetConfigStored = {
   enabled: true,
-  display: { x: 80, y: 160, scale: 0.35, opacity: 1, alwaysOnTop: true, clickThrough: false, locked: false },
+  // x/y 不再写死——由 computeDefaultPetPosition() 在创建/重置时动态计算（主窗口右下角外侧）
+  display: { scale: 0.35, opacity: 1, alwaysOnTop: true, clickThrough: false, locked: false },
   sprite: { hue: 265, name: '声波小精灵' },
   behavior: { audioBreath: true, paused: false },
   messages: {
@@ -223,14 +224,43 @@ function applyDisplayToWindow(win: BrowserWindow, d: PetDisplay): void {
   win.setIgnoreMouseEvents(!!d.clickThrough)
 }
 
+/** 计算宠物默认位置：主窗口右下角外侧（紧贴主窗口右边缘+底边，不遮挡主窗口内容） */
+function computeDefaultPetPosition(): { x: number; y: number } {
+  const workArea = screen.getPrimaryDisplay().workArea
+  let mw: { x: number; y: number; width: number; height: number } | null = null
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try { mw = mainWindow.getBounds() } catch { /* noop */ }
+  }
+  // 宠物视觉尺寸（scale=0.35 时约 84×105）
+  const petW = Math.round(240 * 0.35)
+  const petH = Math.round(300 * 0.35)
+  const gap = 8
+  if (mw) {
+    // 主窗口存在 → 贴其右下角外侧
+    return {
+      x: mw.x + mw.width + gap,
+      y: Math.min(mw.y + mw.height - petH - gap, workArea.height - petH - gap)
+    }
+  }
+  // 降级：屏幕工作区右下角
+  return {
+    x: workArea.width - petW - gap,
+    y: workArea.height - petH - gap
+  }
+}
+
 function createPetWindow(): BrowserWindow {
   const cfg = loadPetStored()
   const d = cfg.display as PetDisplay
+  // 若存储中无位置信息（首次 / 清除过），动态计算默认位置
+  const pos = (typeof d.x === 'number' && typeof d.y === 'number')
+    ? { x: d.x, y: d.y }
+    : computeDefaultPetPosition()
   const win = new BrowserWindow({
     width: 240,
     height: 300,
-    x: d.x,
-    y: d.y,
+    x: pos.x,
+    y: pos.y,
     show: true,
     frame: false,
     resizable: false,
@@ -326,24 +356,26 @@ function setPetBehavior(patch: PetBehaviorStored): void {
   if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:config')
 }
 
-/** 重置宠物到默认位置（屏幕左下 80,160） */
+/** 重置宠物到默认位置（动态计算：主窗口右下角外侧） */
 function resetPetPosition(): void {
+  const def = computeDefaultPetPosition()
   const s = loadPetStored()
-  s.display = { ...(s.display || {}), x: 80, y: 160 } as PetDisplay
+  s.display = { ...(s.display || {}), x: def.x, y: def.y } as PetDisplay
   persistPetStored(s)
   if (petWindow && !petWindow.isDestroyed()) {
-    petWindow.setPosition(80, 160)
+    petWindow.setPosition(def.x, def.y)
     applyDisplayToWindow(petWindow, s.display as PetDisplay)
     petWindow.webContents.send('pet:config')
   }
 }
 
-/** 构建系统托盘右键菜单（标签随当前状态动态变化） */
-function buildPetTrayMenu(): Menu {
+/** 构建统一应用托盘菜单（主窗口控制 + 宠物控制 + 退出） */
+function buildAppTrayMenu(): Menu {
   const s = loadPetStored()
   const d = (s.display || {}) as PetDisplay
   const b = s.behavior || {}
   const items: MenuItemConstructorOptions[] = [
+    // ── 主窗口控制 ──
     {
       label: '打开 SoundVault',
       click: () => {
@@ -355,48 +387,44 @@ function buildPetTrayMenu(): Menu {
       }
     },
     { type: 'separator' },
+    // ── 声波小精灵（子区域）──
+    { label: `🧚 小精灵：${s.enabled ? '显示中' : '已隐藏'}`, enabled: false },
     { label: s.enabled ? '隐藏小精灵' : '显示小精灵', click: () => togglePetWindow() },
     { label: `${d.locked ? '解锁' : '锁定'}拖动`, click: () => setPetDisplay({ locked: !d.locked }) },
-    { label: `点击穿透：${d.clickThrough ? '开' : '关'}`, click: () => setPetDisplay({ clickThrough: !d.clickThrough }) },
-    { label: `置顶：${d.alwaysOnTop ? '开' : '关'}`, click: () => setPetDisplay({ alwaysOnTop: !d.alwaysOnTop }) },
     { label: `暂停互动：${b.paused ? '开' : '关'}`, click: () => setPetBehavior({ paused: !b.paused }) },
     { label: `跟随音量呼吸：${b.audioBreath ? '开' : '关'}`, click: () => setPetBehavior({ audioBreath: !b.audioBreath }) },
-    { type: 'separator' },
-    { label: '缩放 35%', click: () => setPetDisplay({ scale: 0.35 }) },
-    { label: '缩放 50%', click: () => setPetDisplay({ scale: 0.5 }) },
-    { label: '缩放 70%', click: () => setPetDisplay({ scale: 0.7 }) },
-    { label: '缩放 100%', click: () => setPetDisplay({ scale: 1 }) },
     { label: '重置位置', click: () => resetPetPosition() },
     { type: 'separator' },
+    // ── 全局 ──
     { label: '退出 SoundVault', click: () => app.quit() }
   ]
   return Menu.buildFromTemplate(items)
 }
 
-/** 创建系统托盘图标与菜单（复用应用可执行文件图标，避免额外素材依赖） */
-function createPetTray(): void {
-  if (petTray) return
-  petTray = new Tray(nativeImage.createEmpty())
-  petTray.setToolTip('SoundVault · 声波小精灵')
-  petTray.on('click', () => {
-    if (petTray) petTray.popupContextMenu(buildPetTrayMenu())
+/** 创建统一应用系统托盘（SoundVault 主入口，含宠物快捷操作） */
+function createAppTray(): void {
+  if (appTray) return
+  appTray = new Tray(nativeImage.createEmpty())
+  appTray.setToolTip('SoundVault')
+  appTray.on('click', () => {
+    if (appTray) appTray.popupContextMenu(buildAppTrayMenu())
   })
   // 用应用图标作为托盘图标（Windows 托盘需要有效图标）
   try {
     const exePath = app.getPath('exe')
     app.getFileIcon(exePath).then((icon) => {
-      if (petTray && !icon.isEmpty()) petTray.setImage(icon)
+      if (appTray && !icon.isEmpty()) appTray.setImage(icon)
     }).catch(() => {})
   } catch {
     /* 图标获取失败不阻断托盘创建 */
   }
 }
 
-/** 销毁系统托盘 */
-function destroyPetTray(): void {
-  if (petTray) {
-    petTray.destroy()
-    petTray = null
+/** 销毁统一应用系统托盘 */
+function destroyAppTray(): void {
+  if (appTray) {
+    appTray.destroy()
+    appTray = null
   }
 }
 
@@ -557,7 +585,7 @@ app.whenReady().then(() => {
   }
 
   // 系统托盘：始终创建（即便宠物隐藏，也可从托盘恢复 / 退出应用）
-  createPetTray()
+  createAppTray()
 
   // 全局快捷搜索：注册系统级快捷键（默认 Ctrl/Cmd+Shift+Space，可在 Spotlight 内自定义并持久化）
   currentSpotlightShortcut = loadSpotlightShortcut()
@@ -765,7 +793,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   // 退出前确保常驻窗口 / 托盘都被销毁，避免宠物 / 浮层残留导致进程不退出
-  destroyPetTray()
+  destroyAppTray()
   closePetWindow()
   closeSpotlightWindow()
 })
