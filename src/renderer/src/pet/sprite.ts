@@ -23,6 +23,8 @@ interface Pose {
   tilt: number
   eyeScale: number
   mouth: 'wave' | 'o' | 'flat'
+  /** 嘴张开程度 0..1（用于演唱/打哈欠时张嘴大小） */
+  mouthOpen: number
   shakeX: number
   glow: number
 }
@@ -31,6 +33,11 @@ export class SpriteRenderer {
   private state: SpriteRenderState
   private nextBlinkAt = 0
   private blinkUntil = 0
+  // 待机微动作（小抖 / 打哈欠）：眨眼由 blink 系统负责，这里补其余两项
+  private nextMicroAt = 0
+  private microType: 'none' | 'twitch' | 'yawn' = 'none'
+  private microStart = 0
+  private microUntil = 0
 
   constructor(hue = 265, name = '声波小精灵') {
     this.state = {
@@ -45,6 +52,7 @@ export class SpriteRenderer {
       name
     }
     this.scheduleBlink(performance.now())
+    this.scheduleMicro(performance.now())
   }
 
   setAnim(anim: SpriteAnimId, now = performance.now()): void {
@@ -102,6 +110,25 @@ export class SpriteRenderer {
     return false
   }
 
+  /** 安排下一次待机微动作（小抖 / 打哈欠），与眨眼错开节奏 */
+  private scheduleMicro(now: number): void {
+    this.nextMicroAt = now + 4500 + Math.random() * 6500
+  }
+
+  /** 推进待机微动作状态机：到点触发，约 1/4 概率为打哈欠，其余为小抖 */
+  private updateMicro(now: number): void {
+    if (this.microType !== 'none' && now >= this.microUntil) {
+      this.microType = 'none'
+    }
+    if (this.microType === 'none' && now >= this.nextMicroAt) {
+      const yawn = Math.random() < 0.25
+      this.microType = yawn ? 'yawn' : 'twitch'
+      this.microStart = now
+      this.microUntil = now + (yawn ? 1300 : 240)
+      this.scheduleMicro(now)
+    }
+  }
+
   private computePose(now: number): Pose {
     const t = (now - this.state.animStartedAt) / 1000
     const level = this.state.audioLevel
@@ -112,6 +139,7 @@ export class SpriteRenderer {
       tilt: 0,
       eyeScale: 1,
       mouth: 'wave',
+      mouthOpen: 0,
       shakeX: 0,
       glow: 0
     }
@@ -174,7 +202,37 @@ export class SpriteRenderer {
         base.mouth = 'flat'
         break
       }
+      case 'sing': {
+        // 随波形演唱：身体随节拍轻微起伏 + 音量越大越「鼓胀」，嘴随响度张合
+        const beat = Math.sin(now / 160)
+        base.bobY = beat * 3 * (0.4 + level)
+        const lift = Math.max(0, level - 0.35)
+        base.squashX = 1 + lift * 0.14
+        base.squashY = 1 - lift * 0.1
+        base.mouth = 'o'
+        base.mouthOpen = Math.min(1, level * 1.25)
+        base.glow = level * 0.7
+        break
+      }
     }
+
+    // 待机微动作（眨眼由 draw 负责；此处叠加小抖 / 打哈欠，睡眠态除外）
+    this.updateMicro(now)
+    if (this.state.anim !== 'sleep') {
+      if (this.microType === 'twitch') {
+        const tt = now - this.microStart
+        base.shakeX += Math.sin(tt / 16) * 2.2 * Math.max(0, 1 - tt / 240)
+      } else if (this.microType === 'yawn') {
+        const yp = (now - this.microStart) / 1300
+        if (yp >= 0 && yp <= 1) {
+          const env = Math.sin(yp * Math.PI)
+          base.mouth = 'o'
+          base.mouthOpen = Math.max(base.mouthOpen, env * 0.95)
+          base.eyeScale *= 1 - env * 0.45
+        }
+      }
+    }
+
     return base
   }
 
@@ -302,9 +360,10 @@ export class SpriteRenderer {
     ctx.lineWidth = 2.5
     ctx.lineCap = 'round'
     if (p.mouth === 'o') {
+      const open = 1 + (p.mouthOpen || 0) * 1.8
       ctx.fillStyle = outline
       ctx.beginPath()
-      ctx.ellipse(0, mouthY, rx * 0.12, ry * 0.12, 0, 0, Math.PI * 2)
+      ctx.ellipse(0, mouthY, rx * 0.12 * open, ry * 0.12 * open, 0, 0, Math.PI * 2)
       ctx.fill()
     } else if (p.mouth === 'flat') {
       ctx.beginPath()

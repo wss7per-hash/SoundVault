@@ -362,7 +362,7 @@ export function PetWindow(): JSX.Element {
       let eff: SpriteAnimId
       if (persistentRef.current) eff = persistentRef.current
       else if (now < transientUntilRef.current) eff = transientAnimRef.current
-      else eff = (audioPlayingRef.current && !config.behavior.paused) ? 'bounce' : 'idle'
+      else eff = (audioPlayingRef.current && !config.behavior.paused && config.behavior.audioBreath) ? 'sing' : 'idle'
       sprite.setAnim(eff, now)
 
       sprite.draw(ctx, W, H, now)

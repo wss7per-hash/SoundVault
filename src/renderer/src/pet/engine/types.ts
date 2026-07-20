@@ -3,7 +3,7 @@
 // https://github.com/duzexu/desktop-pet
 
 /** 声波小精灵可用的程序化动画状态（替代 desktop-pet 的素材 asset） */
-export type SpriteAnimId = 'idle' | 'bounce' | 'click' | 'surprised' | 'sleep' | 'drag' | 'wave'
+export type SpriteAnimId = 'idle' | 'bounce' | 'click' | 'surprised' | 'sleep' | 'drag' | 'wave' | 'sing'
 
 /** 触发器事件类型（SoundVault 宠物专用；含音频联动事件） */
 export type PetEventType =
