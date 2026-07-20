@@ -43,10 +43,12 @@ export function PetWindow(): JSX.Element {
   const posRef = useRef({ x: 0, y: 0 })
   const alwaysOnTopRef = useRef(true)
   // 右键菜单浮层状态（位置为窗口内 client 坐标）
-  const [menu, setMenu] = useState<{ open: boolean; x: number; y: number }>({ open: false, x: 0, y: 0 })
-  // 行为开关（暂停互动 / 跟随音量呼吸）——镜像 config.behavior 供菜单动态显示
+  // 行为开关（暂停互动 / 跟随音量呼吸）——镜像 config.behavior
   const [behavior, setBehavior] = useState<{ audioBreath: boolean; paused: boolean }>({ audioBreath: true, paused: false })
-  const menuActionRef = useRef<(id: string) => void>(() => {})
+  // 消息气泡（窗口内 HTML 浮层，不受 canvas scale 影响，保证文字清晰可读）
+  const [bubble, setBubble] = useState<{ text: string } | null>(null)
+  const bubbleTimerRef = useRef(0 as number)
+  const scaleRef = useRef(0.35)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -89,6 +91,7 @@ export function PetWindow(): JSX.Element {
     let idleTimer = 0
 
     const applyDisplay = (disp: PetConfig['display']) => {
+      scaleRef.current = Math.max(0.3, disp.scale)
       if (wrapRef.current) {
         wrapRef.current.style.transform = `scale(${Math.max(0.3, disp.scale)})`
         wrapRef.current.style.opacity = String(Math.max(0, Math.min(1, disp.opacity)))
@@ -96,6 +99,12 @@ export function PetWindow(): JSX.Element {
     }
     const markActivity = () => { lastActivityRef.current = performance.now() }
     const clearSleep = () => { if (persistentRef.current === 'sleep') persistentRef.current = null }
+    // 消息气泡：以窗口内 HTML 浮层呈现（不随 canvas scale 缩小，文字清晰可读）
+    const showBubble = (text: string, ms: number) => {
+      setBubble({ text })
+      if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current)
+      bubbleTimerRef.current = window.setTimeout(() => setBubble(null), ms)
+    }
 
     const triggerAnim = (id: SpriteAnimId) => {
       const now = performance.now()
@@ -140,7 +149,7 @@ export function PetWindow(): JSX.Element {
 
     const buildExecutors = (): SpriteActionExecutors => ({
       playSpriteAnim: (anim) => { if (anim) triggerAnim(anim) },
-      showMessage: (text, opts) => sprite.showMessage(text, opts?.durationMs ?? config.messages.bubbleDurationMs),
+      showMessage: (text, opts) => showBubble(text ?? '', opts?.durationMs ?? config.messages.bubbleDurationMs),
       changeDisplay: (action) => {
         if (typeof action.scale === 'number') { config.display.scale = action.scale; applyDisplay(config.display); persistDisplay() }
         if (typeof action.opacity === 'number') { config.display.opacity = action.opacity; applyDisplay(config.display); persistDisplay() }
@@ -211,6 +220,9 @@ export function PetWindow(): JSX.Element {
     }
     const unsubAudio = window.api.pet.onAudioEvent(onAudio)
 
+    // 主进程原生「关于」菜单触发后，由主进程转发文本，这里显示气泡
+    const unsubAbout = window.api.pet.onAbout((text: string) => showBubble(text, 3200))
+
     const unsubConfig = window.api.pet.onConfigChanged(() => {
       window.api.pet.getConfig().then((cfg: PetConfigStored | null) => {
         applyStored(cfg)
@@ -277,11 +289,8 @@ export function PetWindow(): JSX.Element {
     const onContextMenu = (e: MouseEvent) => {
       e.preventDefault()
       triggerAnim('surprised')
-      // 菜单弹到精灵右上方的空白区，避免遮挡本体
-      // 精灵中心在 (PET_CX, PET_CY) ≈ (120, 208)，菜单放到右上角区域
-      const menuX = Math.min(W - MENU_W - 8, PET_CX + 40)
-      const menuY = Math.max(8, PET_CY - MENU_H - 70)
-      setMenu({ open: true, x: menuX, y: menuY })
+      // 交给主进程弹出原生 OS 菜单（定位到精灵右侧，不遮挡本体）
+      window.api.pet.showContextMenu()
     }
 
     // 双击：被戳了一下
@@ -303,49 +312,8 @@ export function PetWindow(): JSX.Element {
       }
     }
 
-    // 右键菜单各功能实现（原生菜单不可靠，改由窗口内 HTML 浮层触发）
-    const handleMenuAction = (id: string) => {
-      switch (id) {
-        case 'settings':
-          window.api.pet.openSettings()
-          break
-        case 'hide':
-          window.api.pet.setEnabled(false)
-          break
-        case 'reset':
-          window.api.pet.resetPosition()
-          break
-        case 'top': {
-          const next = !alwaysOnTopRef.current
-          alwaysOnTopRef.current = next
-          config.display.alwaysOnTop = next
-          window.api.pet.setDisplay({ alwaysOnTop: next })
-          break
-        }
-        case 'about':
-          sprite.showMessage('声波小精灵 · SoundVault 的桌面小伙伴 ♪', 3200)
-          break
-        case 'pause': {
-          config.behavior.paused = !config.behavior.paused
-          setBehavior((b) => ({ ...b, paused: config.behavior.paused }))
-          persistBehavior()
-          if (config.behavior.paused) sprite.showMessage('已暂停互动，我去发呆啦~', 1800)
-          else sprite.showMessage('互动恢复，继续陪你听歌！', 1800)
-          break
-        }
-        case 'breath': {
-          config.behavior.audioBreath = !config.behavior.audioBreath
-          setBehavior((b) => ({ ...b, audioBreath: config.behavior.audioBreath }))
-          persistBehavior()
-          break
-        }
-        case 'quit':
-          window.api.pet.quit()
-          break
-      }
-      setMenu((m) => ({ ...m, open: false }))
-    }
-    menuActionRef.current = handleMenuAction
+    // 右键菜单已改为主进程原生 OS 菜单（见 main 的 buildPetContextMenu），
+    // 由 onContextMenu → window.api.pet.showContextMenu() 触发，定位到精灵右侧、不遮挡本体。
     const onEnter = () => {
       dispatch({ type: 'mouseEnter', timestamp: performance.now(), eventSource: 'petPointer' })
       // 悬停持续一段时间后触发 hoverDuration（寒暄）
@@ -422,6 +390,8 @@ export function PetWindow(): JSX.Element {
       clearInterval(idleTimer)
       unsubAudio()
       unsubConfig()
+      unsubAbout()
+      if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current)
       canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointermove', onHoverMove)
@@ -444,76 +414,32 @@ export function PetWindow(): JSX.Element {
         <canvas ref={canvasRef} style={{ width: W, height: H, display: 'block' }} />
       </div>
 
-      {menu.open && (
-        <>
-          {/* 点击空白处关闭菜单（同时吞掉指针事件，避免误触拖动） */}
-          <div
-            onClick={() => setMenu((m) => ({ ...m, open: false }))}
-            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
-          />
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: 'absolute',
-              left: Math.min(Math.max(4, menu.x), W - MENU_W - 4),
-              top: Math.min(Math.max(4, menu.y), H - MENU_H - 4),
-              width: MENU_W,
-              zIndex: 21,
-              background: 'rgba(28, 26, 44, 0.96)',
-              borderRadius: 14,
-              padding: 6,
-              boxShadow: '0 8px 26px rgba(0, 0, 0, 0.5)',
-              border: '1px solid rgba(255, 255, 255, 0.10)',
-              fontFamily: "'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif",
-              userSelect: 'none'
-            }}
-          >
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', padding: '2px 8px 6px' }}>
-              声波小精灵
-            </div>
-            {PET_MENU_ITEMS.map((it, i) => {
-              if ('type' in it) {
-                return <div key={i} style={{ height: 1, background: 'rgba(255,255,255,0.10)', margin: '4px 4px' }} />
-              }
-              // 暂停 / 呼吸项根据当前状态显示动态文案与图标
-              let label = it.label
-              let icon = it.icon
-              if (it.id === 'pause') {
-                label = behavior.paused ? '恢复互动' : '暂停互动'
-                icon = behavior.paused ? '▶️' : '⏸️'
-              } else if (it.id === 'breath') {
-                label = behavior.audioBreath ? '跟随音量呼吸：开' : '跟随音量呼吸：关'
-                icon = '💨'
-              }
-              return (
-                <div
-                  key={i}
-                  onClick={() => menuActionRef.current(it.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '7px 10px',
-                    borderRadius: 9,
-                    fontSize: 13,
-                    color: it.danger ? '#ff8f8f' : '#f3eefb',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = it.danger ? 'rgba(255,90,90,0.18)' : 'rgba(255,138,190,0.22)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent'
-                  }}
-                >
-                  <span style={{ opacity: 0.9 }}>{icon}</span>
-                  <span>{label}</span>
-                </div>
-              )
-            })}
-          </div>
-        </>
+      {bubble && (
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            bottom: Math.round(148 * scaleRef.current + 10),
+            maxWidth: 200,
+            padding: '8px 12px',
+            background: 'rgba(28, 26, 44, 0.96)',
+            color: '#f3eefb',
+            borderRadius: 12,
+            fontSize: 13,
+            lineHeight: 1.4,
+            textAlign: 'center',
+            boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            fontFamily: "'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif",
+            pointerEvents: 'none',
+            zIndex: 30,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word'
+          }}
+        >
+          {bubble.text}
+        </div>
       )}
     </>
   )

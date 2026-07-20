@@ -264,6 +264,14 @@ const api = {
     getBounds: () => ipcRenderer.invoke('pet:getBounds') as Promise<{ x: number; y: number; width: number; height: number } | null>,
     moveTo: (x: number, y: number) => ipcRenderer.send('pet:moveTo', x, y),
     quit: () => ipcRenderer.send('pet:quit'),
+    // 请求主进程弹出原生右键菜单（定位到精灵右侧，不遮挡本体）
+    showContextMenu: () => ipcRenderer.send('pet:showContextMenu'),
+    // 主进程「关于」原生菜单触发后转发文本，渲染端据此显示气泡
+    onAbout: (cb: (text: string) => void) => {
+      const listener = (_e: unknown, text: string): void => cb(text)
+      ipcRenderer.on('pet:about', listener)
+      return () => ipcRenderer.removeListener('pet:about', listener)
+    },
     onAudioEvent: (cb: (event: { type: 'level' | 'start' | 'stop'; level?: number }) => void) => {
       const listener = (_e: unknown, event: { type: 'level' | 'start' | 'stop'; level?: number }) => cb(event)
       ipcRenderer.on('pet:audio', listener)

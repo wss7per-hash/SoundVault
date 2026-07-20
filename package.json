@@ -5,6 +5,16 @@
   "main": "./out/main/index.js",
   "author": "SoundVault",
   "license": "GPL-3.0",
+  "build": {
+    "appId": "com.soundvault.app",
+    "productName": "SoundVault",
+    "extraResources": [
+      {
+        "from": "src/renderer/src/assets/images/app-icon.png",
+        "to": "app-icon.png"
+      }
+    ]
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "dev:clean": "set ELECTRON_RUN_AS_NODE= && electron-vite dev",

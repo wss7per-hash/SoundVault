@@ -368,11 +368,6 @@ export class SpriteRenderer {
       ctx.fillText('z', x + rx * 0.78, y - ry * 0.95 - zz * 1.5)
       ctx.restore()
     }
-
-    // 消息气泡
-    if (this.state.message) {
-      this.drawBubble(ctx, x, y - ry - 14, W, this.state.message, hue)
-    }
   }
 
   private drawAntennae(ctx: CanvasRenderingContext2D, rx: number, ry: number, hue: number, now: number): void {

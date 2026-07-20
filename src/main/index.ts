@@ -188,7 +188,7 @@ function loadPetStored(): PetConfigStored {
   // 旧装/旧默认把 scale 存成了 1 或 0.7，统一纠正到当前默认（0.35），
   // 仅当存储值恰好为旧默认值时执行，避免覆盖用户主动调整过的尺寸。
   if (s.display && (s.display.scale === 1 || s.display.scale === 0.7)) {
-    s.display.scale = DEFAULT_PET_STORED.display.scale
+    s.display.scale = DEFAULT_PET_STORED.display?.scale ?? 0.35
     persistPetStored(s)
   }
   return s
@@ -224,38 +224,67 @@ function applyDisplayToWindow(win: BrowserWindow, d: PetDisplay): void {
   win.setIgnoreMouseEvents(!!d.clickThrough)
 }
 
-/** 计算宠物默认位置：主窗口右下角外侧（紧贴主窗口右边缘+底边，不遮挡主窗口内容） */
+/** 取应用图标路径（打包后位于 resources/app-icon.png；开发态回退到源码资源） */
+function getAppIconPath(): string {
+  const candidates = [
+    join(process.resourcesPath, 'app-icon.png'),
+    join(app.getAppPath(), 'src/renderer/src/assets/images/app-icon.png')
+  ]
+  for (const p of candidates) {
+    try { if (existsSync(p)) return p } catch { /* noop */ }
+  }
+  return ''
+}
+
+/**
+ * 计算宠物默认位置：让精灵中心落在主窗口「右下角内侧」（紧贴右/下边缘，留 36px 边距），
+ * 使 240×300 的宠物窗口整体可见、且精灵正好位于软件界面右下角范围。
+ * 若主窗口不可得，则退化为屏幕工作区右下角内侧。
+ */
 function computeDefaultPetPosition(): { x: number; y: number } {
-  const workArea = screen.getPrimaryDisplay().workArea
-  let mw: { x: number; y: number; width: number; height: number } | null = null
+  const wa = screen.getPrimaryDisplay().workArea
+  const s = loadPetStored().display
+  const scale = s && typeof s.scale === 'number' ? s.scale : 0.35
+  // 精灵中心在宠物窗口(240×300)内的局部坐标（与 PetWindow 渲染一致）
+  const spriteOX = 120
+  const spriteOY = 300 - 92 * scale
+  let scx: number
+  let scy: number
   if (mainWindow && !mainWindow.isDestroyed()) {
-    try { mw = mainWindow.getBounds() } catch { /* noop */ }
-  }
-  // 宠物视觉尺寸（scale=0.35 时约 84×105）
-  const petW = Math.round(240 * 0.35)
-  const petH = Math.round(300 * 0.35)
-  const gap = 8
-  if (mw) {
-    // 主窗口存在 → 贴其右下角外侧
-    return {
-      x: mw.x + mw.width + gap,
-      y: Math.min(mw.y + mw.height - petH - gap, workArea.height - petH - gap)
+    try {
+      const mw = mainWindow.getBounds()
+      scx = mw.x + mw.width - 36
+      scy = mw.y + mw.height - 36
+    } catch {
+      scx = wa.x + wa.width - 36
+      scy = wa.y + wa.height - 36
     }
+  } else {
+    scx = wa.x + wa.width - 36
+    scy = wa.y + wa.height - 36
   }
-  // 降级：屏幕工作区右下角
-  return {
-    x: workArea.width - petW - gap,
-    y: workArea.height - petH - gap
-  }
+  // 把整个 240×300 窗口夹进屏幕工作区，确保一定可见
+  let wx = scx - spriteOX
+  let wy = scy - spriteOY
+  wx = Math.max(wa.x, Math.min(wx, wa.x + wa.width - 240))
+  wy = Math.max(wa.y, Math.min(wy, wa.y + wa.height - 300))
+  return { x: Math.round(wx), y: Math.round(wy) }
 }
 
 function createPetWindow(): BrowserWindow {
   const cfg = loadPetStored()
   const d = cfg.display as PetDisplay
   // 若存储中无位置信息（首次 / 清除过），动态计算默认位置
-  const pos = (typeof d.x === 'number' && typeof d.y === 'number')
+  const raw = (typeof d.x === 'number' && typeof d.y === 'number')
     ? { x: d.x, y: d.y }
     : computeDefaultPetPosition()
+  // 夹进屏幕工作区，避免陈旧/越界坐标导致宠物窗口跑到屏幕外看不见
+  const wa = screen.getPrimaryDisplay().workArea
+  const pos = {
+    x: Math.max(wa.x, Math.min(raw.x, wa.x + wa.width - 240)),
+    y: Math.max(wa.y, Math.min(raw.y, wa.y + wa.height - 300))
+  }
+  const iconPath = getAppIconPath()
   const win = new BrowserWindow({
     width: 240,
     height: 300,
@@ -269,6 +298,7 @@ function createPetWindow(): BrowserWindow {
     alwaysOnTop: !!d.alwaysOnTop,
     transparent: true,
     backgroundColor: '#00000000',
+    icon: iconPath ? nativeImage.createFromPath(iconPath) : undefined,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -401,23 +431,61 @@ function buildAppTrayMenu(): Menu {
   return Menu.buildFromTemplate(items)
 }
 
+/** 宠物右键菜单（原生 OS 菜单，定位到精灵右侧，不遮挡本体） */
+function buildPetContextMenu(): Menu {
+  const s = loadPetStored()
+  const d = (s.display || {}) as PetDisplay
+  const b = s.behavior || {}
+  const items: MenuItemConstructorOptions[] = [
+    {
+      label: '打开设置',
+      click: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.show()
+          mainWindow.webContents.send('pet:openSettings')
+        }
+      }
+    },
+    { label: s.enabled ? '隐藏小精灵' : '显示小精灵', click: () => togglePetWindow() },
+    { label: '重置位置', click: () => resetPetPosition() },
+    { label: '切换置顶', click: () => setPetDisplay({ alwaysOnTop: !d.alwaysOnTop }) },
+    {
+      label: '关于声波小精灵',
+      click: () => {
+        if (petWindow && !petWindow.isDestroyed()) {
+          petWindow.webContents.send('pet:about', '声波小精灵 · SoundVault 的桌面小伙伴 ♪')
+        }
+      }
+    },
+    { label: `${b.paused ? '恢复互动' : '暂停互动'}`, click: () => setPetBehavior({ paused: !b.paused }) },
+    { label: `跟随音量呼吸：${b.audioBreath ? '开' : '关'}`, click: () => setPetBehavior({ audioBreath: !b.audioBreath }) },
+    { type: 'separator' },
+    { label: '退出 SoundVault', click: () => app.quit() }
+  ]
+  return Menu.buildFromTemplate(items)
+}
+
 /** 创建统一应用系统托盘（SoundVault 主入口，含宠物快捷操作） */
 function createAppTray(): void {
   if (appTray) return
-  appTray = new Tray(nativeImage.createEmpty())
+  // 托盘图标使用与软件一致的品牌图标（app-icon.png），而非 electron 默认图标
+  const iconPath = getAppIconPath()
+  const trayIcon = iconPath && existsSync(iconPath)
+    ? nativeImage.createFromPath(iconPath).resize({ width: 32, height: 32 })
+    : nativeImage.createEmpty()
+  appTray = new Tray(trayIcon)
   appTray.setToolTip('SoundVault')
-  appTray.on('click', () => {
-    if (appTray) appTray.popupContextMenu(buildAppTrayMenu())
+  const popup = () => { if (appTray) appTray.popUpContextMenu(buildAppTrayMenu()) }
+  // 左键 / 右键 都弹出菜单（Windows 下右键不会触发 'click'，需单独处理）
+  appTray.on('click', popup)
+  appTray.on('right-click', popup)
+  appTray.on('double-click', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
   })
-  // 用应用图标作为托盘图标（Windows 托盘需要有效图标）
-  try {
-    const exePath = app.getPath('exe')
-    app.getFileIcon(exePath).then((icon) => {
-      if (appTray && !icon.isEmpty()) appTray.setImage(icon)
-    }).catch(() => {})
-  } catch {
-    /* 图标获取失败不阻断托盘创建 */
-  }
 }
 
 /** 销毁统一应用系统托盘 */
@@ -440,6 +508,7 @@ function createWindow(): void {
       center: true,
       title: 'SoundVault',
       backgroundColor: '#1a1a18',
+      icon: getAppIconPath() ? nativeImage.createFromPath(getAppIconPath()) : undefined,
       frame: false,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
@@ -704,6 +773,20 @@ app.whenReady().then(() => {
   ipcMain.on('pet:show', () => showPetWindow())
   ipcMain.on('pet:hide', () => hidePetWindow())
   ipcMain.on('pet:setEnabled', (_e, enabled: boolean) => setPetEnabled(enabled))
+  // 宠物窗口请求弹出原生右键菜单（定位到精灵右侧，避免遮挡本体）
+  ipcMain.on('pet:showContextMenu', () => {
+    if (!petWindow || petWindow.isDestroyed()) return
+    const b = petWindow.getBounds()
+    const s = loadPetStored().display
+    const scale = s && typeof s.scale === 'number' ? s.scale : 0.35
+    const spriteOY = 300 - 92 * scale
+    // x/y 为相对宠物窗口的坐标：精灵中心右侧 50px、纵向居中处弹出
+    buildPetContextMenu().popup({ window: petWindow, x: 170, y: Math.round(spriteOY) })
+  })
+  // 宠物「关于」气泡（由主进程原生菜单触发，转发给渲染端显示）
+  ipcMain.on('pet:about', (_e, text: string) => {
+    if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:about', text)
+  })
   // 设置面板请求打开宠物设置（定位到主窗口设置面板宠物标签页）
   ipcMain.on('pet:openSettings', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {

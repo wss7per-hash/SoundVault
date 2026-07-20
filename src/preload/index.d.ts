@@ -225,6 +225,10 @@ export interface PetAPI {
   moveTo: (x: number, y: number) => void
   // 退出整个应用
   quit: () => void
+  // 请求主进程弹出原生右键菜单（定位到精灵右侧，不遮挡本体）
+  showContextMenu: () => void
+  // 主进程「关于」原生菜单触发后转发文本，渲染端据此显示气泡
+  onAbout: (cb: (text: string) => void) => () => void
   // Petpack 导入/导出（jszip）
   exportPetpack: () => Promise<{ success: boolean; path?: string; message?: string }>
   importPetpack: () => Promise<{ success: boolean; message?: string }>
